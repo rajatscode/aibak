@@ -78,6 +78,10 @@ pub struct LocalState {
     pick_options: Vec<usize>,
     turn_history: Vec<TurnLog>,
     ai_strength: AiStrength,
+    /// Complete game state snapshots before each turn's orders (for replay).
+    state_history: Vec<GameState>,
+    /// Player 0 win probability recorded after each turn resolves.
+    win_prob_history: Vec<f64>,
 }
 
 #[derive(Clone, Serialize)]
@@ -102,6 +106,7 @@ struct GameView {
     bonuses: Vec<BonusView>,
     history: Vec<TurnLog>,
     win_probability: WinProbView,
+    win_prob_history: Vec<f64>,
 }
 
 #[derive(Serialize)]
@@ -237,6 +242,7 @@ fn build_game_view(app: &LocalState) -> GameView {
             player_1: wp.player_1,
             simulations: wp.simulations_run,
         },
+        win_prob_history: app.win_prob_history.clone(),
     }
 }
 
