@@ -1,0 +1,14 @@
+[package]
+name = "strat-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "strat"
+path = "src/main.rs"
+
+[dependencies]
+strat-engine = { path = "../engine" }
+rand.workspace = true
+serde_json.workspace = true

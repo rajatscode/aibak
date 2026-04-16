@@ -1,0 +1,583 @@
+mod api;
+mod auth;
+mod config;
+mod db;
+mod game;
+mod ws;
+
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::{Html, IntoResponse, Redirect};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use serde::{Deserialize, Serialize};
+use tower_http::cors::CorsLayer;
+use tracing::info;
+
+use strat_engine::ai;
+use strat_engine::fog;
+use strat_engine::map::Map;
+use strat_engine::orders::Order;
+use strat_engine::picking;
+use strat_engine::state::{GameState, Phase, PlayerId, NEUTRAL};
+use strat_engine::turn::{resolve_turn, TurnEvent};
+
+use crate::config::Config;
+
+const PLAYER: PlayerId = 0;
+const AI_PLAYER: PlayerId = 1;
+
+// ── Application state ──
+
+/// Shared application state for all routes.
+#[derive(Clone)]
+pub struct AppState {
+    pub config: Arc<Config>,
+    /// Database pool (None if no DATABASE_URL configured -- local play only).
+    pub db_pool: Option<sqlx::PgPool>,
+    /// WebSocket hub for multiplayer event broadcasting.
+    pub ws_hub: Arc<ws::Hub>,
+    /// Game manager for multiplayer games (None if no DB).
+    pub game_manager: Option<Arc<game::manager::GameManager>>,
+    /// Local (single-player vs AI) game state.
+    pub local: Arc<Mutex<LocalState>>,
+}
+
+impl AppState {
+    /// Get the database pool or return an error suitable for API responses.
+    pub fn require_db(&self) -> Result<&sqlx::PgPool, (StatusCode, String)> {
+        self.db_pool.as_ref().ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "database not configured; multiplayer features require DATABASE_URL".to_string(),
+        ))
+    }
+
+    /// Get the game manager or return an error.
+    pub fn require_game_manager(
+        &self,
+    ) -> Result<&Arc<game::manager::GameManager>, (StatusCode, String)> {
+        self.game_manager.as_ref().ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "multiplayer not configured; requires DATABASE_URL".to_string(),
+        ))
+    }
+}
+
+// ── Local play state (preserved from original server) ──
+
+pub struct LocalState {
+    map: Map,
+    game: GameState,
+    rng: StdRng,
+    pick_options: Vec<usize>,
+    turn_history: Vec<TurnLog>,
+}
+
+#[derive(Clone, Serialize)]
+struct TurnLog {
+    turn: u32,
+    events: Vec<TurnEvent>,
+}
+
+// ── Local play API response types ──
+
+#[derive(Serialize)]
+struct GameView {
+    phase: String,
+    turn: u32,
+    income: u32,
+    my_territories: u32,
+    enemy_territories: u32,
+    winner: Option<u8>,
+    pick_options: Vec<usize>,
+    picks_needed: usize,
+    territories: Vec<TerritoryView>,
+    bonuses: Vec<BonusView>,
+    history: Vec<TurnLog>,
+}
+
+#[derive(Serialize)]
+struct TerritoryView {
+    id: usize,
+    name: String,
+    bonus_id: usize,
+    adjacent: Vec<usize>,
+    owner: u8,
+    armies: u32,
+    visible: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    label_x: f64,
+    label_y: f64,
+}
+
+#[derive(Serialize)]
+struct BonusView {
+    id: usize,
+    name: String,
+    value: u32,
+    territory_ids: Vec<usize>,
+    player_count: usize,
+    total: usize,
+}
+
+#[derive(Deserialize)]
+struct PicksRequest {
+    picks: Vec<usize>,
+}
+
+#[derive(Deserialize)]
+struct OrdersRequest {
+    orders: Vec<Order>,
+}
+
+#[derive(Serialize)]
+struct ActionResult {
+    success: bool,
+    message: String,
+    events: Vec<TurnEvent>,
+}
+
+fn build_game_view(app: &LocalState) -> GameView {
+    let visible = fog::visible_territories(&app.game, PLAYER, &app.map);
+    let is_picking = app.game.phase == Phase::Picking;
+
+    let territories: Vec<TerritoryView> = app
+        .map
+        .territories
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let is_visible = is_picking || visible.contains(&i) || !app.map.settings.fog_of_war;
+            let (lx, ly) = t
+                .visual
+                .as_ref()
+                .map(|v| (v.label_pos[0], v.label_pos[1]))
+                .unwrap_or((0.0, 0.0));
+            TerritoryView {
+                id: i,
+                name: t.name.clone(),
+                bonus_id: t.bonus_id,
+                adjacent: t.adjacent.clone(),
+                owner: if is_visible {
+                    app.game.territory_owners[i]
+                } else {
+                    NEUTRAL
+                },
+                armies: if is_visible {
+                    app.game.territory_armies[i]
+                } else {
+                    0
+                },
+                visible: is_visible,
+                path: t.visual.as_ref().map(|v| v.path.clone()),
+                label_x: lx,
+                label_y: ly,
+            }
+        })
+        .collect();
+
+    let bonuses: Vec<BonusView> = app
+        .map
+        .bonuses
+        .iter()
+        .map(|b| {
+            let player_count = b
+                .territory_ids
+                .iter()
+                .filter(|&&tid| app.game.territory_owners[tid] == PLAYER)
+                .count();
+            BonusView {
+                id: b.id,
+                name: b.name.clone(),
+                value: b.value,
+                territory_ids: b.territory_ids.clone(),
+                player_count,
+                total: b.territory_ids.len(),
+            }
+        })
+        .collect();
+
+    GameView {
+        phase: match app.game.phase {
+            Phase::Picking => "picking".into(),
+            Phase::Play => "play".into(),
+            Phase::Finished => "finished".into(),
+        },
+        turn: app.game.turn,
+        income: app.game.income(PLAYER, &app.map),
+        my_territories: app.game.territory_count_for(PLAYER) as u32,
+        enemy_territories: app.game.territory_count_for(AI_PLAYER) as u32,
+        winner: app.game.winner,
+        pick_options: app.pick_options.clone(),
+        picks_needed: app.map.picking.num_picks,
+        territories,
+        bonuses,
+        history: app.turn_history.clone(),
+    }
+}
+
+fn fog_filter_events(
+    events: &[TurnEvent],
+    visible_before: &std::collections::HashSet<usize>,
+    visible_after: &std::collections::HashSet<usize>,
+) -> Vec<TurnEvent> {
+    events
+        .iter()
+        .filter(|e| match e {
+            TurnEvent::Deploy { territory, .. } => visible_after.contains(territory),
+            TurnEvent::Attack { from, to, .. } => {
+                visible_before.contains(from)
+                    || visible_before.contains(to)
+                    || visible_after.contains(from)
+                    || visible_after.contains(to)
+            }
+            TurnEvent::Transfer { from, to, .. } => {
+                visible_after.contains(from) || visible_after.contains(to)
+            }
+            TurnEvent::Capture { territory, .. } => visible_after.contains(territory),
+            TurnEvent::Blockade { territory, .. } => visible_after.contains(territory),
+            TurnEvent::Eliminated { .. } | TurnEvent::Victory { .. } => true,
+        })
+        .cloned()
+        .collect()
+}
+
+// ── Local play route handlers ──
+
+async fn get_local_game(State(state): State<AppState>) -> Json<GameView> {
+    let app = state.local.lock().unwrap();
+    Json(build_game_view(&app))
+}
+
+async fn submit_local_picks(
+    State(state): State<AppState>,
+    Json(body): Json<PicksRequest>,
+) -> Result<Json<ActionResult>, (StatusCode, String)> {
+    let mut app = state.local.lock().unwrap();
+
+    if app.game.phase != Phase::Picking {
+        return Err((StatusCode::BAD_REQUEST, "Not in picking phase".into()));
+    }
+
+    let needed = app.map.picking.num_picks;
+    if body.picks.len() != needed {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Need exactly {} picks", needed),
+        ));
+    }
+
+    let ai_picks = ai::generate_picks(&app.game, &app.map);
+    let map = app.map.clone();
+
+    picking::resolve_picks(&mut app.game, [&body.picks, &ai_picks], &map);
+
+    Ok(Json(ActionResult {
+        success: true,
+        message: "Picks resolved. Game begins!".into(),
+        events: Vec::new(),
+    }))
+}
+
+async fn submit_local_orders(
+    State(state): State<AppState>,
+    Json(body): Json<OrdersRequest>,
+) -> Result<Json<ActionResult>, (StatusCode, String)> {
+    let mut app = state.local.lock().unwrap();
+
+    if app.game.phase != Phase::Play {
+        return Err((StatusCode::BAD_REQUEST, "Not in play phase".into()));
+    }
+
+    let visible_before = fog::visible_territories(&app.game, PLAYER, &app.map);
+
+    let ai_orders = ai::generate_orders(&app.game, AI_PLAYER, &app.map);
+    let game_clone = app.game.clone();
+    let map = app.map.clone();
+
+    let result = resolve_turn(&game_clone, [body.orders, ai_orders], &map, &mut app.rng);
+
+    let visible_after = fog::visible_territories(&result.state, PLAYER, &app.map);
+    let filtered_events = fog_filter_events(&result.events, &visible_before, &visible_after);
+
+    let turn_num = app.game.turn;
+    app.turn_history.push(TurnLog {
+        turn: turn_num,
+        events: filtered_events.clone(),
+    });
+
+    app.game = result.state;
+
+    let msg = if app.game.phase == Phase::Finished {
+        if app.game.winner == Some(PLAYER) {
+            "Victory!".to_string()
+        } else {
+            "Defeat.".to_string()
+        }
+    } else {
+        format!("Turn {} complete", app.game.turn - 1)
+    };
+
+    Ok(Json(ActionResult {
+        success: true,
+        message: msg,
+        events: filtered_events,
+    }))
+}
+
+async fn new_local_game(State(state): State<AppState>) -> Json<ActionResult> {
+    let mut app = state.local.lock().unwrap();
+    let map = app.map.clone();
+    app.game = GameState::new(&map);
+    app.rng = StdRng::from_entropy();
+    app.pick_options = picking::generate_pick_options(&map, &mut app.rng);
+    app.turn_history.clear();
+    Json(ActionResult {
+        success: true,
+        message: "New game started".into(),
+        events: Vec::new(),
+    })
+}
+
+async fn index() -> Html<&'static str> {
+    Html(include_str!("../../static/index.html"))
+}
+
+// ── Auth route handlers ──
+
+async fn auth_discord_redirect(
+    State(state): State<AppState>,
+) -> Result<Redirect, (StatusCode, String)> {
+    let client_id = state
+        .config
+        .discord_client_id
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
+    let redirect_uri = state
+        .config
+        .discord_redirect_uri
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
+    let url = auth::discord::build_auth_url(client_id, redirect_uri);
+    Ok(Redirect::temporary(&url))
+}
+
+#[derive(Deserialize)]
+struct CallbackQuery {
+    code: String,
+}
+
+async fn auth_discord_callback(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<CallbackQuery>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let client_id = state.config.discord_client_id.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
+    let client_secret = state.config.discord_client_secret.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
+    let redirect_uri = state.config.discord_redirect_uri.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
+    let pool = state.require_db()?;
+
+    // Exchange code for access token.
+    let access_token =
+        auth::discord::exchange_code(client_id, client_secret, redirect_uri, &query.code)
+            .await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Discord token exchange failed: {}", e)))?;
+
+    // Fetch Discord user info.
+    let discord_user = auth::discord::fetch_user(&access_token)
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Discord user fetch failed: {}", e)))?;
+
+    let discord_id = discord_user
+        .discord_id_i64()
+        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("invalid Discord ID: {}", e)))?;
+
+    // Upsert user in database.
+    let user = db::upsert_user(pool, discord_id, &discord_user.username, discord_user.avatar_url().as_deref())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Create JWT.
+    let token = auth::session::create_token(user.id, &user.username, &state.config.jwt_secret)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT creation failed: {}", e)))?;
+
+    // Set cookie and redirect to app.
+    let cookie = format!(
+        "token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800",
+        token
+    );
+    Ok((
+        [(axum::http::header::SET_COOKIE, cookie)],
+        Redirect::temporary("/app"),
+    ))
+}
+
+async fn auth_logout() -> impl IntoResponse {
+    let cookie = "token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+    (
+        [(axum::http::header::SET_COOKIE, cookie.to_string())],
+        Json(serde_json::json!({"success": true})),
+    )
+}
+
+async fn auth_me(
+    auth: auth::AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if let Some(pool) = &state.db_pool {
+        if let Some(user) = db::get_user(pool, auth.user_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        {
+            return Ok(Json(serde_json::json!({
+                "id": user.id,
+                "username": user.username,
+                "avatar_url": user.avatar_url,
+                "rating": user.rating,
+                "games_played": user.games_played,
+                "games_won": user.games_won,
+            })));
+        }
+    }
+    Ok(Json(serde_json::json!({
+        "id": auth.user_id,
+        "username": auth.username,
+    })))
+}
+
+async fn app_placeholder() -> Html<&'static str> {
+    Html("<html><body><h1>strat-club multiplayer</h1><p>Frontend coming soon.</p></body></html>")
+}
+
+// ── Entrypoint ──
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt::init();
+
+    // Load .env file if present.
+    let _ = dotenvy::dotenv();
+
+    let config = Config::from_env();
+    info!("starting strat-club server");
+
+    // Load map for local play.
+    let map_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| config.default_map_path.clone());
+    let map = Map::load(&PathBuf::from(&map_path)).unwrap_or_else(|e| {
+        eprintln!("Failed to load map '{}': {}", map_path, e);
+        std::process::exit(1);
+    });
+
+    info!(
+        map = %map.name,
+        territories = map.territory_count(),
+        bonuses = map.bonuses.len(),
+        "loaded map for local play"
+    );
+
+    let mut rng = StdRng::from_entropy();
+    let game = GameState::new(&map);
+    let pick_options = picking::generate_pick_options(&map, &mut rng);
+
+    let local_state = LocalState {
+        map,
+        game,
+        rng,
+        pick_options,
+        turn_history: Vec::new(),
+    };
+
+    // Set up WebSocket hub.
+    let ws_hub = Arc::new(ws::Hub::new());
+
+    // Connect to database if configured.
+    let db_pool = if let Some(url) = &config.database_url {
+        match sqlx::PgPool::connect(url).await {
+            Ok(pool) => {
+                info!("connected to database");
+                if let Err(e) = db::migrate::run_migrations(&pool).await {
+                    eprintln!("migration error: {}", e);
+                    eprintln!("continuing without database -- multiplayer will be unavailable");
+                    None
+                } else {
+                    Some(pool)
+                }
+            }
+            Err(e) => {
+                eprintln!("database connection failed: {}", e);
+                eprintln!("continuing without database -- multiplayer will be unavailable");
+                None
+            }
+        }
+    } else {
+        info!("no DATABASE_URL set -- running in local play mode only");
+        None
+    };
+
+    // Set up game manager if DB is available.
+    let game_manager = db_pool.as_ref().map(|pool| {
+        Arc::new(game::manager::GameManager::new(pool.clone(), ws_hub.clone()))
+    });
+
+    // Start boot timer background task if DB is available.
+    if let (Some(pool), Some(manager)) = (&db_pool, &game_manager) {
+        let pool = pool.clone();
+        let manager = manager.clone();
+        tokio::spawn(game::timer::boot_timer_task(pool, manager));
+    }
+
+    let bind_addr = config.bind_addr.clone();
+
+    let app_state = AppState {
+        config: Arc::new(config),
+        db_pool,
+        ws_hub,
+        game_manager,
+        local: Arc::new(Mutex::new(local_state)),
+    };
+
+    let app = Router::new()
+        // Local play routes (original functionality).
+        .route("/", get(index))
+        .route("/api/game", get(get_local_game))
+        .route("/api/picks", post(submit_local_picks))
+        .route("/api/orders", post(submit_local_orders))
+        .route("/api/new", post(new_local_game))
+        // Multiplayer app placeholder.
+        .route("/app", get(app_placeholder))
+        // Auth routes.
+        .route("/api/auth/discord", get(auth_discord_redirect))
+        .route("/api/auth/discord/callback", get(auth_discord_callback))
+        .route("/api/auth/logout", post(auth_logout))
+        .route("/api/auth/me", get(auth_me))
+        // Game API routes.
+        .route("/api/games", post(api::games::create_game))
+        .route("/api/games", get(api::games::list_games))
+        .route("/api/games/{id}", get(api::games::get_game))
+        .route("/api/games/{id}/join", post(api::games::join_game))
+        .route("/api/games/{id}/picks", post(api::orders::submit_picks))
+        .route("/api/games/{id}/orders", post(api::orders::submit_orders))
+        // Ladder and lobby.
+        .route("/api/ladder", get(api::ladder::leaderboard))
+        .route("/api/users/{id}", get(api::ladder::player_profile))
+        .route("/api/lobby", get(api::lobby::open_games))
+        // WebSocket.
+        .route("/ws", get(ws::handler::ws_upgrade))
+        .layer(CorsLayer::permissive())
+        .with_state(app_state);
+
+    info!(addr = %bind_addr, "server listening");
+    println!("Playing at http://localhost:3000");
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}

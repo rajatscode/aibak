@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strat Club</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
+  --neutral:#4b5563;--fog:#1f2937;
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* TOP BAR */
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-height:48px;flex-shrink:0}
+#topbar h1{font-size:16px;font-weight:700;color:var(--gold)}
+#topbar .stats{display:flex;gap:16px;font-size:13px;color:var(--text2)}
+#topbar .stats span{display:flex;align-items:center;gap:4px}
+#topbar .stats .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+#topbar button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px;transition:background .15s}
+#topbar button:hover{background:var(--border)}
+
+/* MAIN LAYOUT */
+#main{display:flex;flex:1;overflow:hidden}
+#map-container{flex:1;position:relative;overflow:hidden;background:var(--bg)}
+#sidebar{width:340px;min-width:340px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+
+/* SVG MAP */
+#map-svg{width:100%;height:100%}
+.territory-path{cursor:pointer;transition:fill .15s,stroke .15s,opacity .15s}
+.territory-path:hover{filter:brightness(1.3)}
+.territory-highlight{pointer-events:none;transition:stroke .15s,stroke-width .15s}
+.army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.deploy-badge{pointer-events:none;font-size:10px;font-weight:700;fill:var(--green);text-anchor:middle;dominant-baseline:central}
+.name-text{pointer-events:none;font-size:9px;fill:var(--text2);text-anchor:middle;opacity:0;transition:opacity .15s}
+.territory-group:hover .name-text{opacity:1}
+.pick-ring{pointer-events:none;fill:none;stroke:var(--gold);stroke-width:3}
+.pick-ring-anim{animation:pulse-ring 1.2s ease-in-out infinite}
+@keyframes pulse-ring{0%,100%{r:22;opacity:1}50%{r:28;opacity:.4}}
+.selected-ring{fill:none;stroke:var(--gold);stroke-width:3;pointer-events:none}
+.picked-ring{fill:none;stroke:var(--green);stroke-width:3;pointer-events:none}
+.order-line{stroke-width:2;stroke-dasharray:6,3;fill:none;marker-end:url(#arrowhead)}
+.plus-one{pointer-events:none;font-size:14px;font-weight:700;fill:var(--green);text-anchor:middle;animation:float-up .6s ease-out forwards}
+@keyframes float-up{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-25px)}}
+
+/* CONNECTION LINES */
+.connection-line{stroke:var(--bg3);stroke-width:1;opacity:.3}
+
+/* SIDEBAR SECTIONS */
+.sb-section{padding:12px;border-bottom:1px solid var(--border)}
+.sb-section h3{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.sb-phase{font-size:18px;font-weight:700;margin-bottom:4px}
+.sb-sub{font-size:13px;color:var(--text2)}
+
+/* DEPLOY COUNTER */
+.deploy-counter{font-size:28px;font-weight:800;color:var(--green);text-align:center;padding:8px 0}
+.deploy-hint{font-size:11px;color:var(--text3);text-align:center}
+
+/* ORDER LIST */
+.order-list{flex:1;overflow-y:auto;padding:8px 12px}
+.order-item{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px;font-size:12px;border:1px solid var(--border)}
+.order-item .remove-btn{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px}
+.order-item .remove-btn:hover{color:#f87171}
+
+/* ARMY SELECTOR */
+.army-selector{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--bg);border-radius:6px;margin:6px 0;border:1px solid var(--border)}
+.army-selector button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.army-selector button:hover{background:var(--border)}
+.army-selector .army-count{font-size:16px;font-weight:700;min-width:30px;text-align:center}
+.army-selector .confirm-order{background:var(--blue);color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:600;margin-left:auto}
+.army-selector .confirm-order:hover{background:#3b82f6}
+.army-selector .cancel-order{background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer;font-size:12px;width:auto}
+
+/* BUTTONS */
+.btn{display:block;width:100%;padding:10px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;transition:background .15s,opacity .15s}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover:not(:disabled){background:#3b82f6}
+.btn-green{background:var(--green);color:#000}
+.btn-green:hover:not(:disabled){background:#4ade80}
+.btn-gold{background:var(--gold);color:#000}
+.btn-gold:hover:not(:disabled){background:#fbbf24}
+.btn-red{background:var(--red);color:#fff}
+.btn-red:hover:not(:disabled){background:#ef4444}
+
+/* TURN LOG */
+#turn-log{flex:1;overflow-y:auto;padding:8px 12px;font-size:12px;line-height:1.6}
+#turn-log .log-entry{padding:2px 0}
+#turn-log .log-player{color:#60a5fa}
+#turn-log .log-enemy{color:#f87171}
+#turn-log .log-system{color:var(--gold)}
+
+/* HISTORY */
+.history-section{overflow-y:auto;max-height:200px}
+.history-turn{border-bottom:1px solid var(--border)}
+.history-header{padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);display:flex;justify-content:space-between;align-items:center}
+.history-header:hover{background:var(--bg3)}
+.history-body{padding:4px 12px 8px;font-size:11px;line-height:1.6;display:none}
+.history-body.open{display:block}
+
+/* PICKS LIST */
+.pick-list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.pick-chip{background:var(--bg);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:2px 10px;font-size:11px;cursor:pointer}
+.pick-chip:hover{background:var(--green);color:#000}
+
+/* TOAST */
+#toast-container{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transform:translateY(-10px);transition:opacity .3s,transform .3s;pointer-events:auto}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{border-color:var(--red);background:#2d1013}
+.toast.success{border-color:var(--green);background:#0d2818}
+
+/* GAME OVER OVERLAY */
+#game-over{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:999}
+#game-over.show{display:flex}
+#game-over .card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:40px 60px;text-align:center}
+#game-over .card h2{font-size:32px;margin-bottom:12px}
+#game-over .card p{color:var(--text2);margin-bottom:24px}
+#game-over .card button{padding:12px 32px;font-size:16px}
+
+/* TRANSITION FLASH */
+.phase-flash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:500;pointer-events:none;opacity:0;transition:opacity .3s}
+.phase-flash.show{opacity:1}
+.phase-flash span{font-size:24px;font-weight:800;color:var(--gold);text-shadow:0 0 20px rgba(227,179,65,.5)}
+
+/* BONUS ROW */
+.bonus-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px}
+.bonus-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.bonus-row.complete{animation:glow-green .6s ease-out}
+@keyframes glow-green{0%{background:rgba(63,185,80,.2)}100%{background:transparent}}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+
+/* TOOLTIP */
+.tooltip{position:absolute;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;pointer-events:none;z-index:100;white-space:nowrap;opacity:0;transition:opacity .15s}
+.tooltip.show{opacity:1}
+
+/* SUB-PHASE TABS */
+.subphase-tabs{display:flex;gap:4px;margin-bottom:8px}
+.subphase-tab{flex:1;padding:6px;text-align:center;font-size:11px;font-weight:600;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text2);transition:all .15s}
+.subphase-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.subphase-tab.done{background:var(--bg3);color:var(--green);border-color:var(--green)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1>Strat Club</h1>
+    <div class="stats">
+      <span>Turn <strong id="turn-num">1</strong></span>
+      <span>Income <strong id="income-num">5</strong></span>
+      <span><span class="dot" style="background:var(--blue)"></span> <strong id="my-terr">0</strong></span>
+      <span><span class="dot" style="background:var(--red)"></span> <strong id="enemy-terr">0</strong></span>
+    </div>
+    <button onclick="newGame()" title="New Game (N)">New Game</button>
+  </div>
+  <div id="main">
+    <div id="map-container">
+      <svg id="map-svg" viewBox="0 0 900 470"></svg>
+      <div class="phase-flash" id="phase-flash"><span id="flash-text"></span></div>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+    <div id="sidebar">
+      <div class="sb-section" id="phase-panel"></div>
+      <div class="sb-section" id="control-panel" style="flex-shrink:0"></div>
+      <div id="turn-log" style="flex:1;overflow-y:auto"></div>
+      <div class="history-section" id="history-panel"></div>
+    </div>
+  </div>
+</div>
+<div id="game-over">
+  <div class="card">
+    <h2 id="go-title"></h2>
+    <p id="go-msg"></p>
+    <button class="btn btn-gold" onclick="newGame()">Play Again</button>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+// ========== CONSTANTS ==========
+// POS is populated dynamically from API territory label_x/label_y
+const POS = {};
+const BONUS_COLORS=['#58a6ff','#e3b341','#f0883e','#bc8cff','#3fb950','#f778ba'];
+const PLAYER_COLOR='#2563eb';
+const ENEMY_COLOR='#dc2626';
+const NEUTRAL_COLOR='#4b5563';
+const FOG_COLOR='#1f2937';
+
+// ========== STATE ==========
+let G = null; // game state
+let phase = 'loading'; // picking | deploy | attack | finished
+let picks = [];
+let deploys = {}; // territory_id -> count
+let deployLeft = 0;
+let orders = []; // [{type, from?, to?, territory?, armies}]
+let selectedSource = null;
+let pendingTarget = null;
+let pendingArmies = 0;
+let pendingMax = 0;
+let pendingType = ''; // 'attack' or 'transfer'
+let resolving = false;
+
+// ========== API ==========
+async function api(method, path, body) {
+  try {
+    const opts = {method, headers:{'Content-Type':'application/json'}};
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(path, opts);
+    const j = await r.json();
+    if (!r.ok || j.success === false) {
+      toast(j.message || 'Request failed', 'error');
+      return null;
+    }
+    return j;
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+    return null;
+  }
+}
+
+async function fetchState() {
+  const s = await api('GET', '/api/game');
+  if (s) { G = s; onStateUpdate(); }
+}
+
+// ========== TOAST ==========
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 2500);
+}
+
+// ========== FLASH ==========
+function flash(text, duration=800) {
+  return new Promise(resolve => {
+    const el = document.getElementById('phase-flash');
+    document.getElementById('flash-text').textContent = text;
+    el.classList.add('show');
+    setTimeout(() => { el.classList.remove('show'); setTimeout(resolve, 200); }, duration);
+  });
+}
+
+// ========== MAP RENDERING ==========
+function buildMap() {
+  const svg = document.getElementById('map-svg');
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', '0 0 1000 680');
+
+  // Defs
+  const defs = svgEl('defs');
+  const marker = svgEl('marker', {id:'arrowhead',markerWidth:8,markerHeight:6,refX:8,refY:3,orient:'auto'});
+  const poly = svgEl('polygon', {points:'0 0, 8 3, 0 6', fill:'var(--gold)'});
+  marker.appendChild(poly);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  // Order lines group (below territories so paths draw on top)
+  svg.appendChild(svgEl('g', {id:'order-lines'}));
+
+  // Territory groups
+  const terrGroup = svgEl('g', {id:'territories'});
+  if (G && G.territories) {
+    G.territories.forEach(t => {
+      const x = t.label_x || 0;
+      const y = t.label_y || 0;
+      const g = svgEl('g', {class:'territory-group','data-id':t.id});
+
+      // Territory shape path
+      if (t.path) {
+        g.appendChild(svgEl('path', {
+          d: t.path,
+          class: 'territory-path',
+          id: 'terr-' + t.id,
+          fill: FOG_COLOR,
+          stroke: '#0d1117',
+          'stroke-width': 1.5
+        }));
+      } else {
+        // Fallback circle if no path data
+        g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:FOG_COLOR, stroke:'#0d1117','stroke-width':1.5}));
+      }
+
+      // Selection highlight (invisible path copy on top)
+      if (t.path) {
+        g.appendChild(svgEl('path', {
+          d: t.path,
+          class: 'territory-highlight',
+          id: 'highlight-' + t.id,
+          fill: 'none',
+          stroke: 'none',
+          'stroke-width': 3,
+          'pointer-events': 'none'
+        }));
+      }
+
+      // Army count background circle
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'rgba(0,0,0,0.6)', style:'display:none', 'pointer-events':'none'}));
+      // Army text
+      g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
+      // Deploy badge
+      g.appendChild(svgEl('text', {x:x+14, y:y-14, class:'deploy-badge', id:'deploy-badge-'+t.id}, ''));
+
+      g.addEventListener('click', e => onTerritoryClick(t.id, e));
+      g.addEventListener('contextmenu', e => { e.preventDefault(); onTerritoryRightClick(t.id); });
+      g.addEventListener('mouseenter', e => showTooltip(t.id, e));
+      g.addEventListener('mouseleave', hideTooltip);
+
+      terrGroup.appendChild(g);
+    });
+  }
+  svg.appendChild(terrGroup);
+
+  // Compute true centroids from rendered paths using getBBox()
+  // This runs after paths are in the DOM so getBBox() works correctly
+  if (G && G.territories) {
+    G.territories.forEach(t => {
+      const pathEl = document.getElementById('terr-' + t.id);
+      if (pathEl && pathEl.tagName === 'path') {
+        try {
+          const bbox = pathEl.getBBox();
+          const cx = bbox.x + bbox.width / 2;
+          const cy = bbox.y + bbox.height / 2;
+          POS[t.id] = [cx, cy];
+
+          // Reposition army elements to centroid
+          const bg = document.getElementById('army-bg-' + t.id);
+          const army = document.getElementById('army-' + t.id);
+          const badge = document.getElementById('deploy-badge-' + t.id);
+          if (bg) { bg.setAttribute('cx', cx); bg.setAttribute('cy', cy); }
+          if (army) { army.setAttribute('x', cx); army.setAttribute('y', cy); }
+          if (badge) { badge.setAttribute('x', cx + 14); badge.setAttribute('y', cy - 14); }
+        } catch(e) {
+          POS[t.id] = [t.label_x || 0, t.label_y || 0];
+        }
+      } else {
+        POS[t.id] = [t.label_x || 0, t.label_y || 0];
+      }
+    });
+  }
+
+  // Bonus labels on map
+  // Bonus labels — tucked into corners of each continent, small and unobtrusive
+  const bonusPositions = {
+    0: [60,  140],   // North America — top-left corner
+    1: [195, 580],   // South America — bottom
+    2: [350, 155],   // Europe — top-left of Europe
+    3: [410, 560],   // Africa — bottom
+    4: [910, 125],   // Asia — top-right corner
+    5: [860, 540],   // Oceania — bottom-right
+  };
+  const bonusGroup = svgEl('g', {id:'bonus-labels', opacity:'0.75'});
+  if (G && G.bonuses) {
+    G.bonuses.forEach(b => {
+      const pos = bonusPositions[b.id];
+      if (!pos) return;
+      const g = svgEl('g', {id:'bonus-label-'+b.id, 'pointer-events':'none'});
+      const color = BONUS_COLORS[b.id % BONUS_COLORS.length];
+
+      // Compact single-line label
+      g.appendChild(svgEl('text', {
+        x: pos[0], y: pos[1],
+        'text-anchor':'start', 'font-size':'9px', 'font-weight':'700',
+        fill: color, id: 'bonus-name-'+b.id
+      }, b.name));
+      g.appendChild(svgEl('text', {
+        x: pos[0], y: pos[1]+11,
+        'text-anchor':'start', 'font-size':'8px', 'font-weight':'600',
+        fill: '#aaa', id: 'bonus-prog-'+b.id
+      }, ''));
+      bonusGroup.appendChild(g);
+    });
+  }
+  svg.appendChild(bonusGroup);
+
+  // Float animation group
+  svg.appendChild(svgEl('g', {id:'floats'}));
+}
+
+function svgEl(tag, attrs, text) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  if (attrs) Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+function updateMap() {
+  if (!G) return;
+  G.territories.forEach(t => {
+    const pathEl = document.getElementById('terr-' + t.id);
+    const highlightEl = document.getElementById('highlight-' + t.id);
+    const armyEl = document.getElementById('army-' + t.id);
+    const armyBg = document.getElementById('army-bg-' + t.id);
+    const badgeEl = document.getElementById('deploy-badge-' + t.id);
+
+    if (!pathEl) return;
+
+    // Color
+    let fill = FOG_COLOR;
+    let strokeColor = '#0d1117';
+    if (t.visible !== false) {
+      if (t.owner === 0) fill = PLAYER_COLOR;
+      else if (t.owner === 1) fill = ENEMY_COLOR;
+      else fill = NEUTRAL_COLOR;
+    }
+    pathEl.setAttribute('fill', fill);
+    pathEl.setAttribute('stroke', strokeColor);
+
+    // Highlight for selection/pick state
+    if (highlightEl) {
+      if (selectedSource === t.id) {
+        highlightEl.setAttribute('stroke', 'var(--gold)');
+        highlightEl.setAttribute('stroke-width', '4');
+      } else if (phase === 'picking' && picks.includes(t.id)) {
+        highlightEl.setAttribute('stroke', 'var(--green)');
+        highlightEl.setAttribute('stroke-width', '3');
+      } else if (phase === 'picking' && G.pick_options && G.pick_options.includes(t.id)) {
+        highlightEl.setAttribute('stroke', 'var(--gold)');
+        highlightEl.setAttribute('stroke-width', '2');
+        highlightEl.setAttribute('stroke-dasharray', '6,3');
+      } else {
+        highlightEl.setAttribute('stroke', 'none');
+        highlightEl.setAttribute('stroke-dasharray', 'none');
+      }
+    }
+
+    // Armies
+    let displayArmies = t.armies || 0;
+    const dep = deploys[t.id] || 0;
+    if (dep > 0) displayArmies += dep;
+
+    if (t.visible !== false && displayArmies > 0) {
+      armyEl.textContent = displayArmies;
+      if (armyBg) armyBg.style.display = '';
+    } else {
+      armyEl.textContent = '';
+      if (armyBg) armyBg.style.display = 'none';
+    }
+
+    // Deploy badge
+    if (dep > 0) {
+      badgeEl.textContent = '+' + dep;
+    } else {
+      badgeEl.textContent = '';
+    }
+  });
+
+  // Update bonus labels
+  if (G.bonuses) {
+    G.bonuses.forEach(b => {
+      const progEl = document.getElementById('bonus-prog-' + b.id);
+      if (progEl) {
+        const complete = b.player_count === b.total;
+        progEl.textContent = complete ? `✓ +${b.value}/turn` : `${b.player_count}/${b.total} (+${b.value})`;
+        progEl.setAttribute('fill', complete ? '#4ade80' : '#fff');
+      }
+    });
+  }
+
+  drawOrderLines();
+}
+
+function drawOrderLines() {
+  const g = document.getElementById('order-lines');
+  if (!g) return;
+  g.innerHTML = '';
+
+  // Draw queued order arrows with army counts
+  orders.forEach(o => {
+    if (o.from === undefined || o.to === undefined || !POS[o.from] || !POS[o.to]) return;
+    const [x1,y1] = POS[o.from];
+    const [x2,y2] = POS[o.to];
+    const isAttack = o.type === 'attack';
+    const color = isAttack ? '#ef4444' : '#60a5fa';
+
+    // Arrow line
+    g.appendChild(svgEl('line', {
+      x1, y1, x2, y2,
+      stroke: color, 'stroke-width': 2.5, 'stroke-dasharray': '8,4',
+      'marker-end': 'url(#arrowhead)', opacity: 0.85
+    }));
+
+    // Army count label at midpoint
+    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    g.appendChild(svgEl('circle', {cx:mx, cy:my, r:9, fill:'rgba(0,0,0,0.7)', stroke:color, 'stroke-width':1.5}));
+    g.appendChild(svgEl('text', {
+      x:mx, y:my, 'text-anchor':'middle', 'dominant-baseline':'central',
+      'font-size':'9px', 'font-weight':'700', fill:'#fff', 'pointer-events':'none'
+    }, o.armies));
+  });
+
+  // When a source is selected, show guide lines to valid adjacent targets
+  if (selectedSource !== null && POS[selectedSource]) {
+    const t = terr(selectedSource);
+    if (t) {
+      t.adjacent.forEach(adj => {
+        if (!POS[adj]) return;
+        const at = terr(adj);
+        if (!at) return;
+        const isEnemy = at.owner !== 0;
+        const color = isEnemy ? 'rgba(239,68,68,0.25)' : 'rgba(96,165,250,0.2)';
+        g.appendChild(svgEl('line', {
+          x1: POS[selectedSource][0], y1: POS[selectedSource][1],
+          x2: POS[adj][0], y2: POS[adj][1],
+          stroke: color, 'stroke-width': 2, 'stroke-dasharray': '4,4', fill: 'none'
+        }));
+      });
+    }
+  }
+}
+
+function floatText(territoryId, text) {
+  const fg = document.getElementById('floats');
+  if (!fg || !POS[territoryId]) return;
+  const [x, y] = POS[territoryId];
+  const el = svgEl('text', {x:x, y:y-20, class:'plus-one'}, text);
+  fg.appendChild(el);
+  setTimeout(() => el.remove(), 700);
+}
+
+function showTooltip(id, e) {
+  const t = terr(id);
+  if (!t) return;
+  const tip = document.getElementById('tooltip');
+  let owner = t.owner === 0 ? 'You' : t.owner === 1 ? 'AI' : 'Neutral';
+  tip.textContent = t.name + ' (' + owner + ', ' + t.armies + ' armies)';
+  tip.classList.add('show');
+  const rect = document.getElementById('map-container').getBoundingClientRect();
+  tip.style.left = (e.clientX - rect.left + 12) + 'px';
+  tip.style.top = (e.clientY - rect.top - 30) + 'px';
+}
+function hideTooltip() {
+  document.getElementById('tooltip').classList.remove('show');
+}
+
+// ========== TERRITORY HELPERS ==========
+function terr(id) { return G ? G.territories.find(t => t.id === id) : null; }
+function bonus(id) { return G ? G.bonuses.find(b => b.id === id) : null; }
+function isOwned(id) { const t = terr(id); return t && t.owner === 0; }
+function isEnemy(id) { const t = terr(id); return t && (t.owner === 1 || t.owner === 255); }
+function availableArmies(id) {
+  const t = terr(id);
+  if (!t) return 0;
+  let a = t.armies + (deploys[id] || 0);
+  orders.forEach(o => { if (o.from === id) a -= o.armies; });
+  return Math.max(0, a - 1); // Must leave 1
+}
+
+// ========== STATE UPDATE ==========
+function onStateUpdate() {
+  if (!G) return;
+
+  // Top bar
+  document.getElementById('turn-num').textContent = G.turn || 1;
+  document.getElementById('income-num').textContent = G.income || 0;
+  document.getElementById('my-terr').textContent = G.my_territories || 0;
+  document.getElementById('enemy-terr').textContent = G.enemy_territories || 0;
+
+  // Determine phase
+  if (G.phase === 'finished') {
+    phase = 'finished';
+  } else if (G.phase === 'picking') {
+    phase = 'picking';
+    picks = [];
+  } else if (G.phase === 'play') {
+    // Reset deploy state on new turn or first entry
+    const currentTurn = G.turn || 1;
+    if (phase !== 'attack' && phase !== 'deploy' || !window._lastTurn || window._lastTurn !== currentTurn) {
+      window._lastTurn = currentTurn;
+      phase = 'deploy';
+      deploys = {};
+      deployLeft = G.income || 5;
+      orders = [];
+      selectedSource = null;
+      pendingTarget = null;
+    }
+  }
+
+  buildMap();
+  updateMap();
+  renderSidebar();
+  renderHistory();
+
+  // Game over
+  if (G.phase === 'finished' && G.winner !== null && G.winner !== undefined) {
+    showGameOver(G.winner);
+  }
+}
+
+// ========== SIDEBAR ==========
+function renderSidebar() {
+  const pp = document.getElementById('phase-panel');
+  const cp = document.getElementById('control-panel');
+
+  if (phase === 'picking') {
+    renderPickingPanel(pp, cp);
+  } else if (phase === 'deploy') {
+    renderDeployPanel(pp, cp);
+  } else if (phase === 'attack') {
+    renderAttackPanel(pp, cp);
+  } else {
+    pp.innerHTML = '<div class="sb-phase">Waiting...</div>';
+    cp.innerHTML = '';
+  }
+}
+
+function renderPickingPanel(pp, cp) {
+  const needed = G.picks_needed || 4;
+  pp.innerHTML = `
+    <div class="sb-phase">Picking Phase</div>
+    <div class="sb-sub">Select ${needed} territories to start</div>
+    <div style="margin-top:8px;font-size:13px;color:var(--gold)">${picks.length} / ${needed} picked</div>
+    <div class="pick-list" style="margin-top:8px">
+      ${picks.map(id => {
+        const t = terr(id);
+        return `<span class="pick-chip" onclick="unpick(${id})">${t ? t.name : id} x</span>`;
+      }).join('')}
+    </div>
+  `;
+  cp.innerHTML = `<button class="btn btn-gold" ${picks.length < needed ? 'disabled' : ''} onclick="confirmPicks()">Confirm Picks</button>`;
+}
+
+function renderDeployPanel(pp, cp) {
+  pp.innerHTML = `
+    <div class="sb-phase">Deploy Phase</div>
+    <div class="sb-sub">Click your territories to deploy armies</div>
+    <div class="deploy-counter">${deployLeft}</div>
+    <div class="deploy-hint">Click +1 | Shift+Click +5 | Right-click -1</div>
+  `;
+
+  let html = '<h3>Deployments</h3>';
+  const entries = Object.entries(deploys).filter(([k,v]) => v > 0);
+  if (entries.length === 0) {
+    html += '<div style="font-size:12px;color:var(--text3)">No deployments yet</div>';
+  } else {
+    entries.forEach(([id, count]) => {
+      const t = terr(parseInt(id));
+      html += `<div class="order-item"><span>+${count} to ${t?t.name:id}</span><button class="remove-btn" onclick="removeDeploy(${id})">x</button></div>`;
+    });
+  }
+  html += renderBonusInfo();
+  cp.innerHTML = html;
+}
+
+function renderAttackPanel(pp, cp) {
+  pp.innerHTML = `
+    <div class="sb-phase">Move</div>
+    <div class="sb-sub">${selectedSource !== null ? 'Select target for ' + (terr(selectedSource)||{}).name : 'Click a territory to select source'}</div>
+    <div class="subphase-tabs">
+      <div class="subphase-tab done">Deploy</div>
+      <div class="subphase-tab active">Move</div>
+    </div>
+  `;
+
+  let html = '';
+
+  // Pending army selector
+  if (pendingTarget !== null) {
+    const srcT = terr(selectedSource);
+    const tgtT = terr(pendingTarget);
+    const label = pendingType === 'attack' ? 'Attack' : 'Move';
+    html += `
+      <div style="font-size:12px;margin-bottom:4px;color:var(--text2)">${label}: ${srcT?srcT.name:'?'} -> ${tgtT?tgtT.name:'?'}</div>
+      <div class="army-selector">
+        <button onclick="adjustPending(-1)">-</button>
+        <span class="army-count">${pendingArmies}</span>
+        <button onclick="adjustPending(1)">+</button>
+        <button class="cancel-order" onclick="cancelPending()">Cancel</button>
+        <button class="confirm-order" onclick="confirmPending()">${label}</button>
+      </div>
+    `;
+  }
+
+  // Order list
+  html += '<h3 style="margin-top:8px">Orders</h3>';
+  if (orders.length === 0) {
+    html += '<div style="font-size:12px;color:var(--text3)">No orders queued</div>';
+  } else {
+    orders.forEach((o, i) => {
+      const icon = o.type === 'attack' ? '⚔' : '→';
+      const fromT = terr(o.from);
+      const toT = terr(o.to);
+      html += `<div class="order-item"><span>${icon}: ${fromT?fromT.name:o.from} -> ${toT?toT.name:o.to} (${o.armies})</span><button class="remove-btn" onclick="removeOrder(${i})">x</button></div>`;
+    });
+  }
+
+  html += `<button class="btn btn-green" style="margin-top:12px" onclick="endTurn()">End Turn</button>`;
+  html += renderBonusInfo();
+  cp.innerHTML = html;
+}
+
+function renderBonusInfo() {
+  if (!G || !G.bonuses) return '';
+  let html = '<h3 style="margin-top:12px">Bonuses</h3>';
+  G.bonuses.forEach(b => {
+    const color = BONUS_COLORS[b.id % BONUS_COLORS.length];
+    const complete = b.player_count === b.total;
+    html += `<div class="bonus-row ${complete?'complete':''}"><span class="bonus-dot" style="background:${color}"></span>${b.name} (+${b.value}) ${b.player_count}/${b.total}</div>`;
+  });
+  return html;
+}
+
+// ========== HISTORY ==========
+function renderHistory() {
+  const hp = document.getElementById('history-panel');
+  if (!G || !G.history || G.history.length === 0) { hp.innerHTML = ''; return; }
+  let html = '';
+  G.history.slice().reverse().forEach(h => {
+    html += `<div class="history-turn">
+      <div class="history-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        Turn ${h.turn} <span>+</span>
+      </div>
+      <div class="history-body">${formatEvents(h.events)}</div>
+    </div>`;
+  });
+  hp.innerHTML = html;
+}
+
+function formatEvents(events) {
+  if (!events) return '';
+  return events.map(e => {
+    if (e.Deploy) {
+      const p = e.Deploy.player === 0;
+      const t = terr(e.Deploy.territory);
+      return `<div class="${p?'log-player':'log-enemy'}">${p?'You':'AI'} deployed ${e.Deploy.armies} to ${t?t.name:e.Deploy.territory}</div>`;
+    }
+    if (e.Attack) {
+      const a = e.Attack;
+      const p = a.player === 0;
+      const from = terr(a.from);
+      const to = terr(a.to);
+      const result = a.captured ? 'captured!' : 'failed';
+      return `<div class="${p?'log-player':'log-enemy'}">${p?'You':'AI'} attacked ${from?from.name:a.from} -> ${to?to.name:a.to} (${a.armies}v${a.defenders}) ${result}</div>`;
+    }
+    if (e.Transfer) {
+      const tr = e.Transfer;
+      const p = tr.player === 0;
+      const from = terr(tr.from);
+      const to = terr(tr.to);
+      return `<div class="${p?'log-player':'log-enemy'}">${p?'You':'AI'} transferred ${tr.armies} from ${from?from.name:tr.from} to ${to?to.name:tr.to}</div>`;
+    }
+    if (e.Capture) {
+      const p = e.Capture.player === 0;
+      const t = terr(e.Capture.territory);
+      return `<div class="${p?'log-player':'log-enemy'}">${p?'You':'AI'} captured ${t?t.name:e.Capture.territory}</div>`;
+    }
+    if (e.Eliminated) {
+      return `<div class="log-system">Player ${e.Eliminated.player} eliminated!</div>`;
+    }
+    if (e.Victory) {
+      const p = e.Victory.player === 0;
+      return `<div class="log-system">${p?'You win!':'AI wins!'}</div>`;
+    }
+    return '';
+  }).join('');
+}
+
+// ========== PICKING ==========
+function onPickClick(id) {
+  if (picks.includes(id)) {
+    picks = picks.filter(p => p !== id);
+  } else {
+    if (picks.length >= (G.picks_needed || 4)) return;
+    if (!G.pick_options || !G.pick_options.includes(id)) return;
+    picks.push(id);
+  }
+  updateMap();
+  renderSidebar();
+}
+
+function unpick(id) {
+  picks = picks.filter(p => p !== id);
+  updateMap();
+  renderSidebar();
+}
+
+async function confirmPicks() {
+  const res = await api('POST', '/api/picks', {picks: picks});
+  if (res) {
+    if (res.events) showTurnEvents(res.events);
+    await flash('Game begins!');
+    // Reset turn tracking so applyState properly initializes deploy phase
+    window._lastTurn = null;
+    await fetchState();
+  }
+}
+
+// ========== DEPLOY ==========
+function onDeployClick(id, e) {
+  if (!isOwned(id)) return;
+  const amount = e.shiftKey ? 5 : 1;
+  const actual = Math.min(amount, deployLeft);
+  if (actual <= 0) return;
+
+  if (!deploys[id]) deploys[id] = 0;
+  deploys[id] += actual;
+  deployLeft -= actual;
+
+  floatText(id, '+' + actual);
+  updateMap();
+  renderSidebar();
+
+  // Auto advance when all deployed
+  if (deployLeft <= 0) {
+    setTimeout(() => {
+      phase = 'attack';
+      selectedSource = null;
+      pendingTarget = null;
+      updateMap();
+      renderSidebar();
+      flash('Move Phase', 500);
+    }, 300);
+  }
+}
+
+function onDeployRightClick(id) {
+  if (!deploys[id] || deploys[id] <= 0) return;
+  deploys[id]--;
+  deployLeft++;
+  if (deploys[id] <= 0) delete deploys[id];
+  updateMap();
+  renderSidebar();
+}
+
+function removeDeploy(id) {
+  id = parseInt(id);
+  const amount = deploys[id] || 0;
+  deployLeft += amount;
+  delete deploys[id];
+  updateMap();
+  renderSidebar();
+}
+
+// ========== ATTACK/TRANSFER ==========
+function onAttackClick(id) {
+  if (pendingTarget !== null) {
+    // Pending army selector open, ignore map clicks
+    return;
+  }
+
+  if (selectedSource === null) {
+    // Select source
+    if (!isOwned(id)) return;
+    if (availableArmies(id) <= 0) { toast('No armies available', 'error'); return; }
+    selectedSource = id;
+    updateMap();
+    renderSidebar();
+  } else if (selectedSource === id) {
+    // Deselect
+    selectedSource = null;
+    updateMap();
+    renderSidebar();
+  } else {
+    // Select target
+    const src = terr(selectedSource);
+    if (!src || !src.adjacent.includes(id)) {
+      // Not adjacent - select new source if owned
+      if (isOwned(id) && availableArmies(id) > 0) {
+        selectedSource = id;
+      } else {
+        selectedSource = null;
+      }
+      updateMap();
+      renderSidebar();
+      return;
+    }
+    const tgt = terr(id);
+    if (!tgt) return;
+
+    const max = availableArmies(selectedSource);
+    if (max <= 0) { toast('No armies available', 'error'); selectedSource = null; updateMap(); renderSidebar(); return; }
+
+    pendingTarget = id;
+    pendingType = (tgt.owner === 0) ? 'transfer' : 'attack';
+    pendingArmies = max;
+    pendingMax = max;
+    updateMap();
+    renderSidebar();
+  }
+}
+
+function adjustPending(delta) {
+  pendingArmies = Math.max(1, Math.min(pendingMax, pendingArmies + delta));
+  renderSidebar();
+}
+
+function confirmPending() {
+  if (pendingTarget === null) return;
+  orders.push({
+    type: pendingType,
+    from: selectedSource,
+    to: pendingTarget,
+    armies: pendingArmies
+  });
+  pendingTarget = null;
+  selectedSource = null;
+  updateMap();
+  renderSidebar();
+}
+
+function cancelPending() {
+  pendingTarget = null;
+  updateMap();
+  renderSidebar();
+}
+
+function removeOrder(index) {
+  orders.splice(index, 1);
+  updateMap();
+  renderSidebar();
+}
+
+// ========== END TURN ==========
+async function endTurn() {
+  if (resolving) return;
+  resolving = true;
+
+  // Build API orders
+  const apiOrders = [];
+  Object.entries(deploys).forEach(([id, count]) => {
+    if (count > 0) apiOrders.push({Deploy: {territory: parseInt(id), armies: count}});
+  });
+  orders.forEach(o => {
+    if (o.type === 'attack') {
+      apiOrders.push({Attack: {from: o.from, to: o.to, armies: o.armies}});
+    } else {
+      apiOrders.push({Transfer: {from: o.from, to: o.to, armies: o.armies}});
+    }
+  });
+
+  const res = await api('POST', '/api/orders', {orders: apiOrders});
+  if (res) {
+    if (res.events) await showTurnEvents(res.events);
+  }
+
+  deploys = {};
+  orders = [];
+  selectedSource = null;
+  pendingTarget = null;
+  window._lastTurn = null; // Force deploy re-init on next fetchState
+  resolving = false;
+
+  await fetchState();
+}
+
+async function showTurnEvents(events) {
+  const log = document.getElementById('turn-log');
+  log.innerHTML = '<h3 style="padding:0 0 6px">Turn Events</h3>';
+
+  for (const e of events) {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+
+    if (e.Deploy) {
+      const p = e.Deploy.player === 0;
+      const t = terr(e.Deploy.territory);
+      div.className += p ? ' log-player' : ' log-enemy';
+      div.textContent = `${p?'You':'AI'} deployed ${e.Deploy.armies} to ${t?t.name:e.Deploy.territory}`;
+    } else if (e.Attack) {
+      const a = e.Attack;
+      const p = a.player === 0;
+      const from = terr(a.from);
+      const to = terr(a.to);
+      const result = a.captured ? 'captured!' : 'repelled';
+      div.className += p ? ' log-player' : ' log-enemy';
+      div.textContent = `${p?'You':'AI'} attacked ${from?from.name:a.from} -> ${to?to.name:a.to} (${a.armies}v${a.defenders}) ${result}`;
+    } else if (e.Transfer) {
+      const tr = e.Transfer;
+      const p = tr.player === 0;
+      const from = terr(tr.from);
+      const to = terr(tr.to);
+      div.className += p ? ' log-player' : ' log-enemy';
+      div.textContent = `${p?'You':'AI'} transferred ${tr.armies}: ${from?from.name:tr.from} -> ${to?to.name:tr.to}`;
+    } else if (e.Capture) {
+      const p = e.Capture.player === 0;
+      const t = terr(e.Capture.territory);
+      div.className += p ? ' log-player' : ' log-enemy';
+      div.textContent = `${p?'You':'AI'} captured ${t?t.name:e.Capture.territory}`;
+    } else if (e.Eliminated) {
+      div.className += ' log-system';
+      div.textContent = `Player ${e.Eliminated.player} eliminated!`;
+    } else if (e.Victory) {
+      div.className += ' log-system';
+      div.textContent = e.Victory.player === 0 ? 'Victory!' : 'Defeat!';
+    }
+
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    await sleep(120);
+  }
+}
+
+// ========== GAME OVER ==========
+function showGameOver(winner) {
+  const el = document.getElementById('game-over');
+  const title = document.getElementById('go-title');
+  const msg = document.getElementById('go-msg');
+  if (winner === 0) {
+    title.textContent = 'Victory!';
+    title.style.color = 'var(--green)';
+    msg.textContent = 'You conquered the world!';
+  } else {
+    title.textContent = 'Defeat';
+    title.style.color = 'var(--red)';
+    msg.textContent = 'The AI has conquered the world.';
+  }
+  el.classList.add('show');
+}
+
+// ========== NEW GAME ==========
+async function newGame() {
+  document.getElementById('game-over').classList.remove('show');
+  document.getElementById('turn-log').innerHTML = '';
+  phase = 'loading';
+  picks = [];
+  deploys = {};
+  orders = [];
+  deployLeft = 0;
+  selectedSource = null;
+  pendingTarget = null;
+  resolving = false;
+  const res = await api('POST', '/api/new');
+  if (res) await fetchState();
+}
+
+// ========== CLICK DISPATCHER ==========
+function onTerritoryClick(id, e) {
+  if (resolving) return;
+  if (phase === 'picking') {
+    onPickClick(id);
+  } else if (phase === 'deploy') {
+    if (e.altKey) {
+      onDeployRightClick(id);
+    } else {
+      onDeployClick(id, e);
+    }
+  } else if (phase === 'attack') {
+    onAttackClick(id);
+  }
+}
+
+function onTerritoryRightClick(id) {
+  if (resolving) return;
+  if (phase === 'deploy') {
+    onDeployRightClick(id);
+  }
+}
+
+// ========== KEYBOARD ==========
+document.addEventListener('keydown', e => {
+  if (resolving) return;
+  const key = e.key.toLowerCase();
+
+  if (key === 'escape') {
+    selectedSource = null;
+    pendingTarget = null;
+    updateMap();
+    renderSidebar();
+  }
+  if (key === 'enter' && phase === 'attack') {
+    endTurn();
+  }
+  if (key === 'n') {
+    newGame();
+  }
+  if ((key === '1' || key === 'd') && G && G.phase === 'play' && phase === 'attack') {
+    // Can't go back to deploy in current turn
+  }
+  if ((key === '2' || key === 'a' || key === '3' || key === 't') && phase === 'deploy' && deployLeft <= 0) {
+    phase = 'attack';
+    updateMap();
+    renderSidebar();
+  }
+});
+
+// ========== UTIL ==========
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ========== INIT ==========
+buildMap();
+fetchState();
+</script>
+</body>
+</html>
