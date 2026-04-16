@@ -35,18 +35,20 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 
 /* MAIN LAYOUT */
 #main{display:flex;flex:1;overflow:hidden}
-#map-container{flex:1;position:relative;overflow:hidden;background:var(--bg)}
+#map-container{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 45%, #111d2e 0%, #0c1520 40%, #080e14 100%)}
 #sidebar{width:340px;min-width:340px;background:linear-gradient(180deg, var(--bg2) 0%, #131820 100%);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 
 /* SVG MAP */
 #map-svg{width:100%;height:100%}
-.territory-path{cursor:pointer;transition:fill .2s ease,stroke .2s ease,opacity .2s ease}
-.territory-path:hover{filter:brightness(1.3) drop-shadow(0 0 6px rgba(255,255,255,.15))}
+.territory-path{cursor:pointer;transition:fill .2s ease,stroke .2s ease,opacity .2s ease,filter .2s ease}
+.territory-path:hover{filter:brightness(1.35) drop-shadow(0 0 8px rgba(255,255,255,.2)) drop-shadow(0 0 16px rgba(255,255,255,.08))}
 .territory-highlight{pointer-events:none;transition:stroke .2s ease,stroke-width .2s ease}
-.army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
+.army-text.large-army{font-size:15px}
 .deploy-badge{pointer-events:none;font-size:10px;font-weight:700;fill:var(--green);text-anchor:middle;dominant-baseline:central}
 .name-text{pointer-events:none;font-size:9px;fill:var(--text2);text-anchor:middle;opacity:0;transition:opacity .15s}
 .territory-group:hover .name-text{opacity:1}
+.bonus-tint{pointer-events:none;opacity:0.08;transition:opacity .3s ease}
 .pick-ring{pointer-events:none;fill:none;stroke:var(--gold);stroke-width:3}
 .pick-rank{pointer-events:none;font-size:16px;font-weight:900;fill:var(--gold);text-anchor:middle;dominant-baseline:central;text-shadow:0 0 4px rgba(0,0,0,1),0 0 8px rgba(0,0,0,.8)}
 .pick-ring-anim{animation:pulse-ring 1.2s ease-in-out infinite}
@@ -614,7 +616,71 @@ function buildMap() {
   const markerBlue = svgEl('marker', {id:'arrowhead-blue',markerWidth:8,markerHeight:6,refX:8,refY:3,orient:'auto'});
   markerBlue.appendChild(svgEl('polygon', {points:'0 0, 8 3, 0 6', fill:'#60a5fa'}));
   defs.appendChild(markerBlue);
+
+  // Ocean background gradient
+  const oceanGrad = svgEl('radialGradient', {id:'ocean-bg', cx:'50%', cy:'45%', r:'65%', fx:'50%', fy:'40%'});
+  oceanGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#0f2238'}));
+  oceanGrad.appendChild(svgEl('stop', {offset:'40%', 'stop-color':'#0a1628'}));
+  oceanGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#060d15'}));
+  defs.appendChild(oceanGrad);
+
+  // Territory fill gradients — player (blue)
+  const playerGrad = svgEl('linearGradient', {id:'grad-player', x1:'0', y1:'0', x2:'0', y2:'1'});
+  playerGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#3b82f6'}));
+  playerGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#1d4ed8'}));
+  defs.appendChild(playerGrad);
+
+  // Territory fill gradients — enemy (red)
+  const enemyGrad = svgEl('linearGradient', {id:'grad-enemy', x1:'0', y1:'0', x2:'0', y2:'1'});
+  enemyGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#ef4444'}));
+  enemyGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#b91c1c'}));
+  defs.appendChild(enemyGrad);
+
+  // Territory fill gradients — neutral (gray)
+  const neutralGrad = svgEl('linearGradient', {id:'grad-neutral', x1:'0', y1:'0', x2:'0', y2:'1'});
+  neutralGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#6b7280'}));
+  neutralGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#374151'}));
+  defs.appendChild(neutralGrad);
+
+  // Territory fill gradients — fog
+  const fogGrad = svgEl('linearGradient', {id:'grad-fog', x1:'0', y1:'0', x2:'0', y2:'1'});
+  fogGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#283040'}));
+  fogGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#1a2030'}));
+  defs.appendChild(fogGrad);
+
+  // Army bubble gradient
+  const armyBubbleGrad = svgEl('radialGradient', {id:'army-bubble-grad', cx:'40%', cy:'35%', r:'65%'});
+  armyBubbleGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'rgba(40,40,50,0.85)'}));
+  armyBubbleGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'rgba(10,10,15,0.9)'}));
+  defs.appendChild(armyBubbleGrad);
+
+  // Drop shadow filter for territories
+  const shadowFilter = svgEl('filter', {id:'territory-shadow', x:'-10%', y:'-10%', width:'120%', height:'120%'});
+  const feDropShadow = svgEl('feDropShadow', {dx:'0', dy:'1', 'stdDeviation':'1.5', 'flood-color':'rgba(0,0,0,0.4)', 'flood-opacity':'0.4'});
+  shadowFilter.appendChild(feDropShadow);
+  defs.appendChild(shadowFilter);
+
   svg.appendChild(defs);
+
+  // Ocean background rect
+  svg.appendChild(svgEl('rect', {x:'0', y:'0', width:'1000', height:'680', fill:'url(#ocean-bg)'}));
+
+  // Subtle wave decorations between continents
+  const waveGroup = svgEl('g', {id:'ocean-waves', opacity:'0.12'});
+  const wavePaths = [
+    'M 180,350 Q 210,340 240,355 Q 270,370 300,355',
+    'M 320,300 Q 345,290 370,305 Q 395,318 420,305',
+    'M 550,420 Q 590,408 630,425 Q 670,440 710,420',
+    'M 700,280 Q 730,268 760,283 Q 790,298 820,280',
+    'M 100,480 Q 140,468 180,485 Q 210,498 250,480'
+  ];
+  wavePaths.forEach(function(d) {
+    waveGroup.appendChild(svgEl('path', {
+      d: d, fill:'none', stroke:'#1e3a5f', 'stroke-width':'1.2',
+      'stroke-linecap':'round', opacity:'0.7'
+    }));
+  });
+  svg.appendChild(waveGroup);
 
   // Check if any territory lacks path data (circle-mode map)
   const isCircleMap = G && G.territories && G.territories.some(t => !t.path);
@@ -664,19 +730,36 @@ function buildMap() {
       const y = t.label_y || 0;
       const g = svgEl('g', {class:'territory-group','data-id':t.id});
 
+      // Bonus tint layer (rendered under the territory for subtle coloring)
+      if (t.path && G && G.bonuses) {
+        const tBonus = G.bonuses.find(b => (b.territory_ids || b.territories || []).includes(t.id));
+        if (tBonus) {
+          const bColor = BONUS_COLORS[tBonus.id % BONUS_COLORS.length];
+          g.appendChild(svgEl('path', {
+            d: t.path,
+            class: 'bonus-tint',
+            id: 'bonus-tint-' + t.id,
+            fill: bColor,
+            stroke: 'none'
+          }));
+        }
+      }
+
       // Territory shape path
       if (t.path) {
         g.appendChild(svgEl('path', {
           d: t.path,
           class: 'territory-path',
           id: 'terr-' + t.id,
-          fill: FOG_COLOR,
-          stroke: '#0d1117',
-          'stroke-width': 1.5
+          fill: 'url(#grad-fog)',
+          stroke: '#080c12',
+          'stroke-width': 2,
+          'stroke-linejoin': 'round',
+          filter: 'url(#territory-shadow)'
         }));
       } else {
         // Fallback circle if no path data
-        g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:FOG_COLOR, stroke:'#0d1117','stroke-width':1.5}));
+        g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#080c12','stroke-width':2, filter:'url(#territory-shadow)'}));
       }
 
       // Selection highlight (invisible path copy on top)
@@ -703,8 +786,8 @@ function buildMap() {
         }));
       }
 
-      // Army count background circle
-      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'rgba(0,0,0,0.6)', style:'display:none', 'pointer-events':'none'}));
+      // Army count background circle with gradient and colored border
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'url(#army-bubble-grad)', stroke:'rgba(255,255,255,0.15)', 'stroke-width':'1.5', style:'display:none', 'pointer-events':'none'}));
       // Army text
       g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
       // Deploy badge
@@ -830,16 +913,22 @@ function updateMap() {
 
     if (!pathEl) return;
 
-    // Color
-    let fill = FOG_COLOR;
-    let strokeColor = '#0d1117';
+    // Color — use gradients for a 3D landmass feel
+    let fill = 'url(#grad-fog)';
+    let strokeColor = '#080c12';
+    let ownerBorderColor = 'rgba(255,255,255,0.15)';
     if (t.visible !== false) {
-      if (t.owner === 0) fill = PLAYER_COLOR;
-      else if (t.owner === 1) fill = ENEMY_COLOR;
-      else fill = NEUTRAL_COLOR;
+      if (t.owner === 0) { fill = 'url(#grad-player)'; strokeColor = '#152a5e'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
+      else if (t.owner === 1) { fill = 'url(#grad-enemy)'; strokeColor = '#5a1010'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
+      else { fill = 'url(#grad-neutral)'; strokeColor = '#1a1f2a'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
     }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
+
+    // Update army bubble border color to match owner
+    if (armyBg) {
+      armyBg.setAttribute('stroke', ownerBorderColor);
+    }
 
     // Highlight for selection/pick state
     if (highlightEl) {
@@ -868,9 +957,18 @@ function updateMap() {
 
     if (t.visible !== false && displayArmies > 0) {
       armyEl.textContent = displayArmies;
+      // Larger font and bigger bubble for armies > 10
+      if (displayArmies > 10) {
+        armyEl.classList.add('large-army');
+        if (armyBg) armyBg.setAttribute('r', '14');
+      } else {
+        armyEl.classList.remove('large-army');
+        if (armyBg) armyBg.setAttribute('r', '12');
+      }
       if (armyBg) armyBg.style.display = '';
     } else {
       armyEl.textContent = '';
+      armyEl.classList.remove('large-army');
       if (armyBg) armyBg.style.display = 'none';
     }
 
@@ -1664,7 +1762,7 @@ async function showTurnEvents(events) {
       if (a.captured) {
         // Immediately update territory color to attacker's color
         const capturedEl = document.getElementById('terr-' + a.to);
-        if (capturedEl) capturedEl.setAttribute('fill', p ? PLAYER_COLOR : ENEMY_COLOR);
+        if (capturedEl) capturedEl.setAttribute('fill', p ? 'url(#grad-player)' : 'url(#grad-enemy)');
         flashTerritory(a.to, 'flash-capture');
         playSound('capture');
         if (p) gameStats.captured++;
@@ -1689,7 +1787,7 @@ async function showTurnEvents(events) {
       div.textContent = (p?'You':'AI') + ' captured ' + (t?t.name:e.Capture.territory);
       // Immediately update territory color to capturer's color
       const capEl = document.getElementById('terr-' + e.Capture.territory);
-      if (capEl) capEl.setAttribute('fill', p ? PLAYER_COLOR : ENEMY_COLOR);
+      if (capEl) capEl.setAttribute('fill', p ? 'url(#grad-player)' : 'url(#grad-enemy)');
       flashTerritory(e.Capture.territory, 'flash-capture');
     } else if (e.Eliminated) {
       div.className += ' log-system';
@@ -1961,12 +2059,12 @@ function applyReplayState(state) {
 
     if (!pathEl) return;
 
-    // Color
-    let fill = FOG_COLOR;
+    // Color — use gradients in replay too
+    let fill = 'url(#grad-fog)';
     if (t.visible !== false) {
-      if (t.owner === 0) fill = PLAYER_COLOR;
-      else if (t.owner === 1) fill = ENEMY_COLOR;
-      else fill = NEUTRAL_COLOR;
+      if (t.owner === 0) fill = 'url(#grad-player)';
+      else if (t.owner === 1) fill = 'url(#grad-enemy)';
+      else fill = 'url(#grad-neutral)';
     }
     pathEl.style.transition = 'fill 0.3s ease';
     pathEl.setAttribute('fill', fill);
