@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aibak</title>
+<title>strat.club</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -227,7 +227,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 <body>
 <div id="app">
   <div id="topbar">
-    <h1>AIBAK</h1>
+    <h1>strat.club</h1>
     <div class="stats">
       <span>Turn <strong id="turn-num">1</strong></span>
       <span>Income <strong id="income-num">5</strong></span>
@@ -596,9 +596,6 @@ function buildMap() {
   defs.appendChild(markerBlue);
   svg.appendChild(defs);
 
-  // Order lines group (below territories so paths draw on top)
-  svg.appendChild(svgEl('g', {id:'order-lines'}));
-
   // Check if any territory lacks path data (circle-mode map)
   const isCircleMap = G && G.territories && G.territories.some(t => !t.path);
 
@@ -703,6 +700,9 @@ function buildMap() {
     });
   }
   svg.appendChild(terrGroup);
+
+  // Order lines group — AFTER territories so arrows render on top
+  svg.appendChild(svgEl('g', {id:'order-lines'}));
 
   // Compute true centroids from rendered paths using getBBox()
   // This runs after paths are in the DOM so getBBox() works correctly
