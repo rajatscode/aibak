@@ -185,7 +185,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* GAME OVER OVERLAY */
 #game-over{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:999}
 #game-over.show{display:flex}
-#game-over .card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:500px}
+#game-over .card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:680px;max-height:85vh;overflow-y:auto}
 #game-over .card h2{font-size:32px;margin-bottom:12px}
 #game-over .card p{color:var(--text2);margin-bottom:16px}
 #game-over .card button{padding:12px 32px;font-size:16px}
@@ -195,6 +195,18 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #game-over .stat-item .stat-value{font-size:18px;font-weight:700}
 #game-over .sparkline-container{margin-bottom:20px}
 #game-over .sparkline-container h4{font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px}
+#game-over .analysis-section{margin-top:20px;text-align:left}
+#game-over .analysis-section h3{font-size:14px;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
+#game-over .analysis-chart{margin-bottom:16px}
+#game-over .key-moments{list-style:none;padding:0;margin:0 0 16px 0}
+#game-over .key-moments li{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;transition:border-color .2s}
+#game-over .key-moments li:hover{border-color:var(--blue)}
+#game-over .moment-turn{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700;color:var(--text3);white-space:nowrap}
+#game-over .moment-badge{font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600;white-space:nowrap}
+#game-over .moment-badge.positive{background:rgba(63,185,80,0.15);color:var(--green)}
+#game-over .moment-badge.negative{background:rgba(220,38,38,0.15);color:var(--red)}
+#game-over .moment-badge.neutral{background:rgba(139,148,158,0.15);color:var(--text3)}
+#game-over .biggest-attack{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px}
 
 /* TEMPLATE MODAL */
 #template-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:1000}
@@ -345,6 +357,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <h2 id="go-title"></h2>
     <p id="go-msg"></p>
     <div id="go-stats"></div>
+    <div id="go-analysis"></div>
     <div style="display:flex;gap:12px;justify-content:center">
       <button class="btn btn-gold" style="width:auto;padding:12px 32px" onclick="newGame()">Play Again</button>
       <button class="btn btn-primary" style="width:auto;padding:12px 32px" id="go-review-btn" onclick="enterReplayMode()">Review Game</button>
@@ -1865,6 +1878,7 @@ function showGameOver(winner) {
   const title = document.getElementById('go-title');
   const msg = document.getElementById('go-msg');
   const statsDiv = document.getElementById('go-stats');
+  const analysisDiv = document.getElementById('go-analysis');
   if (winner === 0) {
     title.textContent = 'Victory!';
     title.style.color = 'var(--green)';
@@ -1891,7 +1905,136 @@ function showGameOver(winner) {
   }
 
   statsDiv.innerHTML = statsHtml;
+  analysisDiv.innerHTML = '<p style="color:var(--text3);font-size:12px">Loading analysis...</p>';
   el.classList.add('show');
+
+  // Fetch detailed post-game analysis.
+  fetchPostAnalysis(analysisDiv);
+}
+
+async function fetchPostAnalysis(container) {
+  try {
+    const data = await api('GET', '/api/game/post-analysis');
+    if (!data) { container.innerHTML = ''; return; }
+    container.innerHTML = buildPostAnalysisHTML(data);
+  } catch (e) {
+    container.innerHTML = '';
+  }
+}
+
+function buildPostAnalysisHTML(a) {
+  let html = '<div class="analysis-section">';
+
+  // Territory control chart
+  if (a.territory_control_over_time && a.territory_control_over_time.length > 1) {
+    html += '<div class="analysis-chart"><h3>Territory Control</h3>' +
+      buildAreaChart(a.territory_control_over_time, 560, 80) + '</div>';
+  }
+
+  // Income chart
+  if (a.income_over_time && a.income_over_time.length > 1) {
+    html += '<div class="analysis-chart"><h3>Income</h3>' +
+      buildAreaChart(a.income_over_time, 560, 80) + '</div>';
+  }
+
+  // Efficiency stat
+  if (a.player_efficiency > 0) {
+    html += '<div class="stats-grid" style="margin-bottom:16px">' +
+      '<div class="stat-item"><div class="stat-label">Deploy Efficiency</div>' +
+      '<div class="stat-value">' + a.player_efficiency.toFixed(1) + '</div>' +
+      '<div style="font-size:10px;color:var(--text3)">armies per capture</div></div>';
+    if (a.biggest_attack) {
+      var ba = a.biggest_attack;
+      html += '<div class="stat-item"><div class="stat-label">Biggest Attack</div>' +
+        '<div class="stat-value">' + ba.armies + ' vs ' + ba.defenders + '</div>' +
+        '<div style="font-size:10px;color:var(--text3)">' +
+        ba.from_name + ' → ' + ba.to_name +
+        (ba.captured ? ' (captured)' : ' (failed)') +
+        '</div></div>';
+    }
+    html += '</div>';
+  } else if (a.biggest_attack) {
+    var ba = a.biggest_attack;
+    html += '<div class="biggest-attack"><strong>Biggest Attack:</strong> ' +
+      ba.armies + ' armies from ' + ba.from_name + ' → ' + ba.to_name +
+      ' (vs ' + ba.defenders + ' defenders) - ' +
+      (ba.captured ? 'Captured!' : 'Failed') + '</div>';
+  }
+
+  // Key moments
+  if (a.key_moments && a.key_moments.length > 0) {
+    html += '<h3>Key Moments</h3><ul class="key-moments">';
+    var shown = a.key_moments.slice(0, 8);
+    for (var i = 0; i < shown.length; i++) {
+      var m = shown[i];
+      var badgeClass = m.win_prob_change > 0.05 ? 'positive' : m.win_prob_change < -0.05 ? 'negative' : 'neutral';
+      var changeText = m.win_prob_change !== 0 ? (m.win_prob_change > 0 ? '+' : '') + Math.round(m.win_prob_change * 100) + '%' : '';
+      html += '<li onclick="goToReplayTurn(' + (m.turn - 1) + ')">' +
+        '<span class="moment-turn">T' + m.turn + '</span>' +
+        '<span style="flex:1">' + escapeHtml(m.description) + '</span>' +
+        (changeText ? '<span class="moment-badge ' + badgeClass + '">' + changeText + '</span>' : '') +
+        '</li>';
+    }
+    html += '</ul>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function escapeHtml(s) {
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function buildAreaChart(data, w, h) {
+  var pad = 4;
+  var uw = w - pad * 2;
+  var uh = h - pad * 2;
+  var n = data.length;
+  // Find max value for scaling.
+  var maxVal = 1;
+  for (var i = 0; i < n; i++) {
+    if (data[i][0] > maxVal) maxVal = data[i][0];
+    if (data[i][1] > maxVal) maxVal = data[i][1];
+  }
+
+  // Build player (blue) area path.
+  var bluePts = '';
+  var redPts = '';
+  var blueArea = 'M ' + pad + ',' + (pad + uh);
+  var redArea = 'M ' + pad + ',' + (pad + uh);
+
+  for (var i = 0; i < n; i++) {
+    var x = pad + (i / Math.max(1, n - 1)) * uw;
+    var yBlue = pad + (1 - data[i][0] / maxVal) * uh;
+    var yRed = pad + (1 - data[i][1] / maxVal) * uh;
+    bluePts += x + ',' + yBlue + ' ';
+    redPts += x + ',' + yRed + ' ';
+    blueArea += ' L ' + x + ',' + yBlue;
+    redArea += ' L ' + x + ',' + yRed;
+  }
+  var lastX = pad + uw;
+  blueArea += ' L ' + lastX + ',' + (pad + uh) + ' Z';
+  redArea += ' L ' + lastX + ',' + (pad + uh) + ' Z';
+
+  return '<svg width="' + w + '" height="' + h + '" style="background:var(--bg);border-radius:6px;border:1px solid var(--border)">' +
+    '<path d="' + blueArea + '" fill="rgba(37,99,235,0.15)"/>' +
+    '<path d="' + redArea + '" fill="rgba(220,38,38,0.1)"/>' +
+    '<polyline points="' + bluePts.trim() + '" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round"/>' +
+    '<polyline points="' + redPts.trim() + '" fill="none" stroke="#dc2626" stroke-width="2" stroke-linejoin="round"/>' +
+    '<text x="' + (w - pad) + '" y="' + (pad + 8) + '" text-anchor="end" font-size="8" fill="var(--text3)">' + maxVal + '</text>' +
+    '<text x="' + pad + '" y="' + (pad + 8) + '" font-size="8" fill="#2563eb">You</text>' +
+    '<text x="' + (pad + 30) + '" y="' + (pad + 8) + '" font-size="8" fill="#dc2626">AI</text>' +
+  '</svg>';
+}
+
+function goToReplayTurn(turn) {
+  document.getElementById('game-over').classList.remove('show');
+  enterReplayMode();
+  // Small delay to let replay mode initialize, then navigate to the turn.
+  setTimeout(function() { fetchReplayState(Math.min(turn, replayMaxTurn)); }, 100);
 }
 
 function buildSparklineSVG(data) {

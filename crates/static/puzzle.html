@@ -1,1 +1,632 @@
-<!DOCTYPE html><html><head><title>strat.club - Daily Puzzle</title></head><body><p>Loading puzzle...</p></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>strat.club — Daily Puzzle</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
+  --neutral:#4b5563;--orange:#f97316;
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+body{display:flex;flex-direction:column}
+
+/* Top bar */
+.topbar{width:100%;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar h1{font-size:16px;font-weight:700;color:var(--gold);letter-spacing:1px}
+.topbar h1 span{color:var(--text2);font-weight:400;font-size:13px;margin-left:6px}
+.topbar-right{display:flex;gap:16px;align-items:center}
+.topbar a{color:var(--text2);text-decoration:none;font-size:13px;transition:color .15s}
+.topbar a:hover{color:var(--text)}
+.streak-badge{font-size:14px;font-weight:700;color:var(--orange)}
+
+/* Main layout: map + sidebar */
+.main-layout{display:flex;flex:1;overflow:hidden;max-width:1200px;width:100%;margin:0 auto;padding:20px 24px;gap:24px}
+.map-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
+.sidebar{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:14px;overflow-y:auto;padding-bottom:20px}
+
+/* Map card */
+.map-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;width:100%;max-width:640px}
+.map-card svg{width:100%;height:auto;display:block}
+
+/* Territory styles */
+.t-shape{cursor:pointer;transition:filter .15s,stroke-width .15s}
+.t-shape:hover{filter:brightness(1.3)}
+.t-shape.selected{stroke:var(--gold)!important;stroke-width:3.5!important;filter:brightness(1.4)}
+.t-shape.attack-target{stroke:var(--orange)!important;stroke-width:2.5!important;stroke-dasharray:5 3}
+.t-army{pointer-events:none;font-size:15px;font-weight:800;fill:#fff;text-anchor:middle;dominant-baseline:central}
+.t-name{pointer-events:none;font-size:9px;font-weight:500;fill:var(--text2);text-anchor:middle;dominant-baseline:central;opacity:.9}
+.t-conn{stroke:var(--border);stroke-width:1.5;opacity:.3}
+.b-label{font-size:9px;fill:var(--text3);text-anchor:middle;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+
+/* Sidebar cards */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:10px}
+.puzzle-date{font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;text-transform:uppercase;letter-spacing:.5px;margin-right:6px}
+.badge-easy{background:#064e3b;color:#6ee7b7;border:1px solid #065f46}
+.badge-medium{background:#78350f;color:#fbbf24;border:1px solid #92400e}
+.badge-hard{background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b}
+.badge-type{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.puzzle-desc{font-size:13px;color:var(--text2);line-height:1.55;margin-top:10px}
+
+/* Deploy counter */
+.deploy-counter{display:flex;align-items:center;gap:14px}
+.deploy-num{font-size:36px;font-weight:800;color:var(--blue);line-height:1;min-width:36px;text-align:center}
+.deploy-num.zero{color:var(--text3)}
+.deploy-info{font-size:13px;color:var(--text2);line-height:1.4}
+.deploy-info small{font-size:11px;color:var(--text3);display:block;margin-top:2px}
+
+/* Order list */
+.order-list{list-style:none;display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto}
+.order-item{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px}
+.order-icon{font-size:13px;flex-shrink:0}
+.order-text{flex:1;color:var(--text)}
+.order-rm{background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:0 3px;line-height:1;transition:color .15s}
+.order-rm:hover{color:var(--red)}
+.order-empty{color:var(--text3);font-size:13px;font-style:italic}
+
+/* Action hint */
+.action-hint{font-size:13px;color:var(--text2);line-height:1.5;padding:10px 12px;background:var(--bg);border:1px dashed var(--border);border-radius:8px;transition:border-color .3s}
+.action-hint.error{border-color:var(--red)}
+.action-hint strong{font-weight:600}
+.action-hint .blue{color:var(--blue)}
+.action-hint .red{color:var(--red)}
+
+/* Hint box */
+.hint-box{background:#1c1e24;border:1px solid #92400e;border-radius:8px;padding:12px;font-size:13px;color:#fbbf24;line-height:1.5;display:none}
+.hint-box.show{display:block}
+
+/* Buttons */
+.btn-row{display:flex;gap:8px}
+.btn{flex:1;border:none;border-radius:8px;padding:10px 14px;cursor:pointer;font-size:13px;font-weight:700;transition:background .15s,transform .1s}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-submit{background:var(--green);color:#0d1117}
+.btn-submit:hover:not(:disabled){background:#46c95e}
+.btn-hint{background:var(--bg3);color:var(--gold);border:1px solid var(--border)}
+.btn-hint:hover:not(:disabled){background:var(--border)}
+.btn-reset{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.btn-reset:hover:not(:disabled){background:var(--border)}
+
+/* Result overlay */
+.result-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center}
+.result-overlay.show{display:flex}
+.result-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:440px;width:92%;text-align:center;animation:rpop .3s ease-out}
+@keyframes rpop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
+.result-icon{font-size:56px;margin-bottom:8px}
+.result-title{font-size:22px;font-weight:800;margin-bottom:6px}
+.result-msg{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px}
+.result-optimal{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:left;margin-bottom:16px}
+.result-optimal h4{font-size:11px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;letter-spacing:.5px}
+.result-optimal-order{font-size:13px;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border)}
+.result-optimal-order:last-child{border-bottom:none}
+.result-actions{display:flex;gap:10px;justify-content:center}
+.result-btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.result-btn-close{background:var(--bg3);color:var(--text)}
+.result-btn-close:hover{background:var(--border)}
+.result-btn-share{background:var(--gold);color:#0d1117}
+.result-btn-share:hover{background:#d4a030}
+.tomorrow-msg{text-align:center;font-size:13px;color:var(--text3);padding:6px 0}
+
+/* Loading */
+.loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--text2);font-size:15px;gap:12px}
+.spinner{width:22px;height:22px;border:3px solid var(--bg3);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Responsive */
+@media(max-width:768px){
+  .main-layout{flex-direction:column;padding:12px;gap:14px}
+  .sidebar{width:100%}
+  .map-card{max-width:100%}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>STRAT.CLUB <span>/ daily puzzle</span></h1>
+  <div class="topbar-right">
+    <span class="streak-badge" id="streakBadge"></span>
+    <a href="/">Play</a>
+    <a href="/tutorial">Tutorial</a>
+    <a href="/games">Games</a>
+  </div>
+</div>
+
+<div class="loading" id="loadingEl"><div class="spinner"></div>Loading today's puzzle...</div>
+
+<div class="main-layout" id="app" style="display:none">
+  <div class="map-col">
+    <div class="map-card">
+      <svg id="mapSvg" viewBox="0 0 600 400"></svg>
+    </div>
+  </div>
+  <div class="sidebar" id="sidebar"></div>
+</div>
+
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-card" id="resultCard"></div>
+</div>
+
+<script>
+(function(){
+
+// ===== State =====
+var puzzle = null;
+var orders = [];        // [{type:'Deploy',territory,armies}, {type:'Attack',from,to,armies}]
+var mode = 'deploy';    // 'deploy' | 'attack_from' | 'attack_to' | 'done'
+var attackFrom = null;
+var submitted = false;
+var hintShown = false;
+var positions = [];     // computed territory positions
+
+// ===== Streak =====
+function getStreak() {
+  try { return JSON.parse(localStorage.getItem('puzzle_streak_v2')||'{}'); } catch(e){ return {}; }
+}
+function saveStreak(data) { localStorage.setItem('puzzle_streak_v2', JSON.stringify(data)); }
+function updateStreak(daySeed, won) {
+  var s = getStreak();
+  if (s.lastDay === daySeed) return;
+  if (won) {
+    s.count = (s.lastDay === daySeed - 1) ? (s.count||0) + 1 : 1;
+  } else {
+    s.count = 0;
+  }
+  s.lastDay = daySeed;
+  saveStreak(s);
+  renderStreak();
+}
+function renderStreak() {
+  var s = getStreak();
+  var el = document.getElementById('streakBadge');
+  el.textContent = (s.count > 0) ? '\uD83D\uDD25 ' + s.count + '-day streak' : '';
+}
+
+// ===== Helpers =====
+function $(s){ return document.querySelector(s); }
+function $$(s){ return document.querySelectorAll(s); }
+function ownerStroke(o){ return o===0?'#3b82f6':o===1?'#ef4444':'#6b7280'; }
+function ownerFill(o){ return o===0?'#1e3a5f':o===1?'#5f1e1e':'#2d333b'; }
+function terrName(id){ return puzzle.territories[id]?puzzle.territories[id].name:'T'+id; }
+
+// ===== Deploy helpers =====
+function deployedTotal() {
+  var t=0; for(var i=0;i<orders.length;i++) if(orders[i].type==='Deploy') t+=orders[i].armies; return t;
+}
+function remaining() { return puzzle.income - deployedTotal(); }
+function effectiveArmies(tid) {
+  var a = puzzle.territories[tid].armies;
+  for(var i=0;i<orders.length;i++) if(orders[i].type==='Deploy'&&orders[i].territory===tid) a+=orders[i].armies;
+  return a;
+}
+function attacksFrom(tid) {
+  var a=0; for(var i=0;i<orders.length;i++) if(orders[i].type==='Attack'&&orders[i].from===tid) a+=orders[i].armies; return a;
+}
+
+// ===== Layout =====
+function computeLayout(territories) {
+  var n = territories.length, W = 600, H = 400;
+  var pos = [];
+  for (var i=0;i<n;i++) {
+    var angle = 2*Math.PI*i/n - Math.PI/2;
+    pos.push({x: W/2+170*Math.cos(angle), y: H/2+140*Math.sin(angle)});
+  }
+  for (var iter=0;iter<100;iter++) {
+    var f = pos.map(function(){return {x:0,y:0};});
+    for (var i=0;i<n;i++) for (var j=i+1;j<n;j++) {
+      var dx=pos[i].x-pos[j].x, dy=pos[i].y-pos[j].y;
+      var d=Math.max(Math.sqrt(dx*dx+dy*dy),1);
+      var force=9000/(d*d);
+      f[i].x+=force*dx/d; f[i].y+=force*dy/d;
+      f[j].x-=force*dx/d; f[j].y-=force*dy/d;
+    }
+    for (var i=0;i<n;i++) for (var k=0;k<territories[i].adjacent.length;k++) {
+      var j=territories[i].adjacent[k];
+      var dx=pos[j].x-pos[i].x, dy=pos[j].y-pos[i].y;
+      var d=Math.max(Math.sqrt(dx*dx+dy*dy),1);
+      var force=(d-130)*0.04;
+      f[i].x+=force*dx/d; f[i].y+=force*dy/d;
+    }
+    for (var i=0;i<n;i++) {
+      f[i].x+=(W/2-pos[i].x)*0.008;
+      f[i].y+=(H/2-pos[i].y)*0.008;
+    }
+    var cool=1-iter/120;
+    for (var i=0;i<n;i++) {
+      pos[i].x+=Math.max(-12,Math.min(12,f[i].x))*cool;
+      pos[i].y+=Math.max(-12,Math.min(12,f[i].y))*cool;
+      pos[i].x=Math.max(55,Math.min(W-55,pos[i].x));
+      pos[i].y=Math.max(45,Math.min(H-45,pos[i].y));
+    }
+  }
+  return pos;
+}
+
+// Generate organic hex shape
+function hexPath(cx, cy, r, seed) {
+  var pts=[];
+  for (var i=0;i<6;i++) {
+    var a=Math.PI*2*i/6 - Math.PI/6;
+    var w=0.82+0.36*Math.sin(seed*7.1+i*2.3);
+    pts.push([cx+r*w*Math.cos(a), cy+r*w*Math.sin(a)]);
+  }
+  var d='M'+pts[0][0]+','+pts[0][1];
+  for (var i=1;i<pts.length;i++) {
+    var prev=pts[i-1], cur=pts[i];
+    var mx=(prev[0]+cur[0])/2, my=(prev[1]+cur[1])/2;
+    d+=' Q'+prev[0]+','+prev[1]+' '+mx+','+my;
+  }
+  var last=pts[pts.length-1], first=pts[0];
+  d+=' Q'+last[0]+','+last[1]+' '+first[0]+','+first[1]+'Z';
+  return d;
+}
+
+// ===== Render Map =====
+function renderMap() {
+  var svg = $('#mapSvg');
+  var parts = [];
+  var n = puzzle.territories.length;
+
+  // Connections
+  var drawn = {};
+  for (var i=0;i<n;i++) {
+    var t=puzzle.territories[i];
+    for (var k=0;k<t.adjacent.length;k++) {
+      var j=t.adjacent[k];
+      var key=Math.min(i,j)+'-'+Math.max(i,j);
+      if(!drawn[key]){
+        drawn[key]=true;
+        parts.push('<line class="t-conn" x1="'+positions[i].x+'" y1="'+positions[i].y+'" x2="'+positions[j].x+'" y2="'+positions[j].y+'"/>');
+      }
+    }
+  }
+
+  // Bonus labels
+  for (var bi=0;bi<puzzle.bonuses.length;bi++) {
+    var b=puzzle.bonuses[bi];
+    var bx=0,by=0;
+    for (var k=0;k<b.territory_ids.length;k++){bx+=positions[b.territory_ids[k]].x;by+=positions[b.territory_ids[k]].y;}
+    bx/=b.territory_ids.length; by=by/b.territory_ids.length-50;
+    parts.push('<text class="b-label" x="'+bx+'" y="'+Math.max(12,by)+'">'+b.name+' (+'+b.value+')</text>');
+  }
+
+  // Territories
+  for (var i=0;i<n;i++) {
+    var t=puzzle.territories[i];
+    var p=positions[i];
+    var fill=ownerFill(t.owner), stroke=ownerStroke(t.owner);
+    var cls='t-shape';
+    if (attackFrom===i) cls+=' selected';
+    // Highlight valid attack targets
+    if (mode==='attack_to' && attackFrom!==null) {
+      var fromT=puzzle.territories[attackFrom];
+      if (fromT.adjacent.indexOf(i)!==-1 && t.owner!==puzzle.player) cls+=' attack-target';
+    }
+    var path=hexPath(p.x, p.y, 36, i*3.7+puzzle.id*1.3);
+    parts.push('<path class="'+cls+'" data-id="'+i+'" d="'+path+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2"/>');
+    parts.push('<text class="t-army" x="'+p.x+'" y="'+(p.y-3)+'">'+effectiveArmies(i)+'</text>');
+    parts.push('<text class="t-name" x="'+p.x+'" y="'+(p.y+15)+'">'+t.name+'</text>');
+  }
+
+  svg.innerHTML = parts.join('');
+
+  // Bind territory clicks
+  var shapes = $$('.t-shape');
+  for (var i=0;i<shapes.length;i++) {
+    shapes[i].addEventListener('click', (function(idx){
+      return function(){ onTerritoryClick(idx); };
+    })(parseInt(shapes[i].getAttribute('data-id'))));
+  }
+}
+
+// ===== Render Sidebar =====
+function renderSidebar() {
+  var sb = $('#sidebar');
+  var today = new Date();
+  var dateStr = today.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  var diffCls = puzzle.difficulty==='easy'?'badge-easy':puzzle.difficulty==='medium'?'badge-medium':'badge-hard';
+  var typeLabels = {capture_the_bonus:'Capture the Bonus',defend_or_die:'Defend or Die',multi_front:'Multi-Front'};
+  var typeLabel = typeLabels[puzzle.puzzle_type]||puzzle.puzzle_type;
+
+  // Orders HTML
+  var ordersHtml = '';
+  if (orders.length === 0) {
+    ordersHtml = '<div class="order-empty">No orders yet</div>';
+  } else {
+    ordersHtml = '<ul class="order-list">';
+    for (var i=0;i<orders.length;i++) {
+      var o=orders[i], icon='', text='';
+      if (o.type==='Deploy') { icon='\u{1F6E1}\uFE0F'; text='Deploy '+o.armies+' to '+terrName(o.territory); }
+      else if (o.type==='Attack') { icon='\u2694\uFE0F'; text='Attack '+terrName(o.to)+' from '+terrName(o.from)+' ('+o.armies+')'; }
+      ordersHtml += '<li class="order-item"><span class="order-icon">'+icon+'</span><span class="order-text">'+text+'</span>'
+        + (!submitted?'<button class="order-rm" data-rm="'+i+'">&times;</button>':'')
+        + '</li>';
+    }
+    ordersHtml += '</ul>';
+  }
+
+  // Action hint
+  var hint = '';
+  if (submitted) {
+    hint = 'Solution submitted.';
+  } else if (mode==='deploy') {
+    hint = 'Click a <strong class="blue">blue territory</strong> to deploy armies there.';
+  } else if (mode==='attack_from') {
+    if (remaining()>0) hint = 'You have <strong class="blue">'+remaining()+'</strong> armies left to deploy. Click blue territory to deploy, or click to set up an attack.';
+    else hint = 'Click a <strong class="blue">blue territory</strong> to attack from, then click the <strong class="red">red target</strong>.';
+  } else if (mode==='attack_to') {
+    hint = 'Click an adjacent <strong class="red">enemy territory</strong> to attack. Click the selected territory again to cancel.';
+  }
+
+  var rem = remaining();
+
+  sb.innerHTML =
+    // Puzzle info
+    '<div class="card">' +
+      '<div class="card-title">Daily Puzzle</div>' +
+      '<div class="puzzle-date">'+dateStr+'</div>' +
+      '<div style="margin:6px 0 0"><span class="badge '+diffCls+'">'+puzzle.difficulty+'</span><span class="badge badge-type">'+typeLabel+'</span></div>' +
+      '<div class="puzzle-desc">'+puzzle.description+'</div>' +
+    '</div>' +
+    // Deploy counter
+    '<div class="card">' +
+      '<div class="card-title">Armies to Deploy</div>' +
+      '<div class="deploy-counter">' +
+        '<div class="deploy-num'+(rem===0?' zero':'')+'">'+rem+'</div>' +
+        '<div class="deploy-info">armies remaining<small>Total income: '+puzzle.income+'</small></div>' +
+      '</div>' +
+    '</div>' +
+    // Orders
+    '<div class="card">' +
+      '<div class="card-title">Your Orders</div>' +
+      ordersHtml +
+    '</div>' +
+    // Action hint
+    '<div class="action-hint" id="actionHint">'+hint+'</div>' +
+    // Hint box
+    '<div class="hint-box'+(hintShown?' show':'')+'" id="hintBox">'+puzzle.hint+'</div>' +
+    // Buttons
+    (!submitted ?
+      '<div class="btn-row">' +
+        '<button class="btn btn-reset" id="btnReset">Reset</button>' +
+        '<button class="btn btn-hint" id="btnHint">'+(hintShown?'Hint Shown':'Hint')+'</button>' +
+        '<button class="btn btn-submit" id="btnSubmit">Submit Solution</button>' +
+      '</div>'
+    :
+      '<div class="tomorrow-msg">Come back tomorrow for the next puzzle!</div>'
+    );
+
+  // Bind sidebar events
+  var rmBtns = $$('[data-rm]');
+  for (var i=0;i<rmBtns.length;i++) {
+    rmBtns[i].addEventListener('click', (function(idx){ return function(){ removeOrder(idx); }; })(parseInt(rmBtns[i].getAttribute('data-rm'))));
+  }
+  var resetBtn = $('#btnReset');
+  if (resetBtn) resetBtn.addEventListener('click', resetOrders);
+  var hintBtn = $('#btnHint');
+  if (hintBtn) hintBtn.addEventListener('click', function(){ hintShown=true; renderSidebar(); });
+  var submitBtn = $('#btnSubmit');
+  if (submitBtn) submitBtn.addEventListener('click', submitSolution);
+}
+
+// ===== Territory Click =====
+function onTerritoryClick(tid) {
+  if (submitted) return;
+  var t = puzzle.territories[tid];
+
+  if (mode === 'deploy') {
+    if (t.owner !== puzzle.player) return flashHint('Deploy to your own (blue) territories.');
+    if (remaining() <= 0) {
+      mode = 'attack_from';
+      renderSidebar();
+      return flashHint('No armies left. Set up attacks or submit.');
+    }
+    // Add 1 army (existing deploy order or new)
+    var existing = null;
+    for (var i=0;i<orders.length;i++) if(orders[i].type==='Deploy'&&orders[i].territory===tid){existing=orders[i];break;}
+    if (existing) existing.armies++;
+    else orders.push({type:'Deploy',territory:tid,armies:1});
+    if (remaining()<=0) mode='attack_from';
+    refresh();
+  }
+  else if (mode === 'attack_from') {
+    // Allow switching back to deploy if remaining > 0 and clicking own territory
+    if (t.owner === puzzle.player && remaining() > 0) {
+      // Deploy instead
+      var existing = null;
+      for (var i=0;i<orders.length;i++) if(orders[i].type==='Deploy'&&orders[i].territory===tid){existing=orders[i];break;}
+      if (existing) existing.armies++;
+      else orders.push({type:'Deploy',territory:tid,armies:1});
+      if (remaining()<=0) mode='attack_from';
+      refresh();
+      return;
+    }
+    if (t.owner !== puzzle.player) return flashHint('Select one of your (blue) territories to attack from.');
+    var avail = effectiveArmies(tid) - 1 - attacksFrom(tid);
+    if (avail <= 0) return flashHint('Not enough armies on '+t.name+' to attack.');
+    attackFrom = tid;
+    mode = 'attack_to';
+    refresh();
+  }
+  else if (mode === 'attack_to') {
+    if (tid === attackFrom) {
+      // Cancel
+      attackFrom = null;
+      mode = 'attack_from';
+      refresh();
+      return;
+    }
+    if (t.owner === puzzle.player) return flashHint('Cannot attack your own territory.');
+    var fromT = puzzle.territories[attackFrom];
+    if (fromT.adjacent.indexOf(tid)===-1) return flashHint('Not adjacent. Pick a neighboring enemy territory.');
+    var avail = effectiveArmies(attackFrom) - 1 - attacksFrom(attackFrom);
+    if (avail<=0) { flashHint('Not enough armies.'); attackFrom=null; mode='attack_from'; refresh(); return; }
+    orders.push({type:'Attack',from:attackFrom,to:tid,armies:avail});
+    attackFrom=null;
+    mode='attack_from';
+    refresh();
+  }
+}
+
+function flashHint(msg) {
+  var el = $('#actionHint');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.classList.add('error');
+  setTimeout(function(){ el.classList.remove('error'); }, 1500);
+}
+
+function removeOrder(idx) {
+  if (submitted) return;
+  var removed = orders.splice(idx,1)[0];
+  if (removed && removed.type==='Deploy' && remaining()>0) mode='deploy';
+  attackFrom=null;
+  if (mode==='attack_to') mode='attack_from';
+  refresh();
+}
+
+function resetOrders() {
+  orders=[];
+  mode='deploy';
+  attackFrom=null;
+  hintShown=false;
+  submitted=false;
+  refresh();
+}
+
+function refresh() {
+  renderMap();
+  renderSidebar();
+}
+
+// ===== Submit =====
+function submitSolution() {
+  if (submitted || orders.length===0) {
+    if (orders.length===0) flashHint('Add orders first!');
+    return;
+  }
+  submitted = true;
+  renderSidebar();
+
+  var apiOrders = orders.map(function(o){
+    if(o.type==='Deploy') return {Deploy:{territory:o.territory,armies:o.armies}};
+    if(o.type==='Attack') return {Attack:{from:o.from,to:o.to,armies:o.armies}};
+    return o;
+  });
+
+  fetch('/api/puzzle/submit',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({orders:apiOrders, day_seed:puzzle.day_seed})
+  })
+  .then(function(r){return r.json();})
+  .then(function(result){
+    var won = result.correct||result.objective_met;
+    updateStreak(puzzle.day_seed, won);
+    // Save completion
+    localStorage.setItem('puzzle_done_'+puzzle.day_seed, JSON.stringify({won:won,ts:Date.now()}));
+    showResult(result);
+  })
+  .catch(function(){
+    submitted=false;
+    renderSidebar();
+    flashHint('Network error. Try again.');
+  });
+}
+
+function formatOrder(order) {
+  if(order.Deploy) return 'Deploy '+order.Deploy.armies+' to '+terrName(order.Deploy.territory);
+  if(order.Attack) return 'Attack '+terrName(order.Attack.from)+' \u2192 '+terrName(order.Attack.to)+' with '+order.Attack.armies;
+  if(order.Transfer) return 'Transfer '+order.Transfer.armies+': '+terrName(order.Transfer.from)+' \u2192 '+terrName(order.Transfer.to);
+  return JSON.stringify(order);
+}
+
+function showResult(result) {
+  var won = result.objective_met;
+  var perfect = result.correct;
+  var icon = won?(perfect?'\u2728':'\u2705'):'\u274C';
+  var title = perfect?'Perfect!':won?'Objective Complete!':'Not Quite...';
+  var titleColor = won?'var(--green)':'var(--red)';
+
+  var optHtml='';
+  if(result.optimal_orders&&result.optimal_orders.length>0){
+    var items='';
+    for(var i=0;i<result.optimal_orders.length;i++) items+='<div class="result-optimal-order">'+formatOrder(result.optimal_orders[i])+'</div>';
+    optHtml='<div class="result-optimal"><h4>Optimal Solution</h4>'+items+'</div>';
+  }
+
+  var s = getStreak();
+  var shareText = won
+    ? 'strat.club Daily Puzzle #'+puzzle.id+'\n'+(perfect?'Perfect':'Solved')+' | '+puzzle.difficulty + (s.count>1?' | '+s.count+'-day streak':'')
+    : '';
+
+  var card=$('#resultCard');
+  card.innerHTML =
+    '<div class="result-icon">'+icon+'</div>'+
+    '<div class="result-title" style="color:'+titleColor+'">'+title+'</div>'+
+    '<div class="result-msg">'+result.message+'</div>'+
+    optHtml+
+    '<div class="result-actions">'+
+      '<button class="result-btn result-btn-close" id="closeResult">Close</button>'+
+      (won?'<button class="result-btn result-btn-share" id="shareResult">Copy Result</button>':
+           '<button class="result-btn result-btn-close" id="retryResult">Try Again</button>')+
+    '</div>';
+
+  $('#resultOverlay').classList.add('show');
+
+  $('#closeResult').addEventListener('click',function(){ $('#resultOverlay').classList.remove('show'); });
+  var shareBtn=$('#shareResult');
+  if(shareBtn) shareBtn.addEventListener('click',function(){
+    navigator.clipboard.writeText(shareText).then(function(){shareBtn.textContent='Copied!';setTimeout(function(){shareBtn.textContent='Copy Result';},1500);});
+  });
+  var retryBtn=$('#retryResult');
+  if(retryBtn) retryBtn.addEventListener('click',function(){ $('#resultOverlay').classList.remove('show'); resetOrders(); });
+
+  $('#resultOverlay').addEventListener('click',function(e){ if(e.target===$('#resultOverlay')) $('#resultOverlay').classList.remove('show'); });
+
+  // Highlight optimal on map
+  if(!won && result.optimal_orders) highlightOptimal(result.optimal_orders);
+
+  renderSidebar();
+}
+
+function highlightOptimal(opts) {
+  for(var i=0;i<opts.length;i++){
+    var o=opts[i];
+    if(o.Deploy){
+      var el=$('.t-shape[data-id="'+o.Deploy.territory+'"]');
+      if(el){el.setAttribute('stroke','var(--green)');el.setAttribute('stroke-width','3');el.setAttribute('stroke-dasharray','5 3');}
+    }
+    if(o.Attack){
+      var el=$('.t-shape[data-id="'+o.Attack.to+'"]');
+      if(el){el.setAttribute('stroke','var(--orange)');el.setAttribute('stroke-width','3');el.setAttribute('stroke-dasharray','5 3');}
+    }
+  }
+}
+
+// ===== Init =====
+renderStreak();
+fetch('/api/puzzle/today')
+  .then(function(r){return r.json();})
+  .then(function(data){
+    puzzle=data;
+    positions=computeLayout(puzzle.territories);
+    $('#loadingEl').style.display='none';
+    $('#app').style.display='flex';
+    renderMap();
+    renderSidebar();
+  })
+  .catch(function(e){
+    $('#loadingEl').innerHTML='<span style="color:var(--red)">Failed to load puzzle. Please refresh.</span>';
+  });
+
+})();
+</script>
+</body>
+</html>

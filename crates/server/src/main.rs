@@ -22,6 +22,7 @@ use tracing::info;
 use strat_engine::ai::{self, AiStrength};
 use strat_engine::analysis;
 use strat_engine::fog;
+use strat_engine::game_analysis;
 use strat_engine::map::Map;
 use strat_engine::orders::Order;
 use strat_engine::picking;
@@ -766,6 +767,26 @@ async fn get_analysis(State(state): State<AppState>) -> Json<serde_json::Value> 
     }))
 }
 
+async fn get_post_analysis(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let app = state.local.lock().unwrap();
+
+    // Collect turn events from the turn history.
+    let turn_events: Vec<Vec<TurnEvent>> = app
+        .turn_history
+        .iter()
+        .map(|tl| tl.events.clone())
+        .collect();
+
+    let analysis = game_analysis::analyze_game(
+        &app.state_history,
+        &app.win_prob_history,
+        &turn_events,
+        &app.map,
+    );
+
+    Json(serde_json::to_value(&analysis).unwrap_or_default())
+}
+
 #[derive(Deserialize)]
 struct DifficultyRequest {
     level: AiStrength,
@@ -1087,6 +1108,7 @@ async fn main() {
         .route("/api/new", post(new_local_game))
         .route("/api/game/replay/{turn}", get(get_replay_turn))
         .route("/api/game/analysis", get(get_analysis))
+        .route("/api/game/post-analysis", get(get_post_analysis))
         .route("/api/difficulty", post(set_difficulty))
         .route("/api/stats", get(get_local_stats))
         .route("/api/achievements", get(get_achievements))

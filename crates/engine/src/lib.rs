@@ -3,6 +3,7 @@ pub mod analysis;
 pub mod cards;
 pub mod combat;
 pub mod fog;
+pub mod game_analysis;
 pub mod map;
 pub mod mcts;
 pub mod orders;
