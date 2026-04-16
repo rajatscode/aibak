@@ -77,6 +77,11 @@ label { color: var(--text2); font-size: 12px; display: block; margin-bottom: 2px
 /* Status bar */
 #statusbar { display: flex; align-items: center; gap: 12px; padding: 4px 12px; background: var(--bg2); border-top: 1px solid var(--bg4); font-size: 12px; color: var(--text2); flex-shrink: 0; }
 
+/* Toast notification */
+#toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--bg3); border: 1px solid var(--bg4); color: var(--text); padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 300; display: none; max-width: 500px; white-space: pre-line; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+#toast.error { border-color: var(--red); color: var(--red); }
+#toast.success { border-color: var(--green); color: var(--green); }
+
 /* Modal overlay */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
 .modal { background: var(--bg2); border: 1px solid var(--bg4); border-radius: 10px; padding: 20px; min-width: 400px; max-width: 600px; max-height: 80vh; overflow-y: auto; }
@@ -95,10 +100,11 @@ label { color: var(--text2); font-size: 12px; display: block; margin-bottom: 2px
   <button id="btn-connection" onclick="setMode('connection')" title="Draw connections between territories (C)">+ Connection</button>
   <div class="sep"></div>
   <button onclick="autoLayout()" title="Force-directed auto-layout (L)">Auto-Layout</button>
-  <button onclick="generateShapes()" title="Generate Voronoi territory shapes (G)">Gen Shapes</button>
+  <button onclick="generateShapes()" title="Generate organic territory shapes (G)">Gen Shapes</button>
   <button onclick="autoClusters()" title="Auto-detect bonus regions (K)">Auto-Cluster</button>
   <div class="sep"></div>
   <button onclick="clearShapes()">Clear Shapes</button>
+  <button onclick="validateGraph()" title="Check graph connectivity (V)">Validate</button>
   <button onclick="undo()" title="Undo last action (Ctrl+Z)">Undo</button>
   <div class="sep"></div>
   <button class="primary" onclick="showExport()">Export JSON</button>
@@ -112,7 +118,19 @@ label { color: var(--text2); font-size: 12px; display: block; margin-bottom: 2px
         <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-auto">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text2)"/>
         </marker>
+        <radialGradient id="ocean-gradient" cx="50%" cy="50%" r="70%">
+          <stop offset="0%" stop-color="#0f2240"/>
+          <stop offset="100%" stop-color="#0a1628"/>
+        </radialGradient>
+        <filter id="territory-shadow" x="-10%" y="-10%" width="120%" height="130%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.5"/>
+        </filter>
+        <filter id="territory-hover" x="-10%" y="-10%" width="120%" height="130%">
+          <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.6"/>
+        </filter>
       </defs>
+      <rect id="ocean-bg" fill="url(#ocean-gradient)" style="display:none"/>
+      <g id="g-ocean-detail"></g>
       <g id="g-shapes"></g>
       <g id="g-connections"></g>
       <g id="g-nodes"></g>
@@ -189,6 +207,7 @@ label { color: var(--text2); font-size: 12px; display: block; margin-bottom: 2px
   </div>
 </div>
 
+<div id="toast"></div>
 <div id="statusbar">
   <span id="status-mode">Mode: Select</span>
   <span id="status-info">0 territories, 0 connections</span>
@@ -939,14 +958,247 @@ function fitView() {
 }
 
 // ============================================================
-//  VORONOI SHAPE GENERATION
+//  TOAST NOTIFICATION
 // ============================================================
+function showToast(msg, type, duration) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = type || '';
+  el.style.display = 'block';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.display = 'none'; }, duration || 4000);
+}
+
+// ============================================================
+//  GRAPH VALIDATION
+// ============================================================
+function validateGraph() {
+  if (territories.length === 0) {
+    showToast('No territories to validate.', 'error');
+    return false;
+  }
+  // BFS from first territory
+  const adjMap = {};
+  territories.forEach(t => adjMap[t.id] = []);
+  connections.forEach(([a, b]) => {
+    if (adjMap[a]) adjMap[a].push(b);
+    if (adjMap[b]) adjMap[b].push(a);
+  });
+
+  const visited = new Set();
+  const queue = [territories[0].id];
+  visited.add(territories[0].id);
+  while (queue.length > 0) {
+    const curr = queue.shift();
+    for (const nb of (adjMap[curr] || [])) {
+      if (!visited.has(nb)) {
+        visited.add(nb);
+        queue.push(nb);
+      }
+    }
+  }
+
+  const unreachable = territories.filter(t => !visited.has(t.id));
+  if (unreachable.length === 0) {
+    showToast('Graph is fully connected.', 'success');
+    return true;
+  } else {
+    const names = unreachable.map(t => t.name).join(', ');
+    showToast('Disconnected territories: ' + names, 'error', 6000);
+    return false;
+  }
+}
+
+// ============================================================
+//  SEEDED RANDOM (for reproducible shapes)
+// ============================================================
+function makeRng(seed) {
+  let s = seed | 0;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 4294967296;
+  };
+}
+
+// ============================================================
+//  ORGANIC SHAPE GENERATION
+// ============================================================
+
+// Compute connected components
+function findComponents() {
+  const adjMap = {};
+  territories.forEach(t => adjMap[t.id] = []);
+  connections.forEach(([a, b]) => {
+    if (adjMap[a]) adjMap[a].push(b);
+    if (adjMap[b]) adjMap[b].push(a);
+  });
+  const visited = new Set();
+  const components = [];
+  for (const t of territories) {
+    if (visited.has(t.id)) continue;
+    const comp = [];
+    const queue = [t.id];
+    visited.add(t.id);
+    while (queue.length > 0) {
+      const curr = queue.shift();
+      comp.push(curr);
+      for (const nb of (adjMap[curr] || [])) {
+        if (!visited.has(nb)) {
+          visited.add(nb);
+          queue.push(nb);
+        }
+      }
+    }
+    components.push(comp);
+  }
+  return components;
+}
+
+// Check if two territories are connected
+function areConnected(a, b) {
+  return connections.some(c =>
+    (c[0] === a && c[1] === b) || (c[0] === b && c[1] === a)
+  );
+}
+
+// Perpendicular bisector clipping (kept from original for Voronoi base)
+function clipPolygonByBisector(poly, site, other) {
+  const mx = (site.x + other.x) / 2;
+  const my = (site.y + other.y) / 2;
+  const nx = other.x - site.x;
+  const ny = other.y - site.y;
+  const output = [];
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const curr = poly[i];
+    const next = poly[(i + 1) % n];
+    const dc = (curr.x - mx) * nx + (curr.y - my) * ny;
+    const dn = (next.x - mx) * nx + (next.y - my) * ny;
+    if (dc <= 0) output.push(curr);
+    if ((dc <= 0) !== (dn <= 0)) {
+      const t = dc / (dc - dn);
+      output.push({
+        x: curr.x + t * (next.x - curr.x),
+        y: curr.y + t * (next.y - curr.y)
+      });
+    }
+  }
+  return output;
+}
+
+// Compute raw Voronoi polygon for a site
+function computeVoronoiPoly(site, bx, by, bw, bh) {
+  let poly = [
+    { x: bx, y: by },
+    { x: bx + bw, y: by },
+    { x: bx + bw, y: by + bh },
+    { x: bx, y: by + bh }
+  ];
+  for (const other of territories) {
+    if (other.id === site.id) continue;
+    poly = clipPolygonByBisector(poly, site, other);
+    if (poly.length < 3) return [];
+  }
+  return poly;
+}
+
+// Check if a polygon edge lies on the bounding rectangle
+function isExternalEdge(p1, p2, bx, by, bw, bh) {
+  const eps = 1.0;
+  const onLeft = Math.abs(p1.x - bx) < eps && Math.abs(p2.x - bx) < eps;
+  const onRight = Math.abs(p1.x - (bx + bw)) < eps && Math.abs(p2.x - (bx + bw)) < eps;
+  const onTop = Math.abs(p1.y - by) < eps && Math.abs(p2.y - by) < eps;
+  const onBottom = Math.abs(p1.y - (by + bh)) < eps && Math.abs(p2.y - (by + bh)) < eps;
+  return onLeft || onRight || onTop || onBottom;
+}
+
+// Find which other territory shares an edge (approximate: midpoint closest)
+function findSharedTerritory(site, p1, p2) {
+  const mx = (p1.x + p2.x) / 2;
+  const my = (p1.y + p2.y) / 2;
+  let bestId = -1, bestD = Infinity;
+  for (const t of territories) {
+    if (t.id === site.id) continue;
+    const dx = t.x - mx, dy = t.y - my;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; bestId = t.id; }
+  }
+  return bestId;
+}
+
+// Midpoint displacement fractal perturbation along an edge
+function perturbEdge(p1, p2, roughness, rng, levels) {
+  levels = levels || 4;
+  let points = [{ x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }];
+
+  for (let level = 0; level < levels; level++) {
+    const newPoints = [points[0]];
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      // Perpendicular direction
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 0.5) {
+        newPoints.push(b);
+        continue;
+      }
+      const nx = -dy / len;
+      const ny = dx / len;
+      // Offset with decreasing roughness per level
+      const scale = roughness * Math.pow(0.55, level);
+      const offset = (rng() - 0.5) * 2 * scale;
+      newPoints.push({ x: mx + nx * offset, y: my + ny * offset });
+      newPoints.push(b);
+    }
+    points = newPoints;
+  }
+  return points;
+}
+
+// Convert array of points to smooth SVG path using Catmull-Rom -> cubic bezier
+function pointsToSmoothPath(points, closed) {
+  if (points.length < 3) {
+    let d = `M${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+    for (let i = 1; i < points.length; i++) {
+      d += `L${points[i].x.toFixed(1)},${points[i].y.toFixed(1)}`;
+    }
+    if (closed) d += 'Z';
+    return d;
+  }
+
+  const pts = closed
+    ? [points[points.length - 1], ...points, points[0], points[1]]
+    : [points[0], ...points, points[points.length - 1]];
+
+  let d = `M${pts[1].x.toFixed(1)},${pts[1].y.toFixed(1)}`;
+  const tension = 0.35;
+
+  for (let i = 1; i < pts.length - 2; i++) {
+    const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2];
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+    d += `C${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+
+  if (closed) d += 'Z';
+  return d;
+}
+
+// Store organic generation data for rendering ocean/sea routes
+let organicShapeData = null;
+
 function generateShapes() {
   if (territories.length < 2) return;
   pushUndo('Generate shapes');
 
   // Compute bounding box
-  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   territories.forEach(t => {
     if (t.x < minX) minX = t.x;
     if (t.y < minY) minY = t.y;
@@ -955,73 +1207,93 @@ function generateShapes() {
   });
   const pad = 80;
   const bx = minX - pad, by = minY - pad;
-  const bw = (maxX - minX) + pad*2, bh = (maxY - minY) + pad*2;
+  const bw = (maxX - minX) + pad * 2, bh = (maxY - minY) + pad * 2;
 
-  // Compute Voronoi using half-plane intersection for each site
+  // Create seeded RNG for reproducibility per territory
+  const rng = makeRng(42);
+
+  // Find connected components for island detection
+  const components = findComponents();
+
+  // Build connection set for quick lookups
+  const connSet = new Set();
+  connections.forEach(([a, b]) => {
+    connSet.add(a + ',' + b);
+    connSet.add(b + ',' + a);
+  });
+
+  // Compute center of mass for terrain variation
+  const cx = territories.reduce((s, t) => s + t.x, 0) / territories.length;
+  const cy = territories.reduce((s, t) => s + t.y, 0) / territories.length;
+  const maxDist = Math.max(1, Math.sqrt(
+    territories.reduce((s, t) => Math.max(s, (t.x - cx) ** 2 + (t.y - cy) ** 2), 0)
+  ));
+
+  // Generate organic shapes for each territory
   for (const t of territories) {
-    t.shape = computeVoronoiCell(t, bx, by, bw, bh);
-  }
-  fullRender();
-}
+    const poly = computeVoronoiPoly(t, bx, by, bw, bh);
+    if (poly.length < 3) { t.shape = ''; continue; }
 
-function computeVoronoiCell(site, bx, by, bw, bh) {
-  // Start with bounding rectangle as polygon
-  let poly = [
-    {x: bx, y: by},
-    {x: bx+bw, y: by},
-    {x: bx+bw, y: by+bh},
-    {x: bx, y: by+bh}
-  ];
+    // Perturb each edge of the polygon
+    const allPoints = [];
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i];
+      const p2 = poly[(i + 1) % poly.length];
 
-  // Clip by perpendicular bisector with every other site
-  for (const other of territories) {
-    if (other.id === site.id) continue;
-    poly = clipPolygonByBisector(poly, site, other);
-    if (poly.length < 3) return '';
-  }
+      const edgeLen = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+      if (edgeLen < 2) {
+        allPoints.push(p1);
+        continue;
+      }
 
-  // Convert to SVG path
-  if (poly.length < 3) return '';
-  let d = `M${poly[0].x.toFixed(1)},${poly[0].y.toFixed(1)}`;
-  for (let i = 1; i < poly.length; i++) {
-    d += `L${poly[i].x.toFixed(1)},${poly[i].y.toFixed(1)}`;
-  }
-  d += 'Z';
-  return d;
-}
+      // Determine edge type and roughness
+      let roughness;
+      const external = isExternalEdge(p1, p2, bx, by, bw, bh);
+      if (external) {
+        // Coastline: high roughness, extra jaggedness
+        roughness = 15 + rng() * 12;
+      } else {
+        const sharedId = findSharedTerritory(t, p1, p2);
+        if (sharedId >= 0 && connSet.has(t.id + ',' + sharedId)) {
+          // Interior border between connected territories: smooth
+          roughness = 4 + rng() * 6;
+        } else {
+          // Coastline between unconnected territories
+          roughness = 12 + rng() * 10;
+        }
+      }
 
-function clipPolygonByBisector(poly, site, other) {
-  // Perpendicular bisector: all points closer to site than other
-  // The bisector passes through midpoint, normal = (other - site)
-  const mx = (site.x + other.x) / 2;
-  const my = (site.y + other.y) / 2;
-  const nx = other.x - site.x;
-  const ny = other.y - site.y;
+      // Scale roughness by edge length
+      roughness = Math.min(roughness, edgeLen * 0.3);
 
-  // Clip polygon to half-plane dot(p - mid, n) <= 0
-  const output = [];
-  const n = poly.length;
-  for (let i = 0; i < n; i++) {
-    const curr = poly[i];
-    const next = poly[(i+1) % n];
-    const dc = (curr.x - mx)*nx + (curr.y - my)*ny;
-    const dn = (next.x - mx)*nx + (next.y - my)*ny;
-    if (dc <= 0) output.push(curr);
-    if ((dc <= 0) !== (dn <= 0)) {
-      // Intersection
-      const t = dc / (dc - dn);
-      output.push({
-        x: curr.x + t*(next.x - curr.x),
-        y: curr.y + t*(next.y - curr.y)
-      });
+      const levels = edgeLen > 30 ? 4 : (edgeLen > 15 ? 3 : 2);
+      const perturbed = perturbEdge(p1, p2, roughness, rng, levels);
+      // Add all points except the last (which is the start of next edge)
+      for (let j = 0; j < perturbed.length - 1; j++) {
+        allPoints.push(perturbed[j]);
+      }
     }
+
+    // Convert to smooth bezier path
+    t.shape = pointsToSmoothPath(allPoints, true);
   }
-  return output;
+
+  // Store data for ocean rendering
+  organicShapeData = {
+    bounds: { x: bx, y: by, w: bw, h: bh },
+    components: components,
+    centerX: cx,
+    centerY: cy,
+    maxDist: maxDist
+  };
+
+  fullRender();
 }
 
 function clearShapes() {
   pushUndo('Clear shapes');
   territories.forEach(t => t.shape = null);
+  organicShapeData = null;
   renderShapes();
 }
 

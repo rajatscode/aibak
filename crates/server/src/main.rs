@@ -759,6 +759,10 @@ async fn main() {
         .route("/api/ladder", get(api::ladder::leaderboard))
         .route("/api/users/{id}", get(api::ladder::player_profile))
         .route("/api/lobby", get(api::lobby::open_games))
+        // Map management.
+        .route("/api/maps", get(api::maps::list_maps))
+        .route("/api/maps", post(api::maps::save_map))
+        .route("/api/maps/{id}", axum::routing::delete(api::maps::delete_map))
         // WebSocket.
         .route("/ws", get(ws::handler::ws_upgrade))
         .layer(CorsLayer::permissive())
