@@ -730,6 +730,10 @@ async fn games_page() -> Html<&'static str> {
     Html(include_str!("../../static/games.html"))
 }
 
+async fn tutorial_page() -> Html<&'static str> {
+    Html(include_str!("../../static/tutorial.html"))
+}
+
 // ── Profile & stats endpoints ──
 
 async fn profile_page() -> Html<&'static str> {
@@ -806,6 +810,10 @@ async fn get_local_stats(State(state): State<AppState>) -> Json<serde_json::Valu
         "bonus_captures": bonuses,
         "pick_choices": picks,
     }))
+}
+
+async fn landing() -> Html<&'static str> {
+    Html(include_str!("../../static/landing.html"))
 }
 
 async fn app_placeholder() -> Html<&'static str> {
@@ -933,10 +941,14 @@ async fn main() {
         .route("/api/game/analysis", get(get_analysis))
         .route("/api/difficulty", post(set_difficulty))
         .route("/api/stats", get(get_local_stats))
+        // Landing page.
+        .route("/landing", get(landing))
         // Profile page.
         .route("/profile", get(profile_page))
         // Map editor.
         .route("/editor", get(editor))
+        // Tutorial.
+        .route("/tutorial", get(tutorial_page))
         // Game browser & spectator.
         .route("/games", get(games_page))
         .route("/api/games/active", get(api::spectate::active_games))

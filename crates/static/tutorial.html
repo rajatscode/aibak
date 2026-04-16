@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aibak — Tutorial</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
+  --neutral:#4b5563;--fog:#1f2937;
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+body{display:flex;flex-direction:column;align-items:center;overflow-y:auto}
+
+/* Top bar */
+.topbar{width:100%;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.topbar h1{font-size:16px;font-weight:700;color:var(--gold);letter-spacing:1px}
+.topbar a{color:var(--text2);text-decoration:none;font-size:13px;transition:color .15s}
+.topbar a:hover{color:var(--text)}
+
+/* Step indicator */
+.step-indicator{display:flex;gap:6px;align-items:center;margin:24px 0 8px}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);transition:all .3s}
+.step-dot.active{background:var(--gold);border-color:var(--gold);transform:scale(1.3)}
+.step-dot.done{background:var(--green);border-color:var(--green)}
+.step-label{font-size:13px;color:var(--text2);margin-left:12px}
+
+/* Card container */
+.tutorial-card{width:100%;max-width:720px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin:12px 24px 24px;padding:32px;min-height:420px;display:flex;flex-direction:column;transition:opacity .25s ease}
+.tutorial-card.fade-out{opacity:0}
+
+.card-title{font-size:22px;font-weight:700;margin-bottom:4px;color:var(--text)}
+.card-subtitle{font-size:14px;color:var(--text2);margin-bottom:20px}
+.card-text{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px}
+.card-text strong{color:var(--text)}
+
+/* SVG illustration area */
+.illustration{width:100%;display:flex;justify-content:center;margin:12px 0 20px;flex-shrink:0}
+.illustration svg{max-width:100%}
+
+/* Interactive area */
+.interactive{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin:8px 0 16px}
+.interactive-label{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:8px}
+
+/* Navigation */
+.nav-row{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:16px;border-top:1px solid var(--border)}
+.nav-btn{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 24px;cursor:pointer;font-size:14px;font-weight:600;transition:all .15s}
+.nav-btn:hover{background:var(--border)}
+.nav-btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.nav-btn.primary:hover{background:#1d4ed8}
+.nav-btn.gold{background:var(--gold);border-color:var(--gold);color:#0d1117;font-weight:700}
+.nav-btn.gold:hover{background:#d4a030}
+.nav-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* Combat calculator */
+.calc-row{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.calc-group{flex:1;min-width:140px}
+.calc-group label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px}
+.calc-group input[type=range]{width:100%;accent-color:var(--blue)}
+.calc-value{font-size:20px;font-weight:700;text-align:center}
+.calc-result{margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:14px;line-height:1.8}
+.calc-result .win{color:var(--green);font-weight:700}
+.calc-result .lose{color:var(--red);font-weight:700}
+
+/* Territory hover on SVG */
+.tut-territory{cursor:pointer;transition:filter .2s}
+.tut-territory:hover{filter:brightness(1.3)}
+.tut-label{pointer-events:none;font-size:11px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
+.tut-army{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
+.tut-conn{stroke:var(--border);stroke-width:1.5;opacity:.4}
+.bonus-label{font-size:10px;fill:var(--text3);text-anchor:middle;font-weight:600}
+
+/* Deploy flash */
+@keyframes deploy-flash{0%{filter:brightness(2) saturate(1.5)}100%{filter:none}}
+.flash-deploy{animation:deploy-flash .4s ease-out}
+@keyframes float-up{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-20px)}}
+.plus-anim{animation:float-up .7s ease-out forwards;font-size:14px;font-weight:700;fill:var(--green);text-anchor:middle;pointer-events:none}
+
+/* Fog overlay */
+.fog-overlay{fill:var(--bg);opacity:.7;pointer-events:none}
+
+/* Highlight ring */
+@keyframes pulse-ring{0%,100%{stroke-width:3;opacity:1}50%{stroke-width:5;opacity:.5}}
+.highlight-ring{fill:none;stroke:var(--gold);stroke-width:3;animation:pulse-ring 1.2s ease-in-out infinite;pointer-events:none}
+
+/* Responsive */
+@media(max-width:600px){
+  .tutorial-card{margin:8px;padding:20px}
+  .calc-row{flex-direction:column;gap:12px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>AIBAK</h1>
+  <a href="/">Back to Game</a>
+</div>
+
+<div class="step-indicator" id="stepIndicator"></div>
+<div class="tutorial-card" id="card"></div>
+
+<script>
+const BLUE = '#2563eb', RED = '#dc2626', GREEN = '#3fb950', GOLD = '#e3b341', NEUTRAL_C = '#4b5563', BG = '#0d1117', BORDER = '#30363d', TEXT2 = '#8b949e';
+
+// Mini map: 6 territories, 2 bonuses
+// Layout:  [0]--[1]--[2]
+//           |    |    |
+//          [3]--[4]--[5]
+// Bonus A (top): 0,1,2 => +3    Bonus B (bottom): 3,4,5 => +3
+const TERR = [
+  {id:0, name:'Plains',  cx:140, cy:80,  r:32, adj:[1,3]},
+  {id:1, name:'Hills',   cx:300, cy:80,  r:32, adj:[0,2,4]},
+  {id:2, name:'Forest',  cx:460, cy:80,  r:32, adj:[1,5]},
+  {id:3, name:'Desert',  cx:140, cy:200, r:32, adj:[0,4]},
+  {id:4, name:'Swamp',   cx:300, cy:200, r:32, adj:[1,3,5]},
+  {id:5, name:'Tundra',  cx:460, cy:200, r:32, adj:[2,4]},
+];
+const BONUSES = [
+  {name:'Highlands', ids:[0,1,2], value:3, cy:36},
+  {name:'Lowlands',  ids:[3,4,5], value:3, cy:250},
+];
+
+function svgMap(opts = {}) {
+  const owners = opts.owners || [255,255,255,255,255,255];
+  const armies = opts.armies || [0,0,0,0,0,0];
+  const fog = opts.fog || [];
+  const highlight = opts.highlight || [];
+  const clickable = opts.clickable || [];
+  const clickHandler = opts.onClick ? `onclick="(${opts.onClick.toString()})(event)"` : '';
+  const showBonuses = opts.showBonuses !== false;
+  const w = 600, h = 280;
+
+  function terrColor(owner) {
+    if (owner === 0) return BLUE;
+    if (owner === 1) return RED;
+    return NEUTRAL_C;
+  }
+
+  let conns = '';
+  const drawn = new Set();
+  TERR.forEach(t => {
+    t.adj.forEach(a => {
+      const key = Math.min(t.id,a)+'-'+Math.max(t.id,a);
+      if (!drawn.has(key)) {
+        drawn.add(key);
+        const o = TERR[a];
+        conns += `<line x1="${t.cx}" y1="${t.cy}" x2="${o.cx}" y2="${o.cy}" class="tut-conn"/>`;
+      }
+    });
+  });
+
+  let terrs = '';
+  TERR.forEach(t => {
+    const isFogged = fog.includes(t.id);
+    if (isFogged) {
+      terrs += `<circle cx="${t.cx}" cy="${t.cy}" r="${t.r}" class="fog-overlay"/>`;
+      terrs += `<text x="${t.cx}" y="${t.cy}" class="tut-label" fill="${TEXT2}">?</text>`;
+      return;
+    }
+    const col = terrColor(owners[t.id]);
+    const isClickable = clickable.includes(t.id);
+    terrs += `<circle cx="${t.cx}" cy="${t.cy}" r="${t.r}" fill="${col}" class="tut-territory" data-id="${t.id}" style="opacity:.85" ${isClickable ? clickHandler : ''}/>`;
+    if (armies[t.id] > 0) {
+      terrs += `<text x="${t.cx}" y="${t.cy}" class="tut-army">${armies[t.id]}</text>`;
+    } else {
+      terrs += `<text x="${t.cx}" y="${t.cy-1}" class="tut-label" fill="${TEXT2}" style="font-size:9px">${t.name}</text>`;
+    }
+    if (highlight.includes(t.id)) {
+      terrs += `<circle cx="${t.cx}" cy="${t.cy}" r="${t.r+5}" class="highlight-ring"/>`;
+    }
+  });
+
+  let bonusLabels = '';
+  if (showBonuses) {
+    BONUSES.forEach(b => {
+      const cx = b.ids.reduce((s,i) => s + TERR[i].cx, 0) / b.ids.length;
+      bonusLabels += `<text x="${cx}" y="${b.cy}" class="bonus-label">${b.name} (+${b.value})</text>`;
+    });
+  }
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">${conns}${terrs}${bonusLabels}</svg>`;
+}
+
+// Step definitions
+const STEPS = [
+  // 0: Welcome
+  {
+    title: 'Welcome to Aibak',
+    subtitle: 'Learn the basics of territory strategy in 5 minutes',
+    render(card) {
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration">${svgMap({owners:[0,255,255,255,1,255], armies:[5,0,0,0,5,0], showBonuses:false})}</div>
+        <div class="card-text">
+          Aibak is a turn-based strategy game where you conquer territories, build armies, and outmaneuver your opponent.
+          <br><br>
+          This tutorial walks through the core mechanics using a small 6-territory map. Each step includes a visual example you can interact with.
+        </div>
+        ${navRow(0)}`;
+    }
+  },
+  // 1: The Map
+  {
+    title: 'The Map',
+    subtitle: 'Territories, connections, and bonuses',
+    render(card) {
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration">${svgMap({owners:[255,255,255,255,255,255]})}</div>
+        <div class="card-text">
+          The map is made of <strong>territories</strong> (circles) connected by lines. You can only move armies between connected territories.
+          <br><br>
+          Territories are grouped into <strong>bonuses</strong>. The Highlands bonus (top row) and Lowlands bonus (bottom row) each grant <strong>+3 extra armies per turn</strong> if you control every territory in the group.
+        </div>
+        ${navRow(1)}`;
+    }
+  },
+  // 2: Picking
+  {
+    title: 'Picking Starting Territories',
+    subtitle: 'Choose wisely — your start shapes the game',
+    render(card) {
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration">${svgMap({owners:[255,255,255,255,255,255], highlight:[1,3,5]})}</div>
+        <div class="card-text">
+          Before the game begins, both players pick starting territories from a shared pool (highlighted in gold above).
+          <br><br>
+          Picking uses a <strong>snake draft</strong>: Player 1 picks, then Player 2 picks twice, then Player 1 again, and so on. Each picked territory starts with <strong>5 armies</strong>. Everything else stays neutral.
+          <br><br>
+          Prioritize territories that help you complete a bonus early.
+        </div>
+        ${navRow(2)}`;
+    }
+  },
+  // 3: Income
+  {
+    title: 'Income',
+    subtitle: 'Armies are your currency — earn more each turn',
+    render(card) {
+      // Player owns all of top row (bonus complete) + territory 3
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration">${svgMap({owners:[0,0,0,0,1,1], armies:[5,5,5,5,5,5]})}</div>
+        <div class="card-text">
+          Every turn you receive <strong>5 base armies</strong> plus bonus income from any completed bonus regions.
+          <br><br>
+          In the map above, Blue controls all three Highlands territories, earning: <strong>5 base + 3 bonus = 8 armies/turn</strong>. Red controls all Lowlands for the same. Completing bonuses early is the key to snowballing.
+        </div>
+        ${navRow(3)}`;
+    }
+  },
+  // 4: Deploying
+  {
+    title: 'Deploying Armies',
+    subtitle: 'Place your reinforcements each turn',
+    render(card) {
+      let deployed = false;
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration" id="deploy-map">${svgMap({owners:[0,0,0,0,1,1], armies:[5,3,4,2,5,5], highlight:[0], clickable:[0]})}</div>
+        <div class="interactive" id="deploy-prompt">
+          <div class="interactive-label">Try it</div>
+          <div style="color:var(--text);font-size:14px">Click the <strong>highlighted Plains territory</strong> to deploy 3 armies.</div>
+        </div>
+        <div class="card-text">
+          At the start of each turn, deploy all your new armies onto <strong>territories you already own</strong>. You can split them however you like.
+        </div>
+        ${navRow(4)}`;
+
+      // Attach click listener
+      document.getElementById('deploy-map').addEventListener('click', function handler(e) {
+        const t = e.target.closest('[data-id="0"]');
+        if (!t || deployed) return;
+        deployed = true;
+        // Flash animation
+        t.classList.add('flash-deploy');
+        t.setAttribute('fill', BLUE);
+        // Update army count
+        const svg = document.getElementById('deploy-map').querySelector('svg');
+        // Find army text near Plains
+        const texts = svg.querySelectorAll('text');
+        texts.forEach(tx => {
+          if (tx.textContent === '5' && Math.abs(tx.getAttribute('x') - 140) < 5) {
+            tx.textContent = '8';
+          }
+        });
+        // Add +3 floating text
+        const ns = 'http://www.w3.org/2000/svg';
+        const plus = document.createElementNS(ns, 'text');
+        plus.setAttribute('x', 140);
+        plus.setAttribute('y', 55);
+        plus.setAttribute('class', 'plus-anim');
+        plus.textContent = '+3';
+        svg.appendChild(plus);
+        // Update prompt
+        document.getElementById('deploy-prompt').innerHTML = `
+          <div class="interactive-label">Done!</div>
+          <div style="color:var(--green);font-size:14px;font-weight:600">Plains now has 8 armies (5 + 3 deployed).</div>`;
+        // Remove highlight ring
+        const rings = svg.querySelectorAll('.highlight-ring');
+        rings.forEach(r => r.remove());
+      });
+    }
+  },
+  // 5: Attacking (Combat Calculator)
+  {
+    title: 'Combat',
+    subtitle: 'Deterministic — no dice, no luck',
+    render(card) {
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="card-text">
+          Combat is resolved with fixed kill rates: attackers kill <strong>60%</strong> of defenders, and defenders kill <strong>70%</strong> of attackers. Fractional kills accumulate across turns.
+          <br><br>
+          Example: <strong>5 armies attack 2 defenders</strong>. Attackers kill 2 x 0.6 = 1.2 defenders (1 dies). Defenders kill 5 x 0.7 = 3.5 attackers... wait, that means the defender kills per attacker. Actually: each attacker has a 60% chance to kill, each defender 70%.
+        </div>
+        <div class="interactive">
+          <div class="interactive-label">Combat Calculator</div>
+          <div class="calc-row">
+            <div class="calc-group">
+              <label>Attackers</label>
+              <div class="calc-value" style="color:${BLUE}" id="atkVal">5</div>
+              <input type="range" min="1" max="20" value="5" id="atkSlider">
+            </div>
+            <div style="font-size:24px;font-weight:700;color:var(--text3);align-self:center">vs</div>
+            <div class="calc-group">
+              <label>Defenders</label>
+              <div class="calc-value" style="color:${RED}" id="defVal">2</div>
+              <input type="range" min="1" max="20" value="2" id="defSlider">
+            </div>
+          </div>
+          <div class="calc-result" id="calcResult"></div>
+        </div>
+        ${navRow(5)}`;
+
+      const atkSlider = document.getElementById('atkSlider');
+      const defSlider = document.getElementById('defSlider');
+      function updateCalc() {
+        const atk = +atkSlider.value;
+        const def = +defSlider.value;
+        document.getElementById('atkVal').textContent = atk;
+        document.getElementById('defVal').textContent = def;
+
+        // Combat: attackers kill 60% of defenders, defenders kill 70% of attackers
+        const defKilled = Math.round(atk * 0.6);
+        const atkKilled = Math.round(def * 0.7);
+        const atkSurv = Math.max(0, atk - atkKilled);
+        const defSurv = Math.max(0, def - defKilled);
+        const captured = defSurv === 0 && atkSurv > 0;
+
+        let html = `
+          <div>Attackers kill: ${atk} x 0.6 = <strong>${(atk*0.6).toFixed(1)}</strong> => <strong>${defKilled}</strong> defenders eliminated</div>
+          <div>Defenders kill: ${def} x 0.7 = <strong>${(def*0.7).toFixed(1)}</strong> => <strong>${atkKilled}</strong> attackers eliminated</div>
+          <div style="margin-top:8px">`;
+        if (captured) {
+          html += `<span class="win">Capture!</span> ${atkSurv} armies move in.`;
+        } else if (atkSurv === 0) {
+          html += `<span class="lose">Attack wiped out.</span> ${defSurv} defenders remain.`;
+        } else {
+          html += `<span class="lose">Failed to capture.</span> ${defSurv} defenders survive, ${atkSurv} attackers remain.`;
+        }
+        html += '</div>';
+        document.getElementById('calcResult').innerHTML = html;
+      }
+      atkSlider.addEventListener('input', updateCalc);
+      defSlider.addEventListener('input', updateCalc);
+      updateCalc();
+    }
+  },
+  // 6: Transferring
+  {
+    title: 'Transferring Armies',
+    subtitle: 'Reinforce borders and reposition',
+    render(card) {
+      const svg = svgMapWithArrow({
+        owners:[0,0,0,0,1,1],
+        armies:[2,8,4,3,5,5],
+        from:1, to:2, arrowLabel:'Move 4'
+      });
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration">${svg}</div>
+        <div class="card-text">
+          After deploying and attacking, you can <strong>transfer armies</strong> between your own connected territories. Use transfers to reinforce front lines or shift armies toward your next target.
+          <br><br>
+          Above, Blue moves 4 armies from Hills to Forest, stacking the border against Red. Good positioning wins games.
+        </div>
+        ${navRow(6)}`;
+    }
+  },
+  // 7: Fog of War
+  {
+    title: 'Fog of War',
+    subtitle: 'Information is power',
+    render(card) {
+      // Player owns 0,1,2. Can see adj of 0(3), adj of 2(5), adj of 1(4) => all visible actually
+      // Better: player owns 0,1. Can see 0-adj(1,3), 1-adj(0,2,4). So sees 0,1,2,3,4 but NOT 5.
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration">${svgMap({owners:[0,0,255,1,1,1], armies:[5,5,3,5,5,5], fog:[5]})}</div>
+        <div class="card-text">
+          You can only see territories you own and their <strong>immediate neighbors</strong>. Everything else is hidden in fog (shown as dark circles with "?" above).
+          <br><br>
+          Blue owns Plains and Hills, so Blue can see their neighbors (Forest, Desert, Swamp) but <strong>cannot see Tundra</strong>. Red could be massing armies there. Scouting borders matters.
+        </div>
+        ${navRow(7)}`;
+    }
+  },
+  // 8: Win Condition
+  {
+    title: 'Win Condition',
+    subtitle: 'Total domination',
+    render(card) {
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration">${svgMap({owners:[0,0,0,0,0,0], armies:[5,3,4,5,8,2], showBonuses:false})}</div>
+        <div class="card-text">
+          The game ends when one player <strong>controls every territory</strong> on the map. There are no truces or draws.
+          <br><br>
+          Typically, the player who secures a bonus first builds an income advantage that snowballs into full map control. Deny your opponent their bonus while completing yours.
+        </div>
+        ${navRow(8)}`;
+    }
+  },
+  // 9: Ready!
+  {
+    title: 'You\'re Ready!',
+    subtitle: 'Go conquer',
+    render(card) {
+      card.innerHTML = `
+        <div class="card-title">${this.title}</div>
+        <div class="card-subtitle">${this.subtitle}</div>
+        <div class="illustration">${svgMap({owners:[0,0,0,1,1,1], armies:[8,5,6,6,5,8], showBonuses:false})}</div>
+        <div class="card-text">
+          <strong>Quick recap:</strong>
+          <br>1. Pick starting territories (snake draft)
+          <br>2. Each turn: deploy armies, then attack, then transfer
+          <br>3. 5 base income + bonus income from completed regions
+          <br>4. Combat: 60% offense / 70% defense kill rates, no luck
+          <br>5. Fog of war hides distant territories
+          <br>6. Eliminate your opponent to win
+        </div>
+        <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap">
+          <a href="/" class="nav-btn gold" style="text-decoration:none;text-align:center;flex:1;min-width:200px">Start Playing</a>
+        </div>
+        ${navRow(9, true)}`;
+    }
+  },
+];
+
+function navRow(step, hideNext) {
+  const prev = step > 0 ? `<button class="nav-btn" onclick="goStep(${step-1})">Previous</button>` : '<div></div>';
+  let next = '';
+  if (!hideNext && step < STEPS.length - 1) {
+    next = `<button class="nav-btn primary" onclick="goStep(${step+1})">Next</button>`;
+  } else if (!hideNext) {
+    next = '<div></div>';
+  }
+  return `<div class="nav-row">${prev}${next || '<div></div>'}</div>`;
+}
+
+function svgMapWithArrow(opts) {
+  const base = svgMap(opts);
+  const from = TERR[opts.from];
+  const to = TERR[opts.to];
+  // Insert arrow before closing </svg>
+  const dx = to.cx - from.cx, dy = to.cy - from.cy;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  const nx = dx/len, ny = dy/len;
+  const x1 = from.cx + nx * (from.r + 4), y1 = from.cy + ny * (from.r + 4);
+  const x2 = to.cx - nx * (to.r + 8), y2 = to.cy - ny * (to.r + 8);
+  const mx = (x1+x2)/2, my = (y1+y2)/2 - 14;
+  const arrow = `
+    <defs><marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="${GOLD}"/></marker></defs>
+    <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${GOLD}" stroke-width="2.5" stroke-dasharray="6,3" marker-end="url(#ah)"/>
+    <text x="${mx}" y="${my}" text-anchor="middle" fill="${GOLD}" style="font-size:11px;font-weight:700">${opts.arrowLabel||''}</text>`;
+  return base.replace('</svg>', arrow + '</svg>');
+}
+
+let currentStep = 0;
+
+function buildIndicator() {
+  const el = document.getElementById('stepIndicator');
+  const labels = ['Welcome','Map','Picking','Income','Deploy','Combat','Transfer','Fog','Win','Ready'];
+  let html = '';
+  for (let i = 0; i < STEPS.length; i++) {
+    const cls = i === currentStep ? 'active' : (i < currentStep ? 'done' : '');
+    html += `<div class="step-dot ${cls}" onclick="goStep(${i})" style="cursor:pointer" title="Step ${i+1}: ${labels[i]}"></div>`;
+  }
+  html += `<span class="step-label">${currentStep+1} of ${STEPS.length} — ${labels[currentStep]}</span>`;
+  el.innerHTML = html;
+}
+
+function goStep(n) {
+  if (n < 0 || n >= STEPS.length) return;
+  const card = document.getElementById('card');
+  card.classList.add('fade-out');
+  setTimeout(() => {
+    currentStep = n;
+    STEPS[n].render(card);
+    buildIndicator();
+    card.classList.remove('fade-out');
+    window.scrollTo({top:0, behavior:'smooth'});
+  }, 200);
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goStep(currentStep + 1);
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') goStep(currentStep - 1);
+});
+
+// Init
+STEPS[0].render(document.getElementById('card'));
+buildIndicator();
+</script>
+</body>
+</html>

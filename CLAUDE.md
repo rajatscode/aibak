@@ -1,64 +1,90 @@
-# strat-club
+# Aibak (strat.club)
 
-Turn-based territory strategy game. 1v1 online, Glicko-rated ladder, Discord auth.
+Competitive territory strategy game. 1v1, Glicko-rated ladder with seasons, Discord auth.
 
 ## Architecture
 
-Rust workspace with three crates:
-
-- `crates/engine` — Pure game logic (no IO, no async). Combat, turns, fog, picking, cards, AI.
+Rust workspace:
+- `crates/engine` — Pure game logic (no IO). Combat, turns, fog, picking, cards, AI (greedy + MCTS), win probability analysis.
 - `crates/server` — Axum web server. Modules: `api/`, `auth/`, `db/`, `game/`, `ws/`.
-- `crates/cli` — CLI game runner for local testing.
+- `crates/cli` — CLI game runner.
+- `crates/static/` — Embedded HTML pages (game, editor, tutorial, profile, games browser, landing).
+- `maps/` — JSON map definitions.
 
-Frontend: Single-file HTML at `crates/static/index.html` (embedded via `include_str!`).
-Maps: JSON files in `maps/` (Small Earth 42 territories, MME 89 territories).
+## Pages
 
-## Development
+| Route | Description |
+|-------|-------------|
+| `/` | Main game (local play vs AI) |
+| `/editor` | Map creator (force-directed layout, organic shapes, auto-clustering) |
+| `/tutorial` | Interactive 10-step tutorial with combat calculator |
+| `/profile` | Player stats, rating chart, match history |
+| `/games` | Game browser, spectator mode |
+| `/landing` | Marketing landing page |
+
+## Running
 
 ```bash
-# Run locally (no DB needed for single-player)
+# Local play (no DB needed)
 cargo run --bin strat-server
 
-# Run with multiplayer (needs PostgreSQL)
+# With multiplayer
 cp .env.example .env  # fill in credentials
 cargo run --bin strat-server
 
-# Run tests
+# Tests
 cargo test
 
-# Check for warnings
-cargo clippy
+# Specific map
+cargo run --bin strat-server -- maps/mme.json
 ```
-
-## Key Commands
-
-- `cargo test` — run all tests
-- `cargo clippy` — lint
-- `cargo fmt` — format
-
-## Templates
-
-- **Small Earth**: 42 territories, 6 bonuses (classic Risk layout with SVG paths)
-- **Modified Medium Earth (MME)**: 89 territories, 22 bonuses (no SVG paths yet)
 
 ## Game Mechanics
 
-- Random Warlords picking (1 territory per bonus offered)
+- Random Warlords picking (1 per bonus, ABBA snake draft)
 - 0% luck deterministic combat (60% offense / 70% defense kill rates)
-- Fog of war (see owned + adjacent territories only)
-- Reinforcement and Blockade cards
-- 5 starting armies per picked territory
-- Base income: 5 armies/turn + bonus income
+- Fog of war
+- Reinforcement + Blockade cards
+- 5 starting armies, 5 base income
+
+## AI
+
+- **Easy**: Random deployment + attacks
+- **Medium**: Greedy heuristic with bonus-completion priority
+- **Hard**: MCTS with UCB1 selection, 500ms time budget
+
+## Win Probability
+
+Three-layer evaluation:
+1. `quick_win_probability` (<1ms) — logistic function over material evaluation
+2. `win_probability_with_lookahead` (<50ms) — 1-ply deterministic search
+3. `full_win_probability` (<500ms) — Monte Carlo with calibrated output
+
+## Multiplayer Stack
+
+- Discord OAuth2 + JWT sessions
+- PostgreSQL (users, games, orders, seasons, standings, match history)
+- WebSocket for live game updates
+- Matchmaking queue with rating-based pairing
+- Glicko-2 ratings + seasonal league (Bronze → Grandmaster)
+- 24h boot timers
+
+## API Routes
+
+```
+Local:     GET /, POST /api/new, GET /api/game, POST /api/picks, POST /api/orders
+           GET /api/game/analysis, POST /api/difficulty, GET /api/stats
+Auth:      GET /api/auth/discord, /callback, POST /logout, GET /me
+Games:     POST /api/games, GET /api/games, GET /:id, POST /:id/join, picks, orders
+Maps:      GET /api/maps, POST /api/maps, DELETE /api/maps/:id
+Queue:     POST /api/queue/join, POST /api/queue/leave, GET /api/queue/status
+League:    GET /api/seasons, /current, /:id/standings, GET /api/match-history
+Ladder:    GET /api/ladder, GET /api/users/:id
+Spectate:  GET /api/games/:id/spectate
+WebSocket: GET /ws
+```
 
 ## Legal
 
-NEVER reference competing products by name in code, comments, docs, or commits.
-Use "Deploy" and "Move" phases (not "attack/transfer").
-
-## Environment Variables (for multiplayer)
-
-- `DATABASE_URL` — PostgreSQL connection string
-- `DISCORD_CLIENT_ID` — Discord OAuth2 app ID
-- `DISCORD_CLIENT_SECRET` — Discord OAuth2 secret
-- `DISCORD_REDIRECT_URI` — OAuth2 callback URL (default: http://localhost:3000/api/auth/discord/callback)
-- `JWT_SECRET` — Secret for signing JWT tokens
+NEVER reference competing products. Use "Deploy" and "Move" phases.
+Barbarian States License v1.0.

@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>strat.club — Competitive Territory Strategy</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --bg-card-hover: #1c2333;
+  --gold: #e3b341;
+  --blue: #2563eb;
+  --blue-light: #3b82f6;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --border: #30363d;
+  --radius: 12px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+a { color: var(--gold); text-decoration: none; transition: color 0.2s; }
+a:hover { color: #f0c85a; }
+
+/* ── Fade-in on scroll ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Navigation ── */
+nav {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 100;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+}
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+}
+.nav-brand {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: -0.5px;
+}
+.nav-links { display: flex; gap: 1.5rem; align-items: center; }
+.nav-links a { color: var(--text-muted); font-size: 0.9rem; font-weight: 500; }
+.nav-links a:hover { color: var(--text); }
+
+/* ── Hero ── */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6rem 2rem 4rem;
+  overflow: hidden;
+}
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.hero-bg svg { width: 100%; height: 100%; }
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(13,17,23,0.5) 0%, rgba(13,17,23,0.92) 70%);
+  z-index: 1;
+}
+.hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 800px;
+}
+.hero h1 {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+  margin-bottom: 1.2rem;
+  background: linear-gradient(135deg, var(--text) 0%, var(--gold) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero p {
+  font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+  color: var(--text-muted);
+  margin-bottom: 2.5rem;
+  max-width: 550px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.hero-ctas { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: all 0.25s ease;
+  cursor: pointer;
+  border: none;
+}
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(37,99,235,0.3);
+}
+.btn-primary:hover {
+  background: var(--blue-light);
+  box-shadow: 0 0 30px rgba(37,99,235,0.5);
+  transform: translateY(-2px);
+  color: #fff;
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  transform: translateY(-2px);
+}
+
+/* ── Sections ── */
+section {
+  padding: 6rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.section-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--gold);
+  margin-bottom: 0.75rem;
+}
+.section-title {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 1rem;
+}
+.section-subtitle {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  max-width: 600px;
+  margin-bottom: 3.5rem;
+}
+.section-center { text-align: center; }
+.section-center .section-subtitle { margin-left: auto; margin-right: auto; }
+
+/* ── How It Works ── */
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+}
+.step-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+.step-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--blue), var(--gold));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.step-card:hover { border-color: var(--blue); transform: translateY(-4px); }
+.step-card:hover::before { opacity: 1; }
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(37,99,235,0.15);
+  color: var(--blue-light);
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-bottom: 1.2rem;
+}
+.step-card h3 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+.step-card p { color: var(--text-muted); font-size: 0.95rem; }
+
+/* ── Features Grid ── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  transition: all 0.3s ease;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.feature-card:hover { border-color: var(--gold); transform: translateY(-3px); background: var(--bg-card-hover); }
+.feature-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+.feature-icon.blue { background: rgba(37,99,235,0.15); color: var(--blue-light); }
+.feature-icon.gold { background: rgba(227,179,65,0.15); color: var(--gold); }
+.feature-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.3rem; }
+.feature-card p { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
+
+/* ── Rank Tiers ── */
+.ranks-container {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 3rem;
+}
+.rank-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.5rem 1.2rem;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  min-width: 110px;
+  transition: all 0.3s ease;
+}
+.rank-item:hover { transform: translateY(-5px); border-color: var(--gold); }
+.rank-shield {
+  width: 52px;
+  height: 60px;
+  position: relative;
+}
+.rank-shield svg { width: 100%; height: 100%; }
+.rank-name { font-weight: 700; font-size: 0.85rem; }
+.rank-range { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── Divider ── */
+.divider {
+  max-width: 1200px;
+  margin: 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+/* ── Footer ── */
+footer {
+  padding: 4rem 2rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--border);
+}
+.footer-brand .nav-brand { margin-bottom: 0.5rem; display: block; }
+.footer-brand p { color: var(--text-muted); font-size: 0.9rem; max-width: 280px; }
+.footer-links { display: flex; gap: 3rem; flex-wrap: wrap; }
+.footer-col h4 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 0.75rem; }
+.footer-col a { display: block; color: var(--text-muted); font-size: 0.9rem; padding: 0.25rem 0; }
+.footer-col a:hover { color: var(--text); }
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  section { padding: 4rem 1.5rem; }
+  .features-grid { grid-template-columns: 1fr; }
+  .ranks-container { gap: 0.6rem; }
+  .rank-item { min-width: 90px; padding: 1rem 0.8rem; }
+  .rank-shield { width: 40px; height: 46px; }
+  .footer-inner { flex-direction: column; }
+  .nav-links { gap: 1rem; }
+  .nav-links a { font-size: 0.8rem; }
+}
+@media (max-width: 480px) {
+  .hero-ctas { flex-direction: column; align-items: center; }
+  .btn { width: 100%; max-width: 260px; justify-content: center; }
+  .steps-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+  <div class="nav-inner">
+    <a href="/landing" class="nav-brand">strat.club</a>
+    <div class="nav-links">
+      <a href="#how-it-works">How It Works</a>
+      <a href="#features">Features</a>
+      <a href="#ranks">Ranks</a>
+      <a href="/" class="btn btn-primary" style="padding: 0.5rem 1.2rem; font-size: 0.85rem;">Play Now</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-bg">
+    <svg viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <style>
+          @keyframes pulse1 { 0%,100% { fill: #1a2744; } 50% { fill: #1e3a5f; } }
+          @keyframes pulse2 { 0%,100% { fill: #2a1a1a; } 50% { fill: #4a2020; } }
+          @keyframes pulse3 { 0%,100% { fill: #1a2a1a; } 50% { fill: #1a4a2a; } }
+          @keyframes pulse4 { 0%,100% { fill: #2a2a1a; } 50% { fill: #4a3a1a; } }
+          @keyframes borderGlow { 0%,100% { stroke-opacity: 0.15; } 50% { stroke-opacity: 0.4; } }
+          .t { stroke: #30363d; stroke-width: 1; transition: fill 0.5s; }
+          .t1 { animation: pulse1 4s ease-in-out infinite; }
+          .t2 { animation: pulse2 5s ease-in-out infinite 0.5s; }
+          .t3 { animation: pulse3 4.5s ease-in-out infinite 1s; }
+          .t4 { animation: pulse4 5.5s ease-in-out infinite 1.5s; }
+          .t1b { animation: pulse1 6s ease-in-out infinite 2s; }
+          .t2b { animation: pulse2 4s ease-in-out infinite 2.5s; }
+          .t3b { animation: pulse3 5s ease-in-out infinite 0.3s; }
+          .t4b { animation: pulse4 4.5s ease-in-out infinite 1.8s; }
+          .edge { stroke: var(--blue); stroke-width: 0.5; fill: none; animation: borderGlow 3s ease-in-out infinite; }
+        </style>
+      </defs>
+      <!-- Territory polygons -->
+      <polygon class="t t1" points="0,0 150,20 180,120 100,180 20,140"/>
+      <polygon class="t t2" points="150,20 320,0 350,80 280,150 180,120"/>
+      <polygon class="t t3" points="320,0 500,10 480,110 350,80"/>
+      <polygon class="t t4" points="500,10 680,0 700,90 550,120 480,110"/>
+      <polygon class="t t1b" points="680,0 860,15 840,110 700,90"/>
+      <polygon class="t t2b" points="860,15 1050,0 1060,100 920,130 840,110"/>
+      <polygon class="t t3b" points="1050,0 1200,0 1200,120 1060,100"/>
+      <polygon class="t t4b" points="0,140 100,180 130,290 60,320 0,280"/>
+      <polygon class="t t2" points="100,180 180,120 280,150 300,260 200,300 130,290"/>
+      <polygon class="t t3" points="280,150 350,80 480,110 470,220 380,270 300,260"/>
+      <polygon class="t t1" points="480,110 550,120 600,200 520,270 470,220"/>
+      <polygon class="t t4" points="550,120 700,90 740,200 660,260 600,200"/>
+      <polygon class="t t2b" points="700,90 840,110 820,220 740,200"/>
+      <polygon class="t t1b" points="840,110 920,130 950,230 880,260 820,220"/>
+      <polygon class="t t3" points="920,130 1060,100 1080,220 950,230"/>
+      <polygon class="t t4b" points="1060,100 1200,120 1200,260 1080,220"/>
+      <polygon class="t t3b" points="0,280 60,320 80,430 0,450"/>
+      <polygon class="t t1" points="60,320 130,290 200,300 230,410 150,440 80,430"/>
+      <polygon class="t t2b" points="200,300 300,260 380,270 400,390 310,420 230,410"/>
+      <polygon class="t t4" points="380,270 470,220 520,270 540,380 450,410 400,390"/>
+      <polygon class="t t3b" points="520,270 600,200 660,260 670,370 590,400 540,380"/>
+      <polygon class="t t1b" points="660,260 740,200 820,220 810,350 720,380 670,370"/>
+      <polygon class="t t2" points="820,220 880,260 900,370 810,350"/>
+      <polygon class="t t4b" points="880,260 950,230 980,360 900,370"/>
+      <polygon class="t t1" points="950,230 1080,220 1100,360 980,360"/>
+      <polygon class="t t3" points="1080,220 1200,260 1200,400 1100,360"/>
+      <polygon class="t t2" points="0,450 80,430 100,540 40,570 0,560"/>
+      <polygon class="t t4b" points="80,430 150,440 180,550 100,540"/>
+      <polygon class="t t1b" points="150,440 230,410 310,420 320,530 240,560 180,550"/>
+      <polygon class="t t3" points="310,420 400,390 450,410 460,530 380,560 320,530"/>
+      <polygon class="t t2b" points="450,410 540,380 590,400 600,520 520,550 460,530"/>
+      <polygon class="t t4" points="590,400 670,370 720,380 730,510 650,540 600,520"/>
+      <polygon class="t t1" points="720,380 810,350 830,480 750,520 730,510"/>
+      <polygon class="t t3b" points="810,350 900,370 920,490 830,480"/>
+      <polygon class="t t2" points="900,370 980,360 1000,500 920,490"/>
+      <polygon class="t t4b" points="980,360 1100,360 1120,500 1000,500"/>
+      <polygon class="t t1b" points="1100,360 1200,400 1200,540 1120,500"/>
+      <polygon class="t t3" points="0,560 40,570 60,680 0,700"/>
+      <polygon class="t t2b" points="40,570 100,540 180,550 200,670 120,700 60,680"/>
+      <polygon class="t t4" points="180,550 240,560 270,670 200,670"/>
+      <polygon class="t t1" points="240,560 320,530 380,560 400,680 330,700 270,670"/>
+      <polygon class="t t3b" points="380,560 460,530 520,550 530,680 440,710 400,680"/>
+      <polygon class="t t2" points="520,550 600,520 650,540 660,680 580,710 530,680"/>
+      <polygon class="t t4b" points="650,540 730,510 750,520 770,660 700,690 660,680"/>
+      <polygon class="t t1b" points="750,520 830,480 860,620 790,660 770,660"/>
+      <polygon class="t t3" points="830,480 920,490 940,630 860,620"/>
+      <polygon class="t t2b" points="920,490 1000,500 1020,640 940,630"/>
+      <polygon class="t t4" points="1000,500 1120,500 1140,640 1020,640"/>
+      <polygon class="t t1" points="1120,500 1200,540 1200,680 1140,640"/>
+      <polygon class="t t3b" points="0,700 60,680 120,700 140,800 0,800"/>
+      <polygon class="t t4b" points="120,700 200,670 270,670 300,800 140,800"/>
+      <polygon class="t t2" points="270,670 330,700 370,800 300,800"/>
+      <polygon class="t t1b" points="330,700 400,680 440,710 470,800 370,800"/>
+      <polygon class="t t3" points="440,710 530,680 580,710 600,800 470,800"/>
+      <polygon class="t t4" points="580,710 660,680 700,690 720,800 600,800"/>
+      <polygon class="t t2b" points="700,690 770,660 790,660 820,800 720,800"/>
+      <polygon class="t t1" points="790,660 860,620 900,800 820,800"/>
+      <polygon class="t t4b" points="860,620 940,630 970,800 900,800"/>
+      <polygon class="t t3b" points="940,630 1020,640 1050,800 970,800"/>
+      <polygon class="t t2" points="1020,640 1140,640 1160,800 1050,800"/>
+      <polygon class="t t1b" points="1140,640 1200,680 1200,800 1160,800"/>
+      <!-- Glowing connection edges -->
+      <line class="edge" x1="150" y1="20" x2="180" y2="120" style="animation-delay:0s"/>
+      <line class="edge" x1="350" y1="80" x2="280" y2="150" style="animation-delay:0.5s"/>
+      <line class="edge" x1="550" y1="120" x2="600" y2="200" style="animation-delay:1s"/>
+      <line class="edge" x1="740" y1="200" x2="660" y2="260" style="animation-delay:1.5s"/>
+      <line class="edge" x1="300" y1="260" x2="380" y2="270" style="animation-delay:0.3s"/>
+      <line class="edge" x1="520" y1="270" x2="540" y2="380" style="animation-delay:0.8s"/>
+      <line class="edge" x1="810" y1="350" x2="720" y2="380" style="animation-delay:1.2s"/>
+      <line class="edge" x1="130" y1="290" x2="200" y2="300" style="animation-delay:0.7s"/>
+      <line class="edge" x1="460" y1="530" x2="520" y2="550" style="animation-delay:1.8s"/>
+      <line class="edge" x1="920" y1="490" x2="1000" y2="500" style="animation-delay:2.1s"/>
+      <line class="edge" x1="330" y1="700" x2="400" y2="680" style="animation-delay:0.4s"/>
+      <line class="edge" x1="660" y1="680" x2="700" y2="690" style="animation-delay:1.6s"/>
+    </svg>
+  </div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <h1>Outthink. Outmaneuver. Conquer.</h1>
+    <p>Competitive territory strategy. Pure skill, zero luck.</p>
+    <div class="hero-ctas">
+      <a href="/" class="btn btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Play Now
+      </a>
+      <a href="/tutorial" class="btn btn-secondary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Learn How
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- How It Works -->
+<section id="how-it-works">
+  <div class="section-center">
+    <div class="section-label reveal">Gameplay</div>
+    <h2 class="section-title reveal">Three Steps to Victory</h2>
+    <p class="section-subtitle reveal">Every game is a battle of wits. Deploy your forces, strike at weaknesses, and control the map.</p>
+  </div>
+  <div class="steps-grid">
+    <div class="step-card reveal">
+      <div class="step-number">1</div>
+      <h3>Deploy</h3>
+      <p>Place your armies strategically each turn. Every territory you control generates income for reinforcements.</p>
+    </div>
+    <div class="step-card reveal">
+      <div class="step-number">2</div>
+      <h3>Move</h3>
+      <p>Attack enemy territories and reinforce your borders. Deterministic combat means the better plan always wins.</p>
+    </div>
+    <div class="step-card reveal">
+      <div class="step-number">3</div>
+      <h3>Conquer</h3>
+      <p>Control bonuses for extra income. Eliminate your opponent to claim victory and climb the ranked ladder.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Features -->
+<section id="features">
+  <div class="section-center">
+    <div class="section-label reveal">What Sets Us Apart</div>
+    <h2 class="section-title reveal">Built for Competitive Play</h2>
+    <p class="section-subtitle reveal">Every feature is designed to reward skill, create depth, and keep you coming back.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card reveal">
+      <div class="feature-icon blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div>
+        <h3>Deterministic Combat</h3>
+        <p>No dice, no luck. Pure strategy. Every battle outcome is determined by army counts and kill rates you can calculate.</p>
+      </div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon gold">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 000 20"/><path d="M2 12h4"/><path d="M18 12h4"/></svg>
+      </div>
+      <div>
+        <h3>Fog of War</h3>
+        <p>Limited visibility creates uncertainty and bluffing opportunities. You only see your territories and their neighbors.</p>
+      </div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </div>
+      <div>
+        <h3>MCTS AI</h3>
+        <p>Train against a Monte Carlo Tree Search opponent that evaluates thousands of possible futures each turn.</p>
+      </div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon gold">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+      </div>
+      <div>
+        <h3>Glicko Rated</h3>
+        <p>Skill-based matchmaking with a competitive ladder. Your rating reflects your true strength with confidence intervals.</p>
+      </div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </div>
+      <div>
+        <h3>Map Editor</h3>
+        <p>Create and share custom maps. Design your own territories, bonuses, and connections for endless variety.</p>
+      </div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon gold">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <div>
+        <h3>Live Win Probability</h3>
+        <p>Watch the odds shift as you play. Real-time analysis powered by Monte Carlo simulation shows who is ahead.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Rank Tiers -->
+<section id="ranks">
+  <div class="section-center">
+    <div class="section-label reveal">Competitive Ladder</div>
+    <h2 class="section-title reveal">Climb the Ranks</h2>
+    <p class="section-subtitle reveal">Seven tiers from Bronze to Grandmaster. Win games, improve your rating, and prove your mastery.</p>
+  </div>
+  <div class="ranks-container reveal">
+    <div class="rank-item">
+      <div class="rank-shield">
+        <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#8B4513" stroke="#CD853F" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#CD853F" font-weight="900" font-family="sans-serif">B</text>
+        </svg>
+      </div>
+      <div class="rank-name" style="color:#CD853F">Bronze</div>
+      <div class="rank-range">&lt; 1200</div>
+    </div>
+    <div class="rank-item">
+      <div class="rank-shield">
+        <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#4a4a5a" stroke="#C0C0C0" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#C0C0C0" font-weight="900" font-family="sans-serif">S</text>
+        </svg>
+      </div>
+      <div class="rank-name" style="color:#C0C0C0">Silver</div>
+      <div class="rank-range">1200+</div>
+    </div>
+    <div class="rank-item">
+      <div class="rank-shield">
+        <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#5a4a00" stroke="#e3b341" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#e3b341" font-weight="900" font-family="sans-serif">G</text>
+        </svg>
+      </div>
+      <div class="rank-name" style="color:#e3b341">Gold</div>
+      <div class="rank-range">1400+</div>
+    </div>
+    <div class="rank-item">
+      <div class="rank-shield">
+        <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#1a4a4a" stroke="#40E0D0" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#40E0D0" font-weight="900" font-family="sans-serif">P</text>
+        </svg>
+      </div>
+      <div class="rank-name" style="color:#40E0D0">Platinum</div>
+      <div class="rank-range">1600+</div>
+    </div>
+    <div class="rank-item">
+      <div class="rank-shield">
+        <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#1a2a5a" stroke="#5b9dff" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#5b9dff" font-weight="900" font-family="sans-serif">D</text>
+        </svg>
+      </div>
+      <div class="rank-name" style="color:#5b9dff">Diamond</div>
+      <div class="rank-range">1800+</div>
+    </div>
+    <div class="rank-item">
+      <div class="rank-shield">
+        <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#3a1a4a" stroke="#c084fc" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#c084fc" font-weight="900" font-family="sans-serif">M</text>
+        </svg>
+      </div>
+      <div class="rank-name" style="color:#c084fc">Master</div>
+      <div class="rank-range">2000+</div>
+    </div>
+    <div class="rank-item">
+      <div class="rank-shield">
+        <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="gm-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#e3b341"/>
+              <stop offset="1" stop-color="#f59e0b"/>
+            </linearGradient>
+          </defs>
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#3a2a00" stroke="url(#gm-grad)" stroke-width="2.5"/>
+          <text x="26" y="34" text-anchor="middle" font-size="13" fill="#e3b341" font-weight="900" font-family="sans-serif">GM</text>
+        </svg>
+      </div>
+      <div class="rank-name" style="color:#e3b341">Grandmaster</div>
+      <div class="rank-range">2200+</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <span class="nav-brand">strat.club</span>
+      <p>Competitive territory strategy. Outthink your opponents in deterministic, fog-of-war combat.</p>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h4>Play</h4>
+        <a href="/">Play Game</a>
+        <a href="/tutorial">Tutorial</a>
+        <a href="/editor">Map Editor</a>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <a href="/profile">Profile</a>
+        <a href="/games">Live Games</a>
+        <a href="https://github.com/rmehndir/strat-club" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>Built by Rajat Mehndiratta</span>
+    <span>MIT License</span>
+  </div>
+</footer>
+
+<script>
+// Intersection Observer for scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((entry, i) => {
+    if (entry.isIntersecting) {
+      // Stagger animations for siblings
+      const siblings = entry.target.parentElement.querySelectorAll('.reveal');
+      let delay = 0;
+      siblings.forEach((el) => {
+        if (el === entry.target) {
+          setTimeout(() => el.classList.add('visible'), delay);
+        }
+        delay += 100;
+      });
+      // Fallback: ensure the element becomes visible
+      setTimeout(() => entry.target.classList.add('visible'), 400);
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
