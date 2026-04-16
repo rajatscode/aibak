@@ -81,6 +81,7 @@ impl FromRequestParts<AppState> for AuthUser {
 
 /// Optional auth extractor: does not reject if unauthenticated.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct MaybeAuthUser(pub Option<AuthUser>);
 
 impl FromRequestParts<AppState> for MaybeAuthUser {

@@ -79,6 +79,7 @@ pub async fn get_user(pool: &PgPool, user_id: Uuid) -> Result<Option<UserRow>, s
         .await
 }
 
+#[allow(dead_code)]
 pub async fn get_user_by_discord_id(
     pool: &PgPool,
     discord_id: i64,

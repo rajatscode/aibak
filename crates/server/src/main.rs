@@ -349,8 +349,37 @@ async fn submit_local_orders(
     }))
 }
 
-async fn new_local_game(State(state): State<AppState>) -> Json<ActionResult> {
+#[derive(Deserialize, Default)]
+struct NewGameRequest {
+    #[serde(default)]
+    template: Option<String>,
+}
+
+async fn new_local_game(
+    State(state): State<AppState>,
+    body: Option<Json<NewGameRequest>>,
+) -> Json<ActionResult> {
+    let template = body.and_then(|b| b.0.template).unwrap_or_default();
+
     let mut app = state.local.lock().unwrap();
+
+    // Load a different map if requested.
+    if !template.is_empty() {
+        let map_path = format!("maps/{}.json", template);
+        match Map::load(&PathBuf::from(&map_path)) {
+            Ok(new_map) => {
+                app.map = new_map;
+            }
+            Err(e) => {
+                return Json(ActionResult {
+                    success: false,
+                    message: format!("Failed to load template '{}': {}", template, e),
+                    events: Vec::new(),
+                });
+            }
+        }
+    }
+
     let map = app.map.clone();
     app.game = GameState::new(&map);
     app.rng = StdRng::from_entropy();
@@ -358,7 +387,7 @@ async fn new_local_game(State(state): State<AppState>) -> Json<ActionResult> {
     app.turn_history.clear();
     Json(ActionResult {
         success: true,
-        message: "New game started".into(),
+        message: format!("New game on {}", map.name),
         events: Vec::new(),
     })
 }
@@ -369,6 +398,15 @@ async fn index() -> Html<&'static str> {
 
 async fn editor() -> Html<&'static str> {
     Html(include_str!("../../static/editor.html"))
+}
+
+async fn favicon() -> impl IntoResponse {
+    use axum::http::header;
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#0d1117" stroke="#e3b341" stroke-width="1.5"/><path d="M8 10 L14 8 L18 12 L24 10 L26 14 L22 18 L24 24 L18 22 L14 24 L8 22 L6 16Z" fill="#2563eb" stroke="#0d1117" stroke-width="0.5"/><path d="M14 8 L18 12 L14 14 L10 12Z" fill="#3b82f6" stroke="#0d1117" stroke-width="0.3"/><path d="M18 12 L24 10 L26 14 L22 14Z" fill="#dc2626" stroke="#0d1117" stroke-width="0.3"/><path d="M22 18 L24 24 L18 22 L20 18Z" fill="#4b5563" stroke="#0d1117" stroke-width="0.3"/><circle cx="12" cy="11" r="2.5" fill="rgba(0,0,0,0.5)"/><text x="12" y="12.5" text-anchor="middle" font-size="4" fill="white" font-weight="bold" font-family="sans-serif">5</text><circle cx="22" cy="12" r="2.5" fill="rgba(0,0,0,0.5)"/><text x="22" y="13.5" text-anchor="middle" font-size="4" fill="white" font-weight="bold" font-family="sans-serif">3</text></svg>"##;
+    (
+        [(header::CONTENT_TYPE, "image/svg+xml"), (header::CACHE_CONTROL, "public, max-age=86400")],
+        svg,
+    )
 }
 
 // ── Auth route handlers ──
@@ -604,6 +642,8 @@ async fn main() {
     let app = Router::new()
         // Local play routes (original functionality).
         .route("/", get(index))
+        .route("/favicon.ico", get(favicon))
+        .route("/favicon.svg", get(favicon))
         .route("/api/game", get(get_local_game))
         .route("/api/picks", post(submit_local_picks))
         .route("/api/orders", post(submit_local_orders))
