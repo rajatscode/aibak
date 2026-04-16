@@ -4,3 +4,5 @@ pub mod league;
 pub mod lobby;
 pub mod maps;
 pub mod orders;
+pub mod queue;
+pub mod spectate;

@@ -29,6 +29,14 @@ pub enum GameEvent {
         game_id: Uuid,
         winner_id: Uuid,
     },
+    MatchFound {
+        game_id: Uuid,
+        opponent_name: String,
+    },
+    QueueUpdate {
+        position: usize,
+        estimated_wait_secs: u32,
+    },
 }
 
 /// Central hub for WebSocket game event channels.

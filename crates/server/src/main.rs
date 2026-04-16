@@ -45,6 +45,8 @@ pub struct AppState {
     pub ws_hub: Arc<ws::Hub>,
     /// Game manager for multiplayer games (None if no DB).
     pub game_manager: Option<Arc<game::manager::GameManager>>,
+    /// Matchmaking queue for real-time player pairing.
+    pub matchmaking: Arc<game::matchmaking::MatchmakingQueue>,
     /// Local (single-player vs AI) game state.
     pub local: Arc<Mutex<LocalState>>,
 }
@@ -82,6 +84,36 @@ pub struct LocalState {
     state_history: Vec<GameState>,
     /// Player 0 win probability recorded after each turn resolves.
     win_prob_history: Vec<f64>,
+    /// Persistent local play statistics across games.
+    local_stats: LocalStats,
+}
+
+/// Cumulative statistics for local play sessions (no database required).
+#[derive(Clone, Serialize, Default)]
+struct LocalStats {
+    games_played: u32,
+    wins: u32,
+    losses: u32,
+    total_turns: u32,
+    /// Positive = win streak, negative = loss streak.
+    streak: i32,
+    /// Glicko rating after each completed game.
+    rating_history: Vec<f64>,
+    /// Current Glicko rating state (not serialized to JSON).
+    #[serde(skip)]
+    rating: game::rating::Rating,
+    /// Win probability at game start for each completed game.
+    start_win_probs: Vec<f64>,
+    /// Map name for each completed game.
+    game_maps: Vec<String>,
+    /// Turn count for each completed game.
+    game_turns: Vec<u32>,
+    /// Whether the player won each completed game.
+    game_results: Vec<bool>,
+    /// Bonus names the player has fully captured, with frequency.
+    bonus_captures: Vec<(String, u32)>,
+    /// Territory names the player picked at game start, with frequency.
+    pick_choices: Vec<(String, u32)>,
 }
 
 #[derive(Clone, Serialize)]
@@ -297,6 +329,23 @@ async fn submit_local_picks(
         ));
     }
 
+    // Track pick choices in local stats.
+    for &tid in &body.picks {
+        if let Some(t) = app.map.territories.get(tid) {
+            let name = t.name.clone();
+            if let Some(entry) = app
+                .local_stats
+                .pick_choices
+                .iter_mut()
+                .find(|(n, _)| n == &name)
+            {
+                entry.1 += 1;
+            } else {
+                app.local_stats.pick_choices.push((name, 1));
+            }
+        }
+    }
+
     let ai_picks = ai::generate_picks(&app.game, &app.map);
     let map = app.map.clone();
 
@@ -347,7 +396,52 @@ async fn submit_local_orders(
     app.win_prob_history.push(wp.player_0);
 
     let msg = if app.game.phase == Phase::Finished {
-        if app.game.winner == Some(PLAYER) {
+        let won = app.game.winner == Some(PLAYER);
+        // Record stats for completed game.
+        app.local_stats.games_played += 1;
+        app.local_stats.total_turns += app.game.turn;
+        if won {
+            app.local_stats.wins += 1;
+            app.local_stats.streak = app.local_stats.streak.max(0) + 1;
+        } else {
+            app.local_stats.losses += 1;
+            app.local_stats.streak = app.local_stats.streak.min(0) - 1;
+        }
+        // Update Glicko rating against a default-rated AI opponent.
+        let ai_rating = game::rating::Rating::default();
+        let outcome = if won {
+            game::rating::Outcome::Win
+        } else {
+            game::rating::Outcome::Loss
+        };
+        app.local_stats.rating =
+            game::rating::update_rating(app.local_stats.rating, ai_rating, outcome);
+        let new_rating = app.local_stats.rating.rating;
+        app.local_stats.rating_history.push(new_rating);
+        // Record per-game metadata.
+        let map_name = app.map.name.clone();
+        let game_turn = app.game.turn;
+        let start_wp = app.win_prob_history.first().copied().unwrap_or(0.5);
+        app.local_stats.game_maps.push(map_name);
+        app.local_stats.game_turns.push(game_turn);
+        app.local_stats.game_results.push(won);
+        app.local_stats.start_win_probs.push(start_wp);
+        // Track bonus captures: bonuses fully owned by the player at game end.
+        let bonus_data: Vec<(String, bool)> = app.map.bonuses.iter().map(|b| {
+            let owns_all = b.territory_ids.iter().all(|&tid| app.game.territory_owners[tid] == PLAYER);
+            (b.name.clone(), owns_all)
+        }).collect();
+        for (name, owns_all) in bonus_data {
+            if owns_all {
+                if let Some(entry) = app.local_stats.bonus_captures.iter_mut().find(|(n, _)| n == &name) {
+                    entry.1 += 1;
+                } else {
+                    app.local_stats.bonus_captures.push((name, 1));
+                }
+            }
+        }
+
+        if won {
             "Victory!".to_string()
         } else {
             "Defeat.".to_string()
@@ -632,6 +726,88 @@ async fn set_difficulty(
     })
 }
 
+async fn games_page() -> Html<&'static str> {
+    Html(include_str!("../../static/games.html"))
+}
+
+// ── Profile & stats endpoints ──
+
+async fn profile_page() -> Html<&'static str> {
+    Html(include_str!("../../static/profile.html"))
+}
+
+async fn get_local_stats(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let app = state.local.lock().unwrap();
+    let stats = &app.local_stats;
+    let current_rating = stats.rating.rating;
+    let rd = stats.rating.rd;
+
+    // Determine rank tier from rating.
+    let rank_tier = match current_rating as u32 {
+        0..=1199 => "Bronze",
+        1200..=1399 => "Silver",
+        1400..=1599 => "Gold",
+        1600..=1799 => "Platinum",
+        1800..=1999 => "Diamond",
+        2000..=2199 => "Master",
+        _ => "Grandmaster",
+    };
+
+    let win_rate = if stats.games_played > 0 {
+        (stats.wins as f64 / stats.games_played as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let avg_game_length = if stats.games_played > 0 {
+        stats.total_turns as f64 / stats.games_played as f64
+    } else {
+        0.0
+    };
+
+    // Build match history (last 20 games).
+    let total = stats.game_results.len();
+    let start = total.saturating_sub(20);
+    let match_history: Vec<serde_json::Value> = (start..total)
+        .rev()
+        .map(|i| {
+            serde_json::json!({
+                "game_number": i + 1,
+                "result": if stats.game_results[i] { "win" } else { "loss" },
+                "turns": stats.game_turns[i],
+                "map": stats.game_maps[i],
+                "rating_after": stats.rating_history[i],
+            })
+        })
+        .collect();
+
+    // Sort bonus captures by frequency (descending).
+    let mut bonuses = stats.bonus_captures.clone();
+    bonuses.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // Sort pick choices by frequency (descending).
+    let mut picks = stats.pick_choices.clone();
+    picks.sort_by(|a, b| b.1.cmp(&a.1));
+
+    Json(serde_json::json!({
+        "games_played": stats.games_played,
+        "wins": stats.wins,
+        "losses": stats.losses,
+        "win_rate": win_rate,
+        "total_turns": stats.total_turns,
+        "avg_game_length": avg_game_length,
+        "streak": stats.streak,
+        "rating": current_rating,
+        "rd": rd,
+        "rank_tier": rank_tier,
+        "rating_history": stats.rating_history,
+        "start_win_probs": stats.start_win_probs,
+        "match_history": match_history,
+        "bonus_captures": bonuses,
+        "pick_choices": picks,
+    }))
+}
+
 async fn app_placeholder() -> Html<&'static str> {
     Html("<html><body><h1>strat-club multiplayer</h1><p>Frontend coming soon.</p></body></html>")
 }
@@ -677,6 +853,7 @@ async fn main() {
         ai_strength: AiStrength::Hard,
         state_history: Vec::new(),
         win_prob_history: Vec::new(),
+        local_stats: LocalStats::default(),
     };
 
     // Set up WebSocket hub.
@@ -718,6 +895,20 @@ async fn main() {
         tokio::spawn(game::timer::boot_timer_task(pool, manager));
     }
 
+    // Set up matchmaking queue.
+    let matchmaking = Arc::new(game::matchmaking::MatchmakingQueue::new());
+
+    // Spawn matchmaking background task.
+    {
+        let mm_queue = matchmaking.clone();
+        let mm_manager = game_manager.clone();
+        let mm_hub = ws_hub.clone();
+        let mm_pool = db_pool.clone();
+        tokio::spawn(game::matchmaking::matchmaking_task(
+            mm_queue, mm_manager, mm_hub, mm_pool,
+        ));
+    }
+
     let bind_addr = config.bind_addr.clone();
 
     let app_state = AppState {
@@ -725,6 +916,7 @@ async fn main() {
         db_pool,
         ws_hub,
         game_manager,
+        matchmaking,
         local: Arc::new(Mutex::new(local_state)),
     };
 
@@ -740,8 +932,16 @@ async fn main() {
         .route("/api/game/replay/{turn}", get(get_replay_turn))
         .route("/api/game/analysis", get(get_analysis))
         .route("/api/difficulty", post(set_difficulty))
+        .route("/api/stats", get(get_local_stats))
+        // Profile page.
+        .route("/profile", get(profile_page))
         // Map editor.
         .route("/editor", get(editor))
+        // Game browser & spectator.
+        .route("/games", get(games_page))
+        .route("/api/games/active", get(api::spectate::active_games))
+        .route("/api/games/recent", get(api::spectate::recent_games))
+        .route("/api/games/{id}/spectate", get(api::spectate::spectate_game))
         // Multiplayer app placeholder.
         .route("/app", get(app_placeholder))
         // Auth routes.
@@ -766,6 +966,10 @@ async fn main() {
         .route("/api/seasons/{id}/standings", get(api::league::season_standings))
         .route("/api/seasons/{season_id}/standings/{user_id}", get(api::league::player_season_stats))
         .route("/api/match-history", get(api::league::match_history))
+        // Matchmaking queue.
+        .route("/api/queue/join", post(api::queue::join_queue))
+        .route("/api/queue/leave", post(api::queue::leave_queue))
+        .route("/api/queue/status", get(api::queue::queue_status))
         // Map management.
         .route("/api/maps", get(api::maps::list_maps))
         .route("/api/maps", post(api::maps::save_map))

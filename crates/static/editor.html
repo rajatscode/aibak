@@ -11,206 +11,381 @@
   --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff; --accent2: #388bfd;
   --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #bc8cff;
   --orange: #f0883e;
+  --sidebar-w: 320px;
+  --topbar-h: 44px;
+  --statusbar-h: 28px;
 }
 html, body { height: 100%; overflow: hidden; }
 body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; display: flex; flex-direction: column; }
-button { background: var(--bg3); color: var(--text); border: 1px solid var(--bg4); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background 0.15s; }
-button:hover { background: var(--bg4); }
-button.active { background: var(--accent2); border-color: var(--accent); }
-button.primary { background: var(--accent2); border-color: var(--accent); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text2); }
+
+/* Inputs */
+button { background: var(--bg3); color: var(--text); border: 1px solid var(--bg4); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.15s; font-family: inherit; }
+button:hover { background: var(--bg4); border-color: var(--text2); }
+button.primary { background: var(--accent2); border-color: var(--accent); color: #fff; }
 button.primary:hover { background: var(--accent); }
-button.danger { background: #da3633; border-color: #f85149; }
-button.danger:hover { background: #f85149; }
-input, select { background: var(--bg); color: var(--text); border: 1px solid var(--bg4); padding: 5px 8px; border-radius: 4px; font-size: 13px; outline: none; }
-input:focus { border-color: var(--accent); }
-label { color: var(--text2); font-size: 12px; display: block; margin-bottom: 2px; }
+button.danger { color: var(--red); border-color: transparent; background: transparent; }
+button.danger:hover { background: rgba(248,81,73,0.15); border-color: var(--red); }
+input, select { background: var(--bg); color: var(--text); border: 1px solid var(--bg4); padding: 5px 8px; border-radius: 4px; font-size: 13px; outline: none; font-family: inherit; transition: border-color 0.15s; }
+input:focus, select:focus { border-color: var(--accent); }
 
-/* Toolbar */
-#toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg2); border-bottom: 1px solid var(--bg4); flex-shrink: 0; }
-#toolbar .sep { width: 1px; height: 24px; background: var(--bg4); }
-#toolbar .title { font-weight: 600; font-size: 15px; margin-right: 8px; color: var(--accent); }
+/* ============ TOP BAR ============ */
+#topbar {
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: var(--bg2); border-bottom: 1px solid var(--bg4);
+  height: var(--topbar-h); flex-shrink: 0;
+}
+#topbar .logo { font-weight: 700; font-size: 15px; color: var(--accent); letter-spacing: -0.3px; }
+#topbar .sep { width: 1px; height: 20px; background: var(--bg4); }
+#topbar .stat { font-size: 12px; color: var(--text2); }
+#topbar .stat b { color: var(--text); font-weight: 600; }
+#help-btn { background: transparent; border: 1px solid var(--bg4); width: 28px; height: 28px; border-radius: 50%; font-size: 14px; padding: 0; display: flex; align-items: center; justify-content: center; color: var(--text2); margin-left: auto; }
+#help-btn:hover { color: var(--text); border-color: var(--text2); }
 
-/* Main layout */
+/* ============ MAIN LAYOUT ============ */
 #main { display: flex; flex: 1; overflow: hidden; }
-#canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
+#canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg); cursor: crosshair; }
 #canvas-wrap svg { width: 100%; height: 100%; }
+#canvas-wrap.dragging-connection { cursor: grabbing; }
 
-/* Sidebar */
-#sidebar { width: 340px; min-width: 340px; background: var(--bg2); border-left: 1px solid var(--bg4); display: flex; flex-direction: column; overflow: hidden; }
-.panel { border-bottom: 1px solid var(--bg4); }
-.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: pointer; user-select: none; background: var(--bg3); font-weight: 600; font-size: 13px; }
-.panel-header:hover { background: var(--bg4); }
-.panel-body { padding: 10px 12px; max-height: 300px; overflow-y: auto; }
-.panel-body.collapsed { display: none; }
-.panel-body .row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.panel-body .row label { margin: 0; min-width: 70px; }
-.panel-body .row input { flex: 1; }
-.panel-body .row input[type="number"] { width: 60px; flex: none; }
-.panel-body .row input[type="checkbox"] { width: auto; flex: none; }
+/* ============ SIDEBAR ============ */
+#sidebar {
+  width: var(--sidebar-w); min-width: var(--sidebar-w);
+  background: var(--bg2); border-left: 1px solid var(--bg4);
+  display: flex; flex-direction: column; overflow: hidden;
+}
 
-/* Territory list */
-.terr-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-.terr-item:hover { background: var(--bg3); }
-.terr-item.selected { background: var(--bg4); outline: 1px solid var(--accent); }
-.terr-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.terr-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.terr-item .tid { color: var(--text2); font-size: 11px; }
+/* Section headers */
+.section-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text2); padding: 12px 16px 6px; user-select: none;
+}
+
+/* Map Settings */
+#map-settings { padding: 0 16px 12px; border-bottom: 1px solid var(--bg4); }
+#map-settings .field { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+#map-settings .field label { font-size: 12px; color: var(--text2); min-width: 48px; }
+#map-settings .field input, #map-settings .field select { flex: 1; height: 28px; }
+#map-name-input { font-size: 14px; font-weight: 600; border: 1px solid transparent; background: transparent; color: var(--text); padding: 4px 8px; border-radius: 4px; width: 100%; margin-bottom: 4px; }
+#map-name-input:hover { border-color: var(--bg4); }
+#map-name-input:focus { border-color: var(--accent); background: var(--bg); }
 
 /* Bonus list */
-.bonus-item { padding: 6px 8px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; }
-.bonus-item:hover { border-color: var(--bg4); }
-.bonus-item.selected { border-color: var(--accent); background: var(--bg3); }
-.bonus-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.bonus-header .swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
-.bonus-header .bname { flex: 1; font-weight: 600; font-size: 13px; }
-.bonus-header .bval { color: var(--green); font-weight: 700; font-size: 13px; }
-.bonus-terrs { display: flex; flex-wrap: wrap; gap: 3px; }
-.bonus-terrs .chip { background: var(--bg4); padding: 1px 6px; border-radius: 10px; font-size: 11px; color: var(--text2); cursor: pointer; }
-.bonus-terrs .chip:hover { background: var(--red); color: white; }
+#bonus-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-bottom: 1px solid var(--bg4); }
+#bonus-scroll { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
 
-/* Scrollable panels container */
-#panels-scroll { flex: 1; overflow-y: auto; }
+.bonus-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border-radius: 6px; cursor: pointer; border: 1px solid transparent;
+  transition: all 0.12s; margin-bottom: 2px;
+}
+.bonus-row:hover { background: var(--bg3); }
+.bonus-row.active { background: rgba(88,166,255,0.08); border-color: var(--accent); }
+.bonus-row .swatch {
+  width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.1); cursor: pointer; position: relative;
+}
+.bonus-row .swatch input[type="color"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: none; padding: 0;
+}
+.bonus-row .bname {
+  flex: 1; font-size: 13px; font-weight: 500; min-width: 0;
+  background: transparent; border: none; color: var(--text); outline: none;
+  padding: 0; font-family: inherit;
+}
+.bonus-row .bname:focus { border-bottom: 1px solid var(--accent); }
+.bonus-row .bval {
+  width: 36px; text-align: center; font-size: 12px; font-weight: 700;
+  color: var(--green); background: var(--bg); border: 1px solid var(--bg4);
+  border-radius: 4px; padding: 2px 0; height: 24px;
+}
+.bonus-row .badge {
+  font-size: 10px; color: var(--text2); background: var(--bg4);
+  padding: 1px 6px; border-radius: 8px; white-space: nowrap;
+}
+.bonus-row .del-btn {
+  opacity: 0; background: transparent; border: none; color: var(--text2);
+  cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1; transition: opacity 0.1s;
+}
+.bonus-row:hover .del-btn { opacity: 1; }
+.bonus-row .del-btn:hover { color: var(--red); }
 
-/* Tooltip */
-#tooltip { position: absolute; background: var(--bg3); border: 1px solid var(--bg4); padding: 6px 10px; border-radius: 6px; font-size: 12px; pointer-events: none; display: none; z-index: 100; white-space: nowrap; }
+#add-bonus-btn { margin: 4px 8px 8px; font-size: 12px; }
 
-/* Status bar */
-#statusbar { display: flex; align-items: center; gap: 12px; padding: 4px 12px; background: var(--bg2); border-top: 1px solid var(--bg4); font-size: 12px; color: var(--text2); flex-shrink: 0; }
+/* Unassigned warning */
+.unassigned-warning {
+  margin: 4px 8px; padding: 6px 10px; border-radius: 6px;
+  background: rgba(248,81,73,0.08); border: 1px solid rgba(248,81,73,0.2);
+  font-size: 11px; color: var(--red); display: none;
+}
 
-/* Toast notification */
-#toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--bg3); border: 1px solid var(--bg4); color: var(--text); padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 300; display: none; max-width: 500px; white-space: pre-line; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-#toast.error { border-color: var(--red); color: var(--red); }
-#toast.success { border-color: var(--green); color: var(--green); }
+/* Territory detail (when selected) */
+#territory-detail {
+  border-top: 1px solid var(--bg4); padding: 12px 16px;
+  display: none; flex-shrink: 0;
+}
+#territory-detail .td-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+#territory-detail .td-header .td-name {
+  flex: 1; font-size: 14px; font-weight: 600;
+  background: transparent; border: 1px solid transparent; color: var(--text);
+  padding: 2px 6px; border-radius: 4px;
+}
+#territory-detail .td-header .td-name:hover { border-color: var(--bg4); }
+#territory-detail .td-header .td-name:focus { border-color: var(--accent); background: var(--bg); }
+#territory-detail .td-fields { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+#territory-detail .td-field { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+#territory-detail .td-field label { color: var(--text2); }
+#territory-detail .td-field input[type="number"] { width: 48px; height: 24px; font-size: 12px; }
+#territory-detail .td-field input[type="checkbox"] { accent-color: var(--accent); }
+#territory-detail .td-conns { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
 
-/* Modal overlay */
+/* Multi-select info */
+#multi-detail { display: none; padding: 12px 16px; border-top: 1px solid var(--bg4); flex-shrink: 0; }
+
+/* Actions section */
+#actions-section { padding: 8px 16px 12px; flex-shrink: 0; }
+#actions-section .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+#actions-section .action-grid button { font-size: 11px; padding: 6px 4px; white-space: nowrap; }
+#actions-section .action-grid .full-width { grid-column: 1 / -1; }
+#auto-layout-btn { font-size: 13px; padding: 8px; grid-column: 1 / -1; }
+
+/* ============ TOAST ============ */
+#toast {
+  position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--bg3); border: 1px solid var(--bg4); color: var(--text);
+  padding: 10px 20px; border-radius: 8px; font-size: 13px;
+  z-index: 300; opacity: 0; pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5); white-space: pre-line; max-width: 500px;
+}
+#toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+#toast.error { border-color: var(--red); }
+#toast.success { border-color: var(--green); }
+
+/* ============ STATUS BAR ============ */
+#statusbar {
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: var(--bg2); border-top: 1px solid var(--bg4);
+  height: var(--statusbar-h); flex-shrink: 0; font-size: 11px; color: var(--text2);
+}
+
+/* ============ CONTEXT MENU ============ */
+#context-menu {
+  position: fixed; background: var(--bg2); border: 1px solid var(--bg4);
+  border-radius: 8px; padding: 4px 0; min-width: 160px; z-index: 200;
+  display: none; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+#context-menu .ctx-item {
+  padding: 6px 14px; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; gap: 8px; transition: background 0.1s;
+}
+#context-menu .ctx-item:hover { background: var(--bg3); }
+#context-menu .ctx-item.danger { color: var(--red); }
+#context-menu .ctx-sep { height: 1px; background: var(--bg4); margin: 4px 0; }
+
+/* ============ TOOLTIP ============ */
+#tooltip {
+  position: absolute; background: var(--bg3); border: 1px solid var(--bg4);
+  padding: 6px 10px; border-radius: 6px; font-size: 12px;
+  pointer-events: none; display: none; z-index: 100; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* ============ HELP PANEL ============ */
+#help-panel {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--bg2); border: 1px solid var(--bg4); border-radius: 12px;
+  padding: 24px; width: 420px; z-index: 250; display: none;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+}
+#help-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 249; display: none; }
+#help-panel h3 { margin-bottom: 16px; font-size: 16px; }
+#help-panel .shortcut-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+#help-panel .shortcut-row kbd {
+  background: var(--bg4); padding: 2px 8px; border-radius: 4px; font-size: 11px;
+  font-family: monospace; border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* ============ MODAL ============ */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
-.modal { background: var(--bg2); border: 1px solid var(--bg4); border-radius: 10px; padding: 20px; min-width: 400px; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+.modal { background: var(--bg2); border: 1px solid var(--bg4); border-radius: 12px; padding: 24px; min-width: 400px; max-width: 600px; max-height: 80vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.6); }
 .modal h3 { margin-bottom: 12px; }
-.modal textarea { width: 100%; height: 300px; background: var(--bg); color: var(--text); border: 1px solid var(--bg4); border-radius: 4px; font-family: monospace; font-size: 12px; padding: 8px; resize: vertical; }
+.modal textarea { width: 100%; height: 300px; background: var(--bg); color: var(--text); border: 1px solid var(--bg4); border-radius: 6px; font-family: monospace; font-size: 12px; padding: 10px; resize: vertical; }
 .modal .actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+
+/* ============ DROP ZONE ============ */
+#drop-zone {
+  position: absolute; inset: 0; background: rgba(56,139,253,0.1);
+  border: 3px dashed var(--accent); z-index: 150;
+  display: none; align-items: center; justify-content: center;
+  font-size: 18px; color: var(--accent); font-weight: 600;
+  pointer-events: none;
+}
+
+/* ============ SVG STYLES ============ */
+.territory-node { cursor: pointer; transition: r 0.1s; }
+.territory-node:hover { filter: brightness(1.2); }
 </style>
 </head>
 <body>
 
-<div id="toolbar">
-  <span class="title">Map Editor</span>
+<!-- ===== TOP BAR ===== -->
+<div id="topbar">
+  <span class="logo">Map Editor</span>
   <div class="sep"></div>
-  <button id="btn-select" class="active" onclick="setMode('select')" title="Select & move territories (S)">Select</button>
-  <button id="btn-territory" onclick="setMode('territory')" title="Place territory nodes (T)">+ Territory</button>
-  <button id="btn-connection" onclick="setMode('connection')" title="Draw connections between territories (C)">+ Connection</button>
-  <div class="sep"></div>
-  <button onclick="autoLayout()" title="Force-directed auto-layout (L)">Auto-Layout</button>
-  <button onclick="generateShapes()" title="Generate organic territory shapes (G)">Gen Shapes</button>
-  <button onclick="autoClusters()" title="Auto-detect bonus regions (K)">Auto-Cluster</button>
-  <div class="sep"></div>
-  <button onclick="clearShapes()">Clear Shapes</button>
-  <button onclick="validateGraph()" title="Check graph connectivity (V)">Validate</button>
-  <button onclick="undo()" title="Undo last action (Ctrl+Z)">Undo</button>
-  <div class="sep"></div>
-  <button class="primary" onclick="showExport()">Export JSON</button>
-  <button onclick="showImport()">Import JSON</button>
+  <span class="stat"><b id="stat-terr">0</b> territories</span>
+  <span class="stat"><b id="stat-conn">0</b> connections</span>
+  <span class="stat"><b id="stat-bonus">0</b> bonuses</span>
+  <button id="help-btn" title="Keyboard shortcuts (?)" onclick="toggleHelp()">?</button>
 </div>
 
+<!-- ===== MAIN ===== -->
 <div id="main">
   <div id="canvas-wrap">
     <svg id="svg" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text2)"/>
-        </marker>
         <radialGradient id="ocean-gradient" cx="50%" cy="50%" r="70%">
           <stop offset="0%" stop-color="#0f2240"/>
           <stop offset="100%" stop-color="#0a1628"/>
         </radialGradient>
-        <filter id="territory-shadow" x="-10%" y="-10%" width="120%" height="130%">
+        <filter id="territory-shadow" x="-20%" y="-20%" width="140%" height="150%">
           <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.5"/>
         </filter>
-        <filter id="territory-hover" x="-10%" y="-10%" width="120%" height="130%">
-          <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.6"/>
+        <filter id="glow-filter" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
+        <pattern id="wasteland-hatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
+        </pattern>
       </defs>
       <rect id="ocean-bg" fill="url(#ocean-gradient)" style="display:none"/>
       <g id="g-ocean-detail"></g>
       <g id="g-shapes"></g>
+      <g id="g-bonus-regions"></g>
       <g id="g-connections"></g>
+      <g id="g-drag-line"></g>
       <g id="g-nodes"></g>
       <g id="g-labels"></g>
-      <line id="conn-preview" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="6,4" style="display:none" pointer-events="none"/>
     </svg>
+    <div id="drop-zone">Drop JSON file to import</div>
     <div id="tooltip"></div>
   </div>
 
+  <!-- ===== SIDEBAR ===== -->
   <div id="sidebar">
-    <div id="panels-scroll">
-      <!-- Map Settings -->
-      <div class="panel" id="panel-settings">
-        <div class="panel-header" onclick="togglePanel('settings')">Map Settings <span id="arrow-settings">&#9660;</span></div>
-        <div class="panel-body" id="body-settings">
-          <div class="row"><label>Map ID</label><input id="set-id" value="custom_map" oninput="mapData.id=this.value"></div>
-          <div class="row"><label>Map Name</label><input id="set-name" value="Custom Map" oninput="mapData.name=this.value"></div>
-          <div class="row"><label>Picks</label><input id="set-picks" type="number" value="4" min="1" max="20" oninput="mapData.picking.num_picks=+this.value"></div>
-          <div class="row"><label>Base Income</label><input id="set-income" type="number" value="5" min="0" oninput="mapData.settings.base_income=+this.value"></div>
-          <div class="row"><label>Fog of War</label><input id="set-fog" type="checkbox" checked onchange="mapData.settings.fog_of_war=this.checked"></div>
-        </div>
+    <!-- Map Settings -->
+    <div class="section-title">Map Settings</div>
+    <div id="map-settings">
+      <input type="text" id="map-name-input" value="Custom Map" placeholder="Map name..." spellcheck="false">
+      <div class="field">
+        <label>Picks</label>
+        <select id="set-picks">
+          <option value="3">3 picks</option>
+          <option value="4" selected>4 picks</option>
+          <option value="5">5 picks</option>
+          <option value="6">6 picks</option>
+        </select>
       </div>
+    </div>
 
-      <!-- Territory Editor -->
-      <div class="panel" id="panel-territory">
-        <div class="panel-header" onclick="togglePanel('territory')">Territory Editor <span id="arrow-territory">&#9660;</span></div>
-        <div class="panel-body" id="body-territory">
-          <div id="terr-editor-empty" style="color:var(--text2)">Click a territory to edit</div>
-          <div id="terr-editor" style="display:none">
-            <div class="row"><label>ID</label><span id="te-id"></span></div>
-            <div class="row"><label>Name</label><input id="te-name" oninput="updateTerrName(this.value)"></div>
-            <div class="row"><label>Armies</label><input id="te-armies" type="number" min="1" value="2" oninput="updateTerrArmies(+this.value)"></div>
-            <div class="row"><label>Wasteland</label><input id="te-waste" type="checkbox" onchange="updateTerrWasteland(this.checked)"></div>
-            <div class="row"><label>Bonus</label><select id="te-bonus" onchange="updateTerrBonus(+this.value)"></select></div>
-            <div class="row"><label>Connections</label><span id="te-conn" style="font-size:12px;color:var(--text2)"></span></div>
-            <div class="row" style="margin-top:6px"><button class="danger" onclick="deleteSelectedTerritory()">Delete Territory</button></div>
-          </div>
-        </div>
+    <!-- Bonuses -->
+    <div id="bonus-section">
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;padding-right:16px">
+        Bonuses
+        <span id="bonus-mode-hint" style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--accent);display:none">Click territories to toggle</span>
       </div>
-
-      <!-- Territory List -->
-      <div class="panel" id="panel-terrlist">
-        <div class="panel-header" onclick="togglePanel('terrlist')">Territories (<span id="terr-count">0</span>) <span id="arrow-terrlist">&#9660;</span></div>
-        <div class="panel-body" id="body-terrlist">
-          <div id="terr-list"></div>
-        </div>
+      <div class="unassigned-warning" id="unassigned-warning">
+        <span id="unassigned-count">0</span> territories have no bonus assigned
       </div>
+      <div id="bonus-scroll"></div>
+      <button id="add-bonus-btn" onclick="addBonus()">+ New Bonus</button>
+    </div>
 
-      <!-- Bonus Editor -->
-      <div class="panel" id="panel-bonuses">
-        <div class="panel-header" onclick="togglePanel('bonuses')">Bonuses (<span id="bonus-count">0</span>) <span id="arrow-bonuses">&#9660;</span></div>
-        <div class="panel-body" id="body-bonuses">
-          <div id="bonus-list"></div>
-          <button style="margin-top:6px;width:100%" onclick="addBonus()">+ Add Bonus</button>
-        </div>
+    <!-- Territory Detail (shown when a territory is selected) -->
+    <div id="territory-detail">
+      <div class="section-title">Selected Territory</div>
+      <div class="td-header">
+        <input class="td-name" id="td-name" spellcheck="false">
+        <button class="danger" onclick="deleteSelected()" title="Delete territory" style="font-size:16px;padding:2px 6px">&#10005;</button>
       </div>
+      <div class="td-fields">
+        <div class="td-field"><label>Armies</label><input type="number" id="td-armies" min="1" value="2"></div>
+        <div class="td-field"><label>Wasteland</label><input type="checkbox" id="td-wasteland"></div>
+      </div>
+      <div class="td-conns" id="td-conns"></div>
+    </div>
 
-      <!-- Bonus Detail Editor -->
-      <div class="panel" id="panel-bonusedit" style="display:none">
-        <div class="panel-header" onclick="togglePanel('bonusedit')">Bonus Detail <span id="arrow-bonusedit">&#9660;</span></div>
-        <div class="panel-body" id="body-bonusedit">
-          <div class="row"><label>Name</label><input id="be-name" oninput="updateBonusName(this.value)"></div>
-          <div class="row"><label>Value</label><input id="be-value" type="number" min="0" oninput="updateBonusValue(+this.value)"></div>
-          <div class="row"><label>Color</label><input id="be-color" type="color" onchange="updateBonusColor(this.value)"></div>
-          <div class="row"><label>Territories</label></div>
-          <div id="be-terrs" class="bonus-terrs"></div>
-          <div class="row" style="margin-top:6px">
-            <button onclick="startAddTerrToBonus()">+ Add Territory</button>
-            <button class="danger" onclick="deleteSelectedBonus()">Delete Bonus</button>
-          </div>
-        </div>
+    <!-- Multi-select info -->
+    <div id="multi-detail">
+      <div class="section-title">Multi-Selection</div>
+      <div style="font-size:13px;margin-bottom:8px"><b id="multi-count">0</b> territories selected</div>
+      <button class="danger" onclick="deleteSelected()" style="width:100%">Delete Selected</button>
+    </div>
+
+    <!-- Actions -->
+    <div id="actions-section">
+      <div class="section-title">Actions</div>
+      <div class="action-grid">
+        <button id="auto-layout-btn" class="primary" onclick="autoLayout()">Auto-Layout</button>
+        <button onclick="generateShapes()">Gen Shapes</button>
+        <button onclick="autoClusters()">Auto-Cluster</button>
+        <button onclick="validateGraph()">Validate</button>
+        <button onclick="doExport()">Export JSON</button>
+        <button onclick="showImport()">Import JSON</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- ===== CONTEXT MENU ===== -->
+<div id="context-menu">
+  <div class="ctx-item" data-action="wasteland">Toggle Wasteland</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="bonus-submenu" id="ctx-bonus-item">Set Bonus...</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" data-action="delete">Delete Territory</div>
+</div>
+
+<!-- ===== HELP PANEL ===== -->
+<div id="help-overlay" onclick="toggleHelp()"></div>
+<div id="help-panel">
+  <h3>Keyboard Shortcuts</h3>
+  <div class="shortcut-row"><span>Add territory</span><kbd>Click empty space</kbd></div>
+  <div class="shortcut-row"><span>Select territory</span><kbd>Click territory</kbd></div>
+  <div class="shortcut-row"><span>Multi-select</span><kbd>Shift + Click</kbd></div>
+  <div class="shortcut-row"><span>Create/remove connection</span><kbd>Drag territory to territory</kbd></div>
+  <div class="shortcut-row"><span>Context menu</span><kbd>Right-click territory</kbd></div>
+  <div class="shortcut-row"><span>Toggle bonus membership</span><kbd>Select bonus, then click territory</kbd></div>
+  <div style="height:8px"></div>
+  <div class="shortcut-row"><span>Delete selected</span><kbd>Delete / Backspace</kbd></div>
+  <div class="shortcut-row"><span>Undo</span><kbd>Ctrl+Z</kbd></div>
+  <div class="shortcut-row"><span>Auto-Layout</span><kbd>L</kbd></div>
+  <div class="shortcut-row"><span>Generate Shapes</span><kbd>G</kbd></div>
+  <div class="shortcut-row"><span>Auto-Cluster</span><kbd>K</kbd></div>
+  <div class="shortcut-row"><span>Export</span><kbd>E</kbd></div>
+  <div class="shortcut-row"><span>Deselect all</span><kbd>Escape</kbd></div>
+  <div class="shortcut-row"><span>Fit to view</span><kbd>F</kbd></div>
+  <div class="shortcut-row"><span>Pan canvas</span><kbd>Middle-click drag / Alt+drag</kbd></div>
+  <div class="shortcut-row"><span>Zoom</span><kbd>Scroll wheel</kbd></div>
+  <div style="margin-top:16px;text-align:right">
+    <button onclick="toggleHelp()">Close</button>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
 <div id="toast"></div>
+
+<!-- ===== STATUS BAR ===== -->
 <div id="statusbar">
-  <span id="status-mode">Mode: Select</span>
-  <span id="status-info">0 territories, 0 connections</span>
+  <span id="status-hint">Click anywhere on the canvas to add a territory</span>
   <span style="flex:1"></span>
   <span id="status-pos">0, 0</span>
 </div>
@@ -255,54 +430,45 @@ function pushUndo(desc) {
     bonuses: JSON.parse(JSON.stringify(bonuses)),
     nextTerrId, nextBonusId
   });
-  if (undoStack.length > 50) undoStack.shift();
+  if (undoStack.length > 80) undoStack.shift();
 }
 function undo() {
-  if (!undoStack.length) return;
+  if (!undoStack.length) { toast('Nothing to undo'); return; }
   const s = undoStack.pop();
   territories = s.territories;
   connections = s.connections;
   bonuses = s.bonuses;
   nextTerrId = s.nextTerrId;
   nextBonusId = s.nextBonusId;
-  selectedTerr = null; selectedBonus = null;
+  selectedTerrs.clear();
+  selectedBonus = null;
   fullRender();
+  toast('Undone: ' + s.desc);
 }
 
 // ============================================================
-//  MODE & SELECTION STATE
+//  SELECTION STATE
 // ============================================================
-let mode = 'select'; // 'select','territory','connection'
-let selectedTerr = null;
+let selectedTerrs = new Set();  // multi-select support
 let selectedBonus = null;
-let connStart = null;
+
+// Drag-to-connect state
+let dragConnecting = false;
+let dragConnStart = null;
+let dragConnPt = { x: 0, y: 0 };
+
+// Drag-to-move state
 let dragging = null;
-let dragOffset = {x:0,y:0};
-let addingTerrToBonus = false;
+let dragOffset = { x: 0, y: 0 };
+let dragMoved = false;
 
-// SVG pan & zoom
-let viewBox = {x:0, y:0, w:1200, h:800};
+// Pan & zoom
+let viewBox = { x: 0, y: 0, w: 1200, h: 800 };
 let isPanning = false;
-let panStart = {x:0,y:0};
+let panStart = { x: 0, y: 0 };
 
-function setMode(m) {
-  mode = m;
-  connStart = null;
-  addingTerrToBonus = false;
-  document.getElementById('conn-preview').style.display = 'none';
-  document.querySelectorAll('#toolbar button').forEach(b => {
-    if (b.id.startsWith('btn-')) b.classList.remove('active');
-  });
-  const btn = document.getElementById('btn-' + m);
-  if (btn) btn.classList.add('active');
-  document.getElementById('status-mode').textContent = 'Mode: ' + {select:'Select',territory:'+ Territory',connection:'+ Connection'}[m];
-  updateCursor();
-}
-
-function updateCursor() {
-  const wrap = document.getElementById('canvas-wrap');
-  wrap.style.cursor = {select:'default', territory:'crosshair', connection:'pointer'}[mode] || 'default';
-}
+// Context menu
+let contextTerritory = null;
 
 // ============================================================
 //  SVG HELPERS
@@ -329,157 +495,398 @@ function initView() {
 }
 
 // ============================================================
-//  SVG EVENT HANDLERS
-// ============================================================
-svg.addEventListener('mousedown', e => {
-  if (e.button === 1 || (e.button === 0 && e.altKey)) {
-    isPanning = true;
-    panStart = {x: e.clientX, y: e.clientY};
-    e.preventDefault();
-    return;
-  }
-  const pt = svgPoint(e);
-  const hit = hitTestTerritory(pt);
-
-  if (mode === 'territory' && !hit) {
-    pushUndo('Add territory');
-    addTerritory(pt.x, pt.y);
-    fullRender();
-    return;
-  }
-
-  if (mode === 'connection') {
-    if (hit !== null) {
-      if (connStart === null) {
-        connStart = hit;
-      } else if (connStart !== hit) {
-        pushUndo('Add connection');
-        addConnection(connStart, hit);
-        connStart = null;
-        document.getElementById('conn-preview').style.display = 'none';
-        fullRender();
-      }
-    }
-    return;
-  }
-
-  if (mode === 'select') {
-    if (addingTerrToBonus && hit !== null && selectedBonus !== null) {
-      pushUndo('Add territory to bonus');
-      const b = bonuses.find(b => b.id === selectedBonus);
-      const t = territories.find(t => t.id === hit);
-      if (b && t && !b.territory_ids.includes(hit)) {
-        // Remove from old bonus
-        bonuses.forEach(ob => { ob.territory_ids = ob.territory_ids.filter(x => x !== hit); });
-        b.territory_ids.push(hit);
-        t.bonus_id = b.id;
-      }
-      addingTerrToBonus = false;
-      fullRender();
-      return;
-    }
-    if (hit !== null) {
-      selectTerritory(hit);
-      dragging = hit;
-      const t = territories.find(t => t.id === hit);
-      dragOffset = {x: pt.x - t.x, y: pt.y - t.y};
-    } else {
-      selectTerritory(null);
-    }
-  }
-});
-
-svg.addEventListener('mousemove', e => {
-  const pt = svgPoint(e);
-  document.getElementById('status-pos').textContent = `${Math.round(pt.x)}, ${Math.round(pt.y)}`;
-
-  if (isPanning) {
-    const rect = svg.getBoundingClientRect();
-    const dx = (e.clientX - panStart.x) / rect.width * viewBox.w;
-    const dy = (e.clientY - panStart.y) / rect.height * viewBox.h;
-    viewBox.x -= dx; viewBox.y -= dy;
-    panStart = {x: e.clientX, y: e.clientY};
-    updateViewBox();
-    return;
-  }
-
-  if (dragging !== null) {
-    const t = territories.find(t => t.id === dragging);
-    if (t) {
-      t.x = pt.x - dragOffset.x;
-      t.y = pt.y - dragOffset.y;
-      renderNodes();
-      renderConnections();
-      renderLabels();
-    }
-    return;
-  }
-
-  if (mode === 'connection' && connStart !== null) {
-    const t = territories.find(t => t.id === connStart);
-    const line = document.getElementById('conn-preview');
-    line.style.display = '';
-    line.setAttribute('x1', t.x);
-    line.setAttribute('y1', t.y);
-    line.setAttribute('x2', pt.x);
-    line.setAttribute('y2', pt.y);
-  }
-
-  // Hover tooltip
-  const hit = hitTestTerritory(pt);
-  const tooltip = document.getElementById('tooltip');
-  if (hit !== null) {
-    const t = territories.find(t => t.id === hit);
-    const b = bonuses.find(b => b.territory_ids.includes(hit));
-    tooltip.innerHTML = `<b>${t.name}</b> (ID: ${t.id})<br>Armies: ${t.default_armies}${t.is_wasteland?' [Wasteland]':''}${b?'<br>Bonus: '+b.name:''}`;
-    tooltip.style.display = 'block';
-    tooltip.style.left = (e.clientX - document.getElementById('canvas-wrap').getBoundingClientRect().left + 14) + 'px';
-    tooltip.style.top = (e.clientY - document.getElementById('canvas-wrap').getBoundingClientRect().top + 14) + 'px';
-  } else {
-    tooltip.style.display = 'none';
-  }
-});
-
-svg.addEventListener('mouseup', e => {
-  if (isPanning) { isPanning = false; return; }
-  if (dragging !== null) {
-    dragging = null;
-    renderShapes();
-  }
-});
-
-svg.addEventListener('wheel', e => {
-  e.preventDefault();
-  const pt = svgPoint(e);
-  const factor = e.deltaY > 0 ? 1.1 : 0.9;
-  const nw = viewBox.w * factor;
-  const nh = viewBox.h * factor;
-  viewBox.x = pt.x - (pt.x - viewBox.x) * factor;
-  viewBox.y = pt.y - (pt.y - viewBox.y) * factor;
-  viewBox.w = nw; viewBox.h = nh;
-  updateViewBox();
-}, {passive: false});
-
-// ============================================================
 //  HIT TESTING
 // ============================================================
-function hitTestTerritory(pt, radius=16) {
-  let best = null, bestD = radius*radius;
+function hitTestTerritory(pt, radius = 18) {
+  let best = null, bestD = radius * radius;
   for (const t of territories) {
     const dx = pt.x - t.x, dy = pt.y - t.y;
-    const d = dx*dx + dy*dy;
+    const d = dx * dx + dy * dy;
     if (d < bestD) { bestD = d; best = t.id; }
   }
   return best;
 }
 
 // ============================================================
+//  TOAST NOTIFICATIONS
+// ============================================================
+let toastTimer = null;
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'visible' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { el.className = ''; }, 2500);
+}
+
+// ============================================================
+//  SVG EVENT HANDLERS — DIRECT MANIPULATION
+// ============================================================
+svg.addEventListener('mousedown', function(e) {
+  // Middle-click or Alt+left-click = pan
+  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    isPanning = true;
+    panStart = { x: e.clientX, y: e.clientY };
+    e.preventDefault();
+    return;
+  }
+
+  // Right-click = context menu
+  if (e.button === 2) return; // handled by contextmenu event
+
+  var pt = svgPoint(e);
+  var hit = hitTestTerritory(pt);
+
+  if (hit !== null) {
+    // Clicked on a territory
+
+    // If a bonus is selected in sidebar, toggle membership
+    if (selectedBonus !== null && !e.shiftKey) {
+      pushUndo('Toggle bonus membership');
+      var b = bonuses.find(function(b) { return b.id === selectedBonus; });
+      if (b) {
+        var idx = b.territory_ids.indexOf(hit);
+        if (idx >= 0) {
+          // Remove from this bonus
+          b.territory_ids.splice(idx, 1);
+          toast('Removed from ' + b.name);
+        } else {
+          // Remove from any other bonus first
+          bonuses.forEach(function(ob) { ob.territory_ids = ob.territory_ids.filter(function(x) { return x !== hit; }); });
+          b.territory_ids.push(hit);
+          toast('Added to ' + b.name);
+        }
+        fullRender();
+      }
+      return;
+    }
+
+    // Shift+click = multi-select toggle
+    if (e.shiftKey) {
+      if (selectedTerrs.has(hit)) {
+        selectedTerrs.delete(hit);
+      } else {
+        selectedTerrs.add(hit);
+      }
+      renderNodes();
+      updateTerritoryDetail();
+      return;
+    }
+
+    // Normal click = select + prepare for drag
+    if (!selectedTerrs.has(hit)) {
+      selectedTerrs.clear();
+      selectedTerrs.add(hit);
+    }
+    dragging = hit;
+    dragMoved = false;
+    var t = territories.find(function(t) { return t.id === hit; });
+    dragOffset = { x: pt.x - t.x, y: pt.y - t.y };
+
+    // Also prepare for drag-to-connect
+    dragConnStart = hit;
+    dragConnecting = false;
+
+    renderNodes();
+    updateTerritoryDetail();
+  } else {
+    // Clicked on empty canvas = add territory
+    if (!e.shiftKey) {
+      pushUndo('Add territory');
+      var id = addTerritory(pt.x, pt.y);
+      selectedTerrs.clear();
+      selectedTerrs.add(id);
+      fullRender();
+      toast('Added Territory ' + id);
+    } else {
+      // Shift+click on empty = deselect
+      selectedTerrs.clear();
+      renderNodes();
+      updateTerritoryDetail();
+    }
+  }
+});
+
+svg.addEventListener('mousemove', function(e) {
+  var pt = svgPoint(e);
+  document.getElementById('status-pos').textContent = Math.round(pt.x) + ', ' + Math.round(pt.y);
+
+  if (isPanning) {
+    var rect = svg.getBoundingClientRect();
+    var dx = (e.clientX - panStart.x) / rect.width * viewBox.w;
+    var dy = (e.clientY - panStart.y) / rect.height * viewBox.h;
+    viewBox.x -= dx; viewBox.y -= dy;
+    panStart = { x: e.clientX, y: e.clientY };
+    updateViewBox();
+    return;
+  }
+
+  if (dragging !== null) {
+    var moveThreshold = 5;
+    var t = territories.find(function(t) { return t.id === dragging; });
+    if (!t) return;
+    var tdx = pt.x - dragOffset.x - t.x;
+    var tdy = pt.y - dragOffset.y - t.y;
+    var dist = Math.sqrt(tdx * tdx + tdy * tdy);
+
+    if (!dragMoved && dist > moveThreshold) {
+      dragMoved = true;
+      // Decide: start connection drag
+      if (dragConnStart !== null) {
+        dragConnecting = true;
+        dragging = null;
+        document.getElementById('canvas-wrap').classList.add('dragging-connection');
+        updateStatusHint('Release on another territory to create a connection');
+      }
+    }
+
+    if (!dragConnecting && dragMoved) {
+      // Move the territory
+      t.x = pt.x - dragOffset.x;
+      t.y = pt.y - dragOffset.y;
+      renderNodes();
+      renderConnections();
+      renderLabels();
+    }
+  }
+
+  if (dragConnecting && dragConnStart !== null) {
+    dragConnPt = pt;
+    renderDragLine();
+  }
+
+  // Hover tooltip
+  if (!dragConnecting && dragging === null) {
+    var hit = hitTestTerritory(pt);
+    var tooltip = document.getElementById('tooltip');
+    if (hit !== null) {
+      var ht = territories.find(function(t) { return t.id === hit; });
+      var hb = bonuses.find(function(b) { return b.territory_ids.includes(hit); });
+      var html = '<b>' + ht.name + '</b>';
+      if (ht.is_wasteland) html += ' <span style="color:var(--yellow)">[Wasteland]</span>';
+      if (hb) html += '<br><span style="color:' + hb.color + '">' + hb.name + '</span>';
+      var adj = connections.filter(function(c) { return c[0] === hit || c[1] === hit; }).length;
+      html += '<br><span style="color:var(--text2)">' + adj + ' connection' + (adj !== 1 ? 's' : '') + '</span>';
+      tooltip.innerHTML = html;
+      tooltip.style.display = 'block';
+      var wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+      tooltip.style.left = (e.clientX - wrap.left + 14) + 'px';
+      tooltip.style.top = (e.clientY - wrap.top + 14) + 'px';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  }
+});
+
+svg.addEventListener('mouseup', function(e) {
+  if (isPanning) { isPanning = false; return; }
+
+  if (dragConnecting && dragConnStart !== null) {
+    var pt = svgPoint(e);
+    var hit = hitTestTerritory(pt);
+    if (hit !== null && hit !== dragConnStart) {
+      // Toggle connection
+      var exists = connections.some(function(c) {
+        return (c[0] === dragConnStart && c[1] === hit) || (c[0] === hit && c[1] === dragConnStart);
+      });
+      pushUndo(exists ? 'Remove connection' : 'Add connection');
+      if (exists) {
+        removeConnection(dragConnStart, hit);
+        toast('Connection removed');
+      } else {
+        addConnection(dragConnStart, hit);
+        toast('Connection created');
+      }
+      fullRender();
+    }
+    dragConnecting = false;
+    dragConnStart = null;
+    clearDragLine();
+    document.getElementById('canvas-wrap').classList.remove('dragging-connection');
+    updateStatusHint();
+    return;
+  }
+
+  if (dragging !== null) {
+    if (dragMoved) {
+      renderShapes();
+    }
+    dragging = null;
+    dragConnStart = null;
+    dragMoved = false;
+  }
+});
+
+// Context menu
+svg.addEventListener('contextmenu', function(e) {
+  e.preventDefault();
+  var pt = svgPoint(e);
+  var hit = hitTestTerritory(pt);
+  if (hit === null) { hideContextMenu(); return; }
+
+  contextTerritory = hit;
+  var menu = document.getElementById('context-menu');
+
+  var currentBonus = bonuses.find(function(b) { return b.territory_ids.includes(hit); });
+  var bonusItem = document.getElementById('ctx-bonus-item');
+  if (bonusItem) bonusItem.textContent = currentBonus ? 'Bonus: ' + currentBonus.name : 'Set Bonus...';
+
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+
+  var r = menu.getBoundingClientRect();
+  if (r.right > window.innerWidth) menu.style.left = (e.clientX - r.width) + 'px';
+  if (r.bottom > window.innerHeight) menu.style.top = (e.clientY - r.height) + 'px';
+});
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#context-menu')) hideContextMenu();
+});
+
+function hideContextMenu() {
+  document.getElementById('context-menu').style.display = 'none';
+  contextTerritory = null;
+}
+
+// Context menu action handler
+function handleContextAction(action) {
+  if (contextTerritory === null) return;
+  var t = territories.find(function(t) { return t.id === contextTerritory; });
+  if (!t) { hideContextMenu(); return; }
+
+  if (action === 'delete') {
+    pushUndo('Delete territory');
+    deleteTerritory(contextTerritory);
+    selectedTerrs.delete(contextTerritory);
+    fullRender();
+    toast('Territory deleted');
+  } else if (action === 'wasteland') {
+    pushUndo('Toggle wasteland');
+    t.is_wasteland = !t.is_wasteland;
+    t.default_armies = t.is_wasteland ? 10 : 2;
+    fullRender();
+    toast(t.is_wasteland ? t.name + ' is now a wasteland' : t.name + ' is no longer a wasteland');
+  } else if (action === 'bonus-submenu') {
+    showBonusPicker(contextTerritory);
+    return; // don't hide menu yet
+  }
+  hideContextMenu();
+}
+
+// Attach context menu click handlers
+document.querySelectorAll('#context-menu .ctx-item').forEach(function(item) {
+  item.addEventListener('click', function() {
+    handleContextAction(item.dataset.action);
+  });
+});
+
+// Bonus picker for context menu
+function showBonusPicker(tid) {
+  if (bonuses.length === 0) {
+    toast('Create a bonus first', 'error');
+    hideContextMenu();
+    return;
+  }
+  var items = [{ id: -1, name: '(No Bonus)', color: '#8b949e' }].concat(bonuses);
+  var menu = document.getElementById('context-menu');
+
+  menu.innerHTML = items.map(function(b) {
+    return '<div class="ctx-item" onclick="assignTerritoryBonus(' + tid + ', ' + b.id + '); hideContextMenu(); rebuildContextMenu();">' +
+      '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + b.color + '"></span> ' +
+      b.name +
+    '</div>';
+  }).join('');
+  menu.style.display = 'block';
+}
+
+function rebuildContextMenu() {
+  var menu = document.getElementById('context-menu');
+  menu.innerHTML =
+    '<div class="ctx-item" data-action="wasteland">Toggle Wasteland</div>' +
+    '<div class="ctx-sep"></div>' +
+    '<div class="ctx-item" data-action="bonus-submenu" id="ctx-bonus-item">Set Bonus...</div>' +
+    '<div class="ctx-sep"></div>' +
+    '<div class="ctx-item danger" data-action="delete">Delete Territory</div>';
+  menu.querySelectorAll('.ctx-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      handleContextAction(item.dataset.action);
+    });
+  });
+}
+
+function assignTerritoryBonus(tid, bid) {
+  pushUndo('Change bonus');
+  bonuses.forEach(function(b) { b.territory_ids = b.territory_ids.filter(function(x) { return x !== tid; }); });
+  if (bid >= 0) {
+    var b = bonuses.find(function(b) { return b.id === bid; });
+    if (b) b.territory_ids.push(tid);
+  }
+  fullRender();
+  var bName = bid >= 0 ? (bonuses.find(function(b) { return b.id === bid; }) || {}).name : 'no bonus';
+  toast('Assigned to ' + bName);
+}
+
+// Scroll wheel zoom
+svg.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  var pt = svgPoint(e);
+  var factor = e.deltaY > 0 ? 1.1 : 0.9;
+  var nw = viewBox.w * factor;
+  var nh = viewBox.h * factor;
+  viewBox.x = pt.x - (pt.x - viewBox.x) * factor;
+  viewBox.y = pt.y - (pt.y - viewBox.y) * factor;
+  viewBox.w = nw; viewBox.h = nh;
+  updateViewBox();
+}, { passive: false });
+
+// ============================================================
+//  DRAG LINE (rubber-band for connections)
+// ============================================================
+function renderDragLine() {
+  var g = document.getElementById('g-drag-line');
+  g.innerHTML = '';
+  if (!dragConnecting || dragConnStart === null) return;
+  var t = territories.find(function(t) { return t.id === dragConnStart; });
+  if (!t) return;
+  var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', t.x);
+  line.setAttribute('y1', t.y);
+  line.setAttribute('x2', dragConnPt.x);
+  line.setAttribute('y2', dragConnPt.y);
+  line.setAttribute('stroke', 'var(--accent)');
+  line.setAttribute('stroke-width', '2');
+  line.setAttribute('stroke-dasharray', '8,5');
+  line.setAttribute('opacity', '0.8');
+  g.appendChild(line);
+
+  // Highlight target
+  var hit = hitTestTerritory(dragConnPt);
+  if (hit !== null && hit !== dragConnStart) {
+    var ht = territories.find(function(t) { return t.id === hit; });
+    var circ = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circ.setAttribute('cx', ht.x);
+    circ.setAttribute('cy', ht.y);
+    circ.setAttribute('r', '14');
+    circ.setAttribute('fill', 'none');
+    circ.setAttribute('stroke', 'var(--accent)');
+    circ.setAttribute('stroke-width', '2');
+    circ.setAttribute('stroke-dasharray', '4,3');
+    g.appendChild(circ);
+  }
+}
+
+function clearDragLine() {
+  document.getElementById('g-drag-line').innerHTML = '';
+}
+
+// ============================================================
 //  DATA OPERATIONS
 // ============================================================
 function addTerritory(x, y) {
-  const id = nextTerrId++;
+  var id = nextTerrId++;
   territories.push({
-    id, name: `Territory ${id}`, x, y,
+    id: id, name: 'Territory ' + id, x: x, y: y,
     bonus_id: 0, is_wasteland: false, default_armies: 2,
     shape: null
   });
@@ -488,198 +895,124 @@ function addTerritory(x, y) {
 
 function addConnection(a, b) {
   if (a === b) return;
-  const exists = connections.some(c =>
-    (c[0] === a && c[1] === b) || (c[0] === b && c[1] === a)
-  );
+  var exists = connections.some(function(c) {
+    return (c[0] === a && c[1] === b) || (c[0] === b && c[1] === a);
+  });
   if (!exists) connections.push([a, b]);
 }
 
 function removeConnection(a, b) {
-  connections = connections.filter(c =>
-    !((c[0]===a && c[1]===b) || (c[0]===b && c[1]===a))
-  );
+  connections = connections.filter(function(c) {
+    return !((c[0] === a && c[1] === b) || (c[0] === b && c[1] === a));
+  });
 }
 
 function deleteTerritory(id) {
-  territories = territories.filter(t => t.id !== id);
-  connections = connections.filter(c => c[0] !== id && c[1] !== id);
-  bonuses.forEach(b => { b.territory_ids = b.territory_ids.filter(t => t !== id); });
+  territories = territories.filter(function(t) { return t.id !== id; });
+  connections = connections.filter(function(c) { return c[0] !== id && c[1] !== id; });
+  bonuses.forEach(function(b) { b.territory_ids = b.territory_ids.filter(function(t) { return t !== id; }); });
 }
 
 function addBonus() {
   pushUndo('Add bonus');
-  const id = nextBonusId++;
+  var id = nextBonusId++;
+  var name = 'Bonus ' + id;
   bonuses.push({
-    id, name: `Bonus ${id}`, value: 2,
+    id: id, name: name, value: 2,
     color: BONUS_COLORS[id % BONUS_COLORS.length],
     territory_ids: []
   });
+  selectedBonus = id;
   fullRender();
-  selectBonus(id);
+  toast('Created "' + name + '" -- click territories to assign');
 }
 
 function deleteBonus(id) {
-  bonuses = bonuses.filter(b => b.id !== id);
-  territories.forEach(t => { if (t.bonus_id === id) t.bonus_id = 0; });
+  bonuses = bonuses.filter(function(b) { return b.id !== id; });
+  if (selectedBonus === id) selectedBonus = null;
+}
+
+function deleteSelected() {
+  if (selectedTerrs.size === 0) return;
+  pushUndo('Delete territories');
+  var count = selectedTerrs.size;
+  selectedTerrs.forEach(function(id) { deleteTerritory(id); });
+  selectedTerrs.clear();
+  fullRender();
+  toast('Deleted ' + count + ' territor' + (count > 1 ? 'ies' : 'y'));
 }
 
 // ============================================================
-//  SELECTION
+//  TERRITORY DETAIL PANEL
 // ============================================================
-function selectTerritory(id) {
-  selectedTerr = id;
-  const edEmpty = document.getElementById('terr-editor-empty');
-  const ed = document.getElementById('terr-editor');
-  if (id === null) {
-    edEmpty.style.display = ''; ed.style.display = 'none';
-    renderNodes();
-    renderTerrList();
+function updateTerritoryDetail() {
+  var detailEl = document.getElementById('territory-detail');
+  var multiEl = document.getElementById('multi-detail');
+
+  if (selectedTerrs.size === 0) {
+    detailEl.style.display = 'none';
+    multiEl.style.display = 'none';
     return;
   }
-  const t = territories.find(t => t.id === id);
-  if (!t) return;
-  edEmpty.style.display = 'none'; ed.style.display = '';
-  document.getElementById('te-id').textContent = t.id;
-  document.getElementById('te-name').value = t.name;
-  document.getElementById('te-armies').value = t.default_armies;
-  document.getElementById('te-waste').checked = t.is_wasteland;
 
-  // Bonus dropdown
-  const sel = document.getElementById('te-bonus');
-  sel.innerHTML = '<option value="-1">(none)</option>';
-  bonuses.forEach(b => {
-    sel.innerHTML += `<option value="${b.id}" ${t.bonus_id===b.id?'selected':''}>${b.name}</option>`;
+  if (selectedTerrs.size > 1) {
+    detailEl.style.display = 'none';
+    multiEl.style.display = '';
+    document.getElementById('multi-count').textContent = selectedTerrs.size;
+    return;
+  }
+
+  // Single selection
+  multiEl.style.display = 'none';
+  detailEl.style.display = '';
+  var id = selectedTerrs.values().next().value;
+  var t = territories.find(function(t) { return t.id === id; });
+  if (!t) { detailEl.style.display = 'none'; return; }
+
+  document.getElementById('td-name').value = t.name;
+  document.getElementById('td-armies').value = t.default_armies;
+  document.getElementById('td-wasteland').checked = t.is_wasteland;
+
+  var adj = connections.filter(function(c) { return c[0] === id || c[1] === id; }).map(function(c) { return c[0] === id ? c[1] : c[0]; });
+  var adjNames = adj.map(function(a) {
+    var at = territories.find(function(t) { return t.id === a; });
+    return at ? at.name : '#' + a;
   });
-
-  // Connections
-  const adj = connections.filter(c => c[0]===id || c[1]===id).map(c => c[0]===id?c[1]:c[0]);
-  document.getElementById('te-conn').textContent = adj.map(a => {
-    const at = territories.find(t => t.id === a);
-    return at ? at.name : a;
-  }).join(', ') || 'none';
-
-  renderNodes();
-  renderTerrList();
+  document.getElementById('td-conns').textContent = adj.length > 0
+    ? 'Connected to: ' + adjNames.join(', ')
+    : 'No connections';
 }
 
-function selectBonus(id) {
-  selectedBonus = id;
-  const panel = document.getElementById('panel-bonusedit');
-  if (id === null) { panel.style.display = 'none'; renderBonusList(); return; }
-  const b = bonuses.find(b => b.id === id);
-  if (!b) return;
-  panel.style.display = '';
-  document.getElementById('be-name').value = b.name;
-  document.getElementById('be-value').value = b.value;
-  document.getElementById('be-color').value = b.color;
-  renderBonusTerrChips();
-  renderBonusList();
-  renderNodes();
-  renderShapes();
-}
-
-// ============================================================
-//  TERRITORY EDITOR CALLBACKS
-// ============================================================
-function updateTerrName(v) {
-  const t = territories.find(t => t.id === selectedTerr);
-  if (t) { t.name = v; renderLabels(); renderTerrList(); }
-}
-function updateTerrArmies(v) {
-  const t = territories.find(t => t.id === selectedTerr);
-  if (t) t.default_armies = v;
-}
-function updateTerrWasteland(v) {
-  const t = territories.find(t => t.id === selectedTerr);
+// Territory detail input handlers
+document.getElementById('td-name').addEventListener('input', function() {
+  if (selectedTerrs.size !== 1) return;
+  var t = territories.find(function(t) { return t.id === selectedTerrs.values().next().value; });
+  if (t) { t.name = this.value; renderLabels(); renderBonusList(); }
+});
+document.getElementById('td-armies').addEventListener('input', function() {
+  if (selectedTerrs.size !== 1) return;
+  var t = territories.find(function(t) { return t.id === selectedTerrs.values().next().value; });
+  if (t) t.default_armies = +this.value;
+});
+document.getElementById('td-wasteland').addEventListener('change', function() {
+  if (selectedTerrs.size !== 1) return;
+  var t = territories.find(function(t) { return t.id === selectedTerrs.values().next().value; });
   if (t) {
-    t.is_wasteland = v;
-    if (v) { t.default_armies = 10; document.getElementById('te-armies').value = 10; }
-    else { t.default_armies = 2; document.getElementById('te-armies').value = 2; }
-  }
-}
-function updateTerrBonus(bid) {
-  const t = territories.find(t => t.id === selectedTerr);
-  if (!t) return;
-  // Remove from old bonus
-  bonuses.forEach(b => { b.territory_ids = b.territory_ids.filter(x => x !== selectedTerr); });
-  if (bid >= 0) {
-    const b = bonuses.find(b => b.id === bid);
-    if (b) { b.territory_ids.push(selectedTerr); t.bonus_id = bid; }
-  }
-  renderBonusList();
-  renderNodes();
-  renderShapes();
-}
-function deleteSelectedTerritory() {
-  if (selectedTerr === null) return;
-  pushUndo('Delete territory');
-  deleteTerritory(selectedTerr);
-  selectedTerr = null;
-  fullRender();
-}
-
-// ============================================================
-//  BONUS EDITOR CALLBACKS
-// ============================================================
-function updateBonusName(v) {
-  const b = bonuses.find(b => b.id === selectedBonus);
-  if (b) { b.name = v; renderBonusList(); }
-}
-function updateBonusValue(v) {
-  const b = bonuses.find(b => b.id === selectedBonus);
-  if (b) { b.value = v; renderBonusList(); }
-}
-function updateBonusColor(v) {
-  const b = bonuses.find(b => b.id === selectedBonus);
-  if (b) { b.color = v; renderBonusList(); renderNodes(); renderShapes(); }
-}
-function startAddTerrToBonus() {
-  addingTerrToBonus = true;
-  document.getElementById('status-mode').textContent = 'Click a territory to add to bonus...';
-}
-function deleteSelectedBonus() {
-  if (selectedBonus === null) return;
-  pushUndo('Delete bonus');
-  deleteBonus(selectedBonus);
-  selectedBonus = null;
-  document.getElementById('panel-bonusedit').style.display = 'none';
-  fullRender();
-}
-function removeTerrFromBonus(tid) {
-  pushUndo('Remove territory from bonus');
-  const b = bonuses.find(b => b.id === selectedBonus);
-  if (b) {
-    b.territory_ids = b.territory_ids.filter(x => x !== tid);
-    renderBonusTerrChips();
-    renderBonusList();
+    t.is_wasteland = this.checked;
+    t.default_armies = this.checked ? 10 : 2;
+    document.getElementById('td-armies').value = t.default_armies;
     renderNodes();
-    renderShapes();
   }
-}
-function renderBonusTerrChips() {
-  const b = bonuses.find(b => b.id === selectedBonus);
-  const el = document.getElementById('be-terrs');
-  if (!b) { el.innerHTML = ''; return; }
-  el.innerHTML = b.territory_ids.map(tid => {
-    const t = territories.find(t => t.id === tid);
-    return `<span class="chip" onclick="removeTerrFromBonus(${tid})" title="Click to remove">${t ? t.name : tid}</span>`;
-  }).join('');
-}
+});
 
-// ============================================================
-//  PANEL TOGGLING
-// ============================================================
-function togglePanel(name) {
-  const body = document.getElementById('body-' + name);
-  const arrow = document.getElementById('arrow-' + name);
-  if (body.classList.contains('collapsed')) {
-    body.classList.remove('collapsed');
-    arrow.innerHTML = '&#9660;';
-  } else {
-    body.classList.add('collapsed');
-    arrow.innerHTML = '&#9654;';
-  }
-}
+// Map name handler
+document.getElementById('map-name-input').addEventListener('input', function() {
+  mapData.name = this.value;
+  mapData.id = this.value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'custom_map';
+});
+document.getElementById('set-picks').addEventListener('change', function() {
+  mapData.picking.num_picks = +this.value;
+});
 
 // ============================================================
 //  RENDERING
@@ -689,80 +1022,110 @@ function fullRender() {
   renderConnections();
   renderNodes();
   renderLabels();
-  renderTerrList();
   renderBonusList();
-  updateStatus();
-  if (selectedTerr !== null) selectTerritory(selectedTerr);
-  if (selectedBonus !== null) selectBonus(selectedBonus);
+  updateTerritoryDetail();
+  updateStats();
+  updateUnassignedWarning();
 }
 
 function renderNodes() {
-  const g = document.getElementById('g-nodes');
+  var g = document.getElementById('g-nodes');
   g.innerHTML = '';
-  for (const t of territories) {
-    const b = bonuses.find(b => b.territory_ids.includes(t.id));
-    const color = b ? b.color : '#8b949e';
-    const sel = t.id === selectedTerr;
-    const inBonus = selectedBonus !== null && b && b.id === selectedBonus;
+  for (var i = 0; i < territories.length; i++) {
+    var t = territories[i];
+    var b = bonuses.find(function(b) { return b.territory_ids.includes(t.id); });
+    var color = b ? b.color : '#8b949e';
+    var sel = selectedTerrs.has(t.id);
+    var inActiveBonus = selectedBonus !== null && b && b.id === selectedBonus;
+    var noBonus = !b;
 
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    // Outer warning ring for no-bonus territories
+    if (noBonus && !sel) {
+      var warn = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      warn.setAttribute('cx', t.x);
+      warn.setAttribute('cy', t.y);
+      warn.setAttribute('r', '13');
+      warn.setAttribute('fill', 'none');
+      warn.setAttribute('stroke', 'var(--red)');
+      warn.setAttribute('stroke-width', '1');
+      warn.setAttribute('stroke-dasharray', '3,3');
+      warn.setAttribute('opacity', '0.5');
+      g.appendChild(warn);
+    }
+
+    // Wasteland hatch overlay
+    if (t.is_wasteland) {
+      var hatch = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      hatch.setAttribute('cx', t.x);
+      hatch.setAttribute('cy', t.y);
+      hatch.setAttribute('r', sel ? '12' : '9');
+      hatch.setAttribute('fill', 'url(#wasteland-hatch)');
+      hatch.setAttribute('stroke', 'none');
+      g.appendChild(hatch);
+    }
+
+    // Main circle
+    var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', t.x);
     circle.setAttribute('cy', t.y);
-    circle.setAttribute('r', sel ? 12 : 9);
+    circle.setAttribute('r', sel ? '12' : '9');
     circle.setAttribute('fill', color);
-    circle.setAttribute('fill-opacity', '0.9');
-    circle.setAttribute('stroke', sel ? '#ffffff' : (inBonus ? '#ffffff' : 'none'));
-    circle.setAttribute('stroke-width', sel ? 3 : 2);
-    circle.style.filter = sel ? 'drop-shadow(0 0 6px rgba(255,255,255,0.4))' : '';
-    circle.style.cursor = 'pointer';
+    circle.setAttribute('fill-opacity', inActiveBonus ? '1' : (b ? '0.85' : '0.5'));
+    circle.setAttribute('stroke', sel ? '#ffffff' : (inActiveBonus ? '#ffffff' : 'none'));
+    circle.setAttribute('stroke-width', sel ? '3' : '2');
+    circle.classList.add('territory-node');
+    if (sel) circle.style.filter = 'drop-shadow(0 0 8px rgba(255,255,255,0.4))';
+    if (inActiveBonus && !sel) circle.style.filter = 'drop-shadow(0 0 6px ' + color + ')';
     circle.setAttribute('data-id', t.id);
     g.appendChild(circle);
   }
 }
 
 function renderConnections() {
-  const g = document.getElementById('g-connections');
+  var g = document.getElementById('g-connections');
   g.innerHTML = '';
-  for (const [a, b] of connections) {
-    const ta = territories.find(t => t.id === a);
-    const tb = territories.find(t => t.id === b);
+
+  for (var i = 0; i < connections.length; i++) {
+    var a = connections[i][0], b_id = connections[i][1];
+    var ta = territories.find(function(t) { return t.id === a; });
+    var tb = territories.find(function(t) { return t.id === b_id; });
     if (!ta || !tb) continue;
 
-    const dx = tb.x - ta.x, dy = tb.y - ta.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
+    var dx = tb.x - ta.x, dy = tb.y - ta.y;
+    var dist = Math.sqrt(dx * dx + dy * dy);
 
-    // Check if cross-cluster (different bonuses)
-    const ba = bonuses.find(bn => bn.territory_ids.includes(a));
-    const bb = bonuses.find(bn => bn.territory_ids.includes(b));
-    const crossCluster = ba && bb && ba.id !== bb.id && dist > 200;
+    var ba = bonuses.find(function(bn) { return bn.territory_ids.includes(a); });
+    var bb = bonuses.find(function(bn) { return bn.territory_ids.includes(b_id); });
+    var crossCluster = ba && bb && ba.id !== bb.id && dist > 200;
+    var highlight = selectedTerrs.has(a) || selectedTerrs.has(b_id);
 
-    const line = document.createElementNS('http://www.w3.org/2000/svg', crossCluster ? 'path' : 'line');
+    var line = document.createElementNS('http://www.w3.org/2000/svg', crossCluster ? 'path' : 'line');
     if (crossCluster) {
-      // Curved dashed line
-      const mx = (ta.x + tb.x)/2, my = (ta.y + tb.y)/2;
-      const nx = -dy / dist * 40, ny = dx / dist * 40;
-      line.setAttribute('d', `M${ta.x},${ta.y} Q${mx+nx},${my+ny} ${tb.x},${tb.y}`);
+      var mx = (ta.x + tb.x) / 2, my = (ta.y + tb.y) / 2;
+      var nx = -dy / dist * 40, ny = dx / dist * 40;
+      line.setAttribute('d', 'M' + ta.x + ',' + ta.y + ' Q' + (mx + nx) + ',' + (my + ny) + ' ' + tb.x + ',' + tb.y);
       line.setAttribute('fill', 'none');
-      line.setAttribute('stroke', '#8b949e');
-      line.setAttribute('stroke-width', '1.5');
+      line.setAttribute('stroke', highlight ? 'var(--accent)' : '#8b949e');
+      line.setAttribute('stroke-width', highlight ? '2' : '1.5');
       line.setAttribute('stroke-dasharray', '8,5');
-      line.setAttribute('opacity', '0.5');
+      line.setAttribute('opacity', highlight ? '0.8' : '0.4');
     } else {
       line.setAttribute('x1', ta.x); line.setAttribute('y1', ta.y);
       line.setAttribute('x2', tb.x); line.setAttribute('y2', tb.y);
-      line.setAttribute('stroke', '#8b949e');
-      line.setAttribute('stroke-width', '1.5');
-      line.setAttribute('opacity', '0.4');
+      line.setAttribute('stroke', highlight ? 'var(--accent)' : '#8b949e');
+      line.setAttribute('stroke-width', highlight ? '2' : '1.5');
+      line.setAttribute('opacity', highlight ? '0.7' : '0.3');
     }
     g.appendChild(line);
   }
 }
 
 function renderLabels() {
-  const g = document.getElementById('g-labels');
+  var g = document.getElementById('g-labels');
   g.innerHTML = '';
-  for (const t of territories) {
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  for (var i = 0; i < territories.length; i++) {
+    var t = territories[i];
+    var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.setAttribute('x', t.x);
     text.setAttribute('y', t.y - 16);
     text.setAttribute('text-anchor', 'middle');
@@ -775,194 +1138,125 @@ function renderLabels() {
   }
 }
 
-// Parse hex color to {r,g,b}
-function hexToRgb(hex) {
-  hex = hex.replace('#', '');
-  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-  return {
-    r: parseInt(hex.substring(0, 2), 16),
-    g: parseInt(hex.substring(2, 4), 16),
-    b: parseInt(hex.substring(4, 6), 16)
-  };
-}
-
-// Adjust color brightness
-function adjustBrightness(hex, factor) {
-  const c = hexToRgb(hex);
-  const r = Math.min(255, Math.max(0, Math.round(c.r * factor)));
-  const g = Math.min(255, Math.max(0, Math.round(c.g * factor)));
-  const b = Math.min(255, Math.max(0, Math.round(c.b * factor)));
-  return `rgb(${r},${g},${b})`;
-}
-
 function renderShapes() {
-  const g = document.getElementById('g-shapes');
-  const gOcean = document.getElementById('g-ocean-detail');
-  const oceanBg = document.getElementById('ocean-bg');
-  const defs = svg.querySelector('defs');
+  var g = document.getElementById('g-shapes');
   g.innerHTML = '';
-  gOcean.innerHTML = '';
-
-  const hasShapes = territories.some(t => t.shape);
-
-  // Show/hide ocean background
-  if (hasShapes && organicShapeData) {
-    const ob = organicShapeData.bounds;
-    const oceanPad = 60;
-    oceanBg.setAttribute('x', ob.x - oceanPad);
-    oceanBg.setAttribute('y', ob.y - oceanPad);
-    oceanBg.setAttribute('width', ob.w + oceanPad * 2);
-    oceanBg.setAttribute('height', ob.h + oceanPad * 2);
-    oceanBg.setAttribute('rx', '12');
-    oceanBg.style.display = '';
-
-    // Subtle wave lines in the ocean
-    const rng = makeRng(999);
-    for (let i = 0; i < 12; i++) {
-      const wx = ob.x - oceanPad + rng() * (ob.w + oceanPad * 2);
-      const wy = ob.y - oceanPad + rng() * (ob.h + oceanPad * 2);
-      const wLen = 40 + rng() * 80;
-      const wave = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      const cp1y = wy - 3 - rng() * 4;
-      const cp2y = wy + 3 + rng() * 4;
-      wave.setAttribute('d', `M${wx.toFixed(0)},${wy.toFixed(0)} Q${(wx + wLen * 0.33).toFixed(0)},${cp1y.toFixed(0)} ${(wx + wLen * 0.5).toFixed(0)},${wy.toFixed(0)} Q${(wx + wLen * 0.67).toFixed(0)},${cp2y.toFixed(0)} ${(wx + wLen).toFixed(0)},${wy.toFixed(0)}`);
-      wave.setAttribute('fill', 'none');
-      wave.setAttribute('stroke', '#1a3a5c');
-      wave.setAttribute('stroke-width', '0.8');
-      wave.setAttribute('opacity', '0.3');
-      gOcean.appendChild(wave);
-    }
-
-    // Draw sea route lines between island components
-    const components = organicShapeData.components;
-    if (components.length > 1) {
-      // Find inter-component connections
-      for (const [a, b] of connections) {
-        let compA = -1, compB = -1;
-        for (let ci = 0; ci < components.length; ci++) {
-          if (components[ci].includes(a)) compA = ci;
-          if (components[ci].includes(b)) compB = ci;
-        }
-        if (compA !== compB && compA >= 0 && compB >= 0) {
-          const ta = territories.find(t => t.id === a);
-          const tb = territories.find(t => t.id === b);
-          if (!ta || !tb) continue;
-          const dx = tb.x - ta.x, dy = tb.y - ta.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const nx = -dy / dist * 30, ny = dx / dist * 30;
-          const mx = (ta.x + tb.x) / 2, my = (ta.y + tb.y) / 2;
-          const route = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          route.setAttribute('d', `M${ta.x.toFixed(1)},${ta.y.toFixed(1)} Q${(mx + nx).toFixed(1)},${(my + ny).toFixed(1)} ${tb.x.toFixed(1)},${tb.y.toFixed(1)}`);
-          route.setAttribute('fill', 'none');
-          route.setAttribute('stroke', '#3a6080');
-          route.setAttribute('stroke-width', '1.5');
-          route.setAttribute('stroke-dasharray', '6,4');
-          route.setAttribute('opacity', '0.6');
-          gOcean.appendChild(route);
-        }
-      }
-    }
-  } else {
-    oceanBg.style.display = 'none';
-  }
-
-  // Remove old territory gradient defs (clean up)
-  defs.querySelectorAll('[id^="tgrad-"]').forEach(el => el.remove());
-
-  for (const t of territories) {
+  for (var i = 0; i < territories.length; i++) {
+    var t = territories[i];
     if (!t.shape) continue;
-    const b = bonuses.find(b => b.territory_ids.includes(t.id));
-    const baseColor = b ? b.color : '#8b949e';
-    const sel = t.id === selectedTerr;
-    const inBonus = selectedBonus !== null && b && b.id === selectedBonus;
+    var b = bonuses.find(function(b) { return b.territory_ids.includes(t.id); });
+    var color = b ? b.color : '#8b949e';
+    var sel = selectedTerrs.has(t.id);
+    var inBonus = selectedBonus !== null && b && b.id === selectedBonus;
 
-    // Terrain variation: slight brightness shift based on distance from center
-    let brightFactor = 1.0;
-    if (organicShapeData) {
-      const dx = t.x - organicShapeData.centerX;
-      const dy = t.y - organicShapeData.centerY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      brightFactor = 0.85 + 0.3 * (1 - dist / organicShapeData.maxDist);
-    }
-
-    // Create gradient for 3D landmass effect
-    const gradId = 'tgrad-' + t.id;
-    const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-    grad.setAttribute('id', gradId);
-    grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
-    grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
-    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop1.setAttribute('offset', '0%');
-    stop1.setAttribute('stop-color', adjustBrightness(baseColor, brightFactor * 1.15));
-    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop2.setAttribute('offset', '100%');
-    stop2.setAttribute('stop-color', adjustBrightness(baseColor, brightFactor * 0.7));
-    grad.appendChild(stop1);
-    grad.appendChild(stop2);
-    defs.appendChild(grad);
-
-    // Territory fill path
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', t.shape);
-    path.setAttribute('fill', `url(#${gradId})`);
-    path.setAttribute('fill-opacity', inBonus ? '0.55' : '0.35');
-    path.setAttribute('stroke', adjustBrightness(baseColor, 0.6));
-    path.setAttribute('stroke-width', sel ? 2.5 : 1.2);
-    path.setAttribute('stroke-opacity', sel ? 1 : 0.7);
-    path.style.filter = sel ? 'url(#territory-hover)' : 'url(#territory-shadow)';
-    path.style.cursor = 'pointer';
-    path.setAttribute('data-id', t.id);
+    path.setAttribute('fill', color);
+    path.setAttribute('fill-opacity', inBonus ? '0.35' : '0.15');
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', sel ? 2.5 : 1);
+    path.setAttribute('stroke-opacity', sel ? 1 : 0.5);
 
-    // Hover effect
-    path.addEventListener('mouseenter', function() {
-      if (t.id !== selectedTerr) {
-        this.setAttribute('fill-opacity', inBonus ? '0.65' : '0.45');
-        this.style.filter = 'url(#territory-hover)';
-      }
-    });
-    path.addEventListener('mouseleave', function() {
-      if (t.id !== selectedTerr) {
-        this.setAttribute('fill-opacity', inBonus ? '0.55' : '0.35');
-        this.style.filter = 'url(#territory-shadow)';
-      }
-    });
+    if (t.is_wasteland) {
+      var hatchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      hatchPath.setAttribute('d', t.shape);
+      hatchPath.setAttribute('fill', 'url(#wasteland-hatch)');
+      hatchPath.setAttribute('stroke', 'none');
+      g.appendChild(hatchPath);
+    }
 
     g.appendChild(path);
   }
 }
 
-function renderTerrList() {
-  const el = document.getElementById('terr-list');
-  document.getElementById('terr-count').textContent = territories.length;
-  el.innerHTML = territories.map(t => {
-    const b = bonuses.find(b => b.territory_ids.includes(t.id));
-    const color = b ? b.color : '#8b949e';
-    return `<div class="terr-item ${t.id===selectedTerr?'selected':''}" onclick="selectTerritory(${t.id})">
-      <span class="dot" style="background:${color}"></span>
-      <span class="name">${t.name}</span>
-      <span class="tid">#${t.id}</span>
-    </div>`;
-  }).join('');
-}
-
 function renderBonusList() {
-  const el = document.getElementById('bonus-list');
-  document.getElementById('bonus-count').textContent = bonuses.length;
-  el.innerHTML = bonuses.map(b => {
-    return `<div class="bonus-item ${b.id===selectedBonus?'selected':''}" onclick="selectBonus(${b.id})">
-      <div class="bonus-header">
-        <span class="swatch" style="background:${b.color}"></span>
-        <span class="bname">${b.name}</span>
-        <span class="bval">+${b.value}</span>
-      </div>
-      <div style="font-size:11px;color:var(--text2)">${b.territory_ids.length} territories</div>
-    </div>`;
+  var el = document.getElementById('bonus-scroll');
+  el.innerHTML = bonuses.map(function(b) {
+    var active = b.id === selectedBonus;
+    return '<div class="bonus-row ' + (active ? 'active' : '') + '" data-bonus-id="' + b.id + '" onclick="selectBonusRow(' + b.id + ', event)">' +
+      '<span class="swatch" style="background:' + b.color + '">' +
+        '<input type="color" value="' + b.color + '" onclick="event.stopPropagation()" onchange="changeBonusColor(' + b.id + ', this.value)">' +
+      '</span>' +
+      '<input class="bname" value="' + escapeAttr(b.name) + '" onclick="event.stopPropagation()" oninput="renameBonusInline(' + b.id + ', this.value)" spellcheck="false">' +
+      '<input class="bval" type="number" value="' + b.value + '" min="0" onclick="event.stopPropagation()" onchange="changeBonusValue(' + b.id + ', +this.value)">' +
+      '<span class="badge">' + b.territory_ids.length + '</span>' +
+      '<span class="del-btn" onclick="event.stopPropagation(); deleteBonusById(' + b.id + ')" title="Delete bonus">&#10005;</span>' +
+    '</div>';
   }).join('');
 }
 
-function updateStatus() {
-  document.getElementById('status-info').textContent =
-    `${territories.length} territories, ${connections.length} connections, ${bonuses.length} bonuses`;
+function selectBonusRow(id, event) {
+  if (event && (event.target.tagName === 'INPUT' || event.target.classList.contains('del-btn'))) return;
+  if (selectedBonus === id) {
+    selectedBonus = null;
+    document.getElementById('bonus-mode-hint').style.display = 'none';
+    updateStatusHint();
+  } else {
+    selectedBonus = id;
+    selectedTerrs.clear();
+    document.getElementById('bonus-mode-hint').style.display = '';
+    var bName = (bonuses.find(function(b) { return b.id === id; }) || {}).name;
+    updateStatusHint('Bonus "' + bName + '" selected -- click territories to toggle membership');
+  }
+  renderBonusList();
+  renderNodes();
+  renderShapes();
+  updateTerritoryDetail();
+}
+
+function renameBonusInline(id, val) {
+  var b = bonuses.find(function(b) { return b.id === id; });
+  if (b) b.name = val;
+}
+
+function changeBonusColor(id, val) {
+  var b = bonuses.find(function(b) { return b.id === id; });
+  if (b) { b.color = val; renderBonusList(); renderNodes(); renderShapes(); }
+}
+
+function changeBonusValue(id, val) {
+  var b = bonuses.find(function(b) { return b.id === id; });
+  if (b) b.value = val;
+}
+
+function deleteBonusById(id) {
+  pushUndo('Delete bonus');
+  var name = (bonuses.find(function(b) { return b.id === id; }) || {}).name;
+  deleteBonus(id);
+  fullRender();
+  toast('Deleted bonus "' + name + '"');
+}
+
+function updateUnassignedWarning() {
+  var assigned = new Set();
+  bonuses.forEach(function(b) { b.territory_ids.forEach(function(id) { assigned.add(id); }); });
+  var unassigned = territories.filter(function(t) { return !assigned.has(t.id); }).length;
+  var el = document.getElementById('unassigned-warning');
+  if (unassigned > 0 && territories.length > 0) {
+    el.style.display = 'block';
+    document.getElementById('unassigned-count').textContent = unassigned;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-terr').textContent = territories.length;
+  document.getElementById('stat-conn').textContent = connections.length;
+  document.getElementById('stat-bonus').textContent = bonuses.length;
+}
+
+function updateStatusHint(msg) {
+  var el = document.getElementById('status-hint');
+  if (msg) { el.textContent = msg; return; }
+  if (selectedBonus !== null) {
+    var b = bonuses.find(function(b) { return b.id === selectedBonus; });
+    el.textContent = b ? 'Click territories to toggle in/out of "' + b.name + '"' : '';
+  } else if (selectedTerrs.size > 0) {
+    el.textContent = 'Drag to connect. Right-click for options. Shift+click to multi-select.';
+  } else {
+    el.textContent = 'Click anywhere on the canvas to add a territory';
+  }
 }
 
 // ============================================================
@@ -972,368 +1266,127 @@ function forceLayout() {
   if (territories.length === 0) return;
   pushUndo('Auto-layout');
 
-  const N = territories.length;
-  const k_spring = 0.005;
-  const k_repel = 8000;
-  const damping = 0.92;
-  const idealLen = 120;
-  const iterations = 600;
+  var N = territories.length;
+  var k_spring = 0.005;
+  var k_repel = 8000;
+  var damping = 0.92;
+  var idealLen = 120;
+  var iterations = 600;
 
-  // Center territories if spread is tiny
-  const cx = territories.reduce((s,t)=>s+t.x,0)/N;
-  const cy = territories.reduce((s,t)=>s+t.y,0)/N;
-  const spread = Math.sqrt(territories.reduce((s,t)=>s+(t.x-cx)**2+(t.y-cy)**2,0)/N);
+  var cx = territories.reduce(function(s, t) { return s + t.x; }, 0) / N;
+  var cy = territories.reduce(function(s, t) { return s + t.y; }, 0) / N;
+  var spread = Math.sqrt(territories.reduce(function(s, t) { return s + Math.pow(t.x - cx, 2) + Math.pow(t.y - cy, 2); }, 0) / N);
   if (spread < 50) {
-    // Randomize positions in a circle
-    territories.forEach((t, i) => {
-      const angle = (2*Math.PI*i)/N;
-      const r = 100 + Math.random()*200;
-      t.x = 600 + Math.cos(angle)*r;
-      t.y = 400 + Math.sin(angle)*r;
+    territories.forEach(function(t, i) {
+      var angle = (2 * Math.PI * i) / N;
+      var r = 100 + Math.random() * 200;
+      t.x = 600 + Math.cos(angle) * r;
+      t.y = 400 + Math.sin(angle) * r;
     });
   }
 
-  const vx = new Float64Array(N);
-  const vy = new Float64Array(N);
+  var vx = new Float64Array(N);
+  var vy = new Float64Array(N);
 
-  // Build adjacency lookup
-  const adj = new Set();
-  connections.forEach(([a,b]) => { adj.add(a+','+b); adj.add(b+','+a); });
+  var adj = new Set();
+  connections.forEach(function(c) { adj.add(c[0] + ',' + c[1]); adj.add(c[1] + ',' + c[0]); });
 
-  for (let iter = 0; iter < iterations; iter++) {
-    const fx = new Float64Array(N);
-    const fy = new Float64Array(N);
+  for (var iter = 0; iter < iterations; iter++) {
+    var fx = new Float64Array(N);
+    var fy = new Float64Array(N);
 
-    // Repulsion between all pairs
-    for (let i = 0; i < N; i++) {
-      for (let j = i+1; j < N; j++) {
-        let dx = territories[j].x - territories[i].x;
-        let dy = territories[j].y - territories[i].y;
-        let d2 = dx*dx + dy*dy;
+    for (var i = 0; i < N; i++) {
+      for (var j = i + 1; j < N; j++) {
+        var dx = territories[j].x - territories[i].x;
+        var dy = territories[j].y - territories[i].y;
+        var d2 = dx * dx + dy * dy;
         if (d2 < 1) d2 = 1;
-        const d = Math.sqrt(d2);
-        const f = k_repel / d2;
-        const fdx = f * dx / d;
-        const fdy = f * dy / d;
+        var d = Math.sqrt(d2);
+        var f = k_repel / d2;
+        var fdx = f * dx / d;
+        var fdy = f * dy / d;
         fx[i] -= fdx; fy[i] -= fdy;
         fx[j] += fdx; fy[j] += fdy;
       }
     }
 
-    // Spring attraction for connections
-    for (const [a, b] of connections) {
-      const ia = territories.findIndex(t => t.id === a);
-      const ib = territories.findIndex(t => t.id === b);
+    for (var ci = 0; ci < connections.length; ci++) {
+      var a = connections[ci][0], b = connections[ci][1];
+      var ia = territories.findIndex(function(t) { return t.id === a; });
+      var ib = territories.findIndex(function(t) { return t.id === b; });
       if (ia < 0 || ib < 0) continue;
-      let dx = territories[ib].x - territories[ia].x;
-      let dy = territories[ib].y - territories[ia].y;
-      const d = Math.sqrt(dx*dx + dy*dy);
-      if (d < 1) continue;
-      const displacement = d - idealLen;
-      const f = k_spring * displacement;
-      const fdx = f * dx / d;
-      const fdy = f * dy / d;
-      fx[ia] += fdx; fy[ia] += fdy;
-      fx[ib] -= fdx; fy[ib] -= fdy;
+      var cdx = territories[ib].x - territories[ia].x;
+      var cdy = territories[ib].y - territories[ia].y;
+      var cd = Math.sqrt(cdx * cdx + cdy * cdy);
+      if (cd < 1) continue;
+      var displacement = cd - idealLen;
+      var cf = k_spring * displacement;
+      var cfdx = cf * cdx / cd;
+      var cfdy = cf * cdy / cd;
+      fx[ia] += cfdx; fy[ia] += cfdy;
+      fx[ib] -= cfdx; fy[ib] -= cfdy;
     }
 
-    // Center gravity
-    const gcx = territories.reduce((s,t)=>s+t.x,0)/N;
-    const gcy = territories.reduce((s,t)=>s+t.y,0)/N;
-    for (let i = 0; i < N; i++) {
-      fx[i] += (600 - gcx) * 0.001;
-      fy[i] += (400 - gcy) * 0.001;
+    var gcx = territories.reduce(function(s, t) { return s + t.x; }, 0) / N;
+    var gcy = territories.reduce(function(s, t) { return s + t.y; }, 0) / N;
+    for (var gi = 0; gi < N; gi++) {
+      fx[gi] += (600 - gcx) * 0.001;
+      fy[gi] += (400 - gcy) * 0.001;
     }
 
-    // Update velocities and positions
-    for (let i = 0; i < N; i++) {
-      vx[i] = (vx[i] + fx[i]) * damping;
-      vy[i] = (vy[i] + fy[i]) * damping;
-      // Limit velocity
-      const speed = Math.sqrt(vx[i]*vx[i]+vy[i]*vy[i]);
+    for (var ui = 0; ui < N; ui++) {
+      vx[ui] = (vx[ui] + fx[ui]) * damping;
+      vy[ui] = (vy[ui] + fy[ui]) * damping;
+      var speed = Math.sqrt(vx[ui] * vx[ui] + vy[ui] * vy[ui]);
       if (speed > 20) {
-        vx[i] = vx[i]/speed*20;
-        vy[i] = vy[i]/speed*20;
+        vx[ui] = vx[ui] / speed * 20;
+        vy[ui] = vy[ui] / speed * 20;
       }
-      territories[i].x += vx[i];
-      territories[i].y += vy[i];
+      territories[ui].x += vx[ui];
+      territories[ui].y += vy[ui];
     }
   }
 
   fullRender();
   fitView();
+  toast('Layout complete');
 }
 
-function autoLayout() {
-  forceLayout();
-}
+function autoLayout() { forceLayout(); }
 
 function fitView() {
   if (territories.length === 0) return;
-  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-  territories.forEach(t => {
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  territories.forEach(function(t) {
     if (t.x < minX) minX = t.x;
     if (t.y < minY) minY = t.y;
     if (t.x > maxX) maxX = t.x;
     if (t.y > maxY) maxY = t.y;
   });
-  const pad = 100;
-  const w = maxX - minX + pad*2;
-  const h = maxY - minY + pad*2;
-  const rect = svg.getBoundingClientRect();
-  const aspect = rect.width / rect.height;
-  if (w/h > aspect) {
+  var pad = 100;
+  var w = maxX - minX + pad * 2;
+  var h = maxY - minY + pad * 2;
+  var rect = svg.getBoundingClientRect();
+  var aspect = rect.width / rect.height;
+  if (w / h > aspect) {
     viewBox.w = w; viewBox.h = w / aspect;
   } else {
     viewBox.h = h; viewBox.w = h * aspect;
   }
-  viewBox.x = minX - pad - (viewBox.w - (maxX-minX))/2;
-  viewBox.y = minY - pad - (viewBox.h - (maxY-minY))/2;
+  viewBox.x = minX - pad - (viewBox.w - (maxX - minX)) / 2;
+  viewBox.y = minY - pad - (viewBox.h - (maxY - minY)) / 2;
   updateViewBox();
 }
 
 // ============================================================
-//  TOAST NOTIFICATION
+//  VORONOI SHAPE GENERATION (DO NOT MODIFY)
 // ============================================================
-function showToast(msg, type, duration) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = type || '';
-  el.style.display = 'block';
-  clearTimeout(el._timer);
-  el._timer = setTimeout(() => { el.style.display = 'none'; }, duration || 4000);
-}
-
-// ============================================================
-//  GRAPH VALIDATION
-// ============================================================
-function validateGraph() {
-  if (territories.length === 0) {
-    showToast('No territories to validate.', 'error');
-    return false;
-  }
-  // BFS from first territory
-  const adjMap = {};
-  territories.forEach(t => adjMap[t.id] = []);
-  connections.forEach(([a, b]) => {
-    if (adjMap[a]) adjMap[a].push(b);
-    if (adjMap[b]) adjMap[b].push(a);
-  });
-
-  const visited = new Set();
-  const queue = [territories[0].id];
-  visited.add(territories[0].id);
-  while (queue.length > 0) {
-    const curr = queue.shift();
-    for (const nb of (adjMap[curr] || [])) {
-      if (!visited.has(nb)) {
-        visited.add(nb);
-        queue.push(nb);
-      }
-    }
-  }
-
-  const unreachable = territories.filter(t => !visited.has(t.id));
-  if (unreachable.length === 0) {
-    showToast('Graph is fully connected.', 'success');
-    return true;
-  } else {
-    const names = unreachable.map(t => t.name).join(', ');
-    showToast('Disconnected territories: ' + names, 'error', 6000);
-    return false;
-  }
-}
-
-// ============================================================
-//  SEEDED RANDOM (for reproducible shapes)
-// ============================================================
-function makeRng(seed) {
-  let s = seed | 0;
-  return function() {
-    s = (s * 1664525 + 1013904223) & 0xffffffff;
-    return (s >>> 0) / 4294967296;
-  };
-}
-
-// ============================================================
-//  ORGANIC SHAPE GENERATION
-// ============================================================
-
-// Compute connected components
-function findComponents() {
-  const adjMap = {};
-  territories.forEach(t => adjMap[t.id] = []);
-  connections.forEach(([a, b]) => {
-    if (adjMap[a]) adjMap[a].push(b);
-    if (adjMap[b]) adjMap[b].push(a);
-  });
-  const visited = new Set();
-  const components = [];
-  for (const t of territories) {
-    if (visited.has(t.id)) continue;
-    const comp = [];
-    const queue = [t.id];
-    visited.add(t.id);
-    while (queue.length > 0) {
-      const curr = queue.shift();
-      comp.push(curr);
-      for (const nb of (adjMap[curr] || [])) {
-        if (!visited.has(nb)) {
-          visited.add(nb);
-          queue.push(nb);
-        }
-      }
-    }
-    components.push(comp);
-  }
-  return components;
-}
-
-// Check if two territories are connected
-function areConnected(a, b) {
-  return connections.some(c =>
-    (c[0] === a && c[1] === b) || (c[0] === b && c[1] === a)
-  );
-}
-
-// Perpendicular bisector clipping (kept from original for Voronoi base)
-function clipPolygonByBisector(poly, site, other) {
-  const mx = (site.x + other.x) / 2;
-  const my = (site.y + other.y) / 2;
-  const nx = other.x - site.x;
-  const ny = other.y - site.y;
-  const output = [];
-  const n = poly.length;
-  for (let i = 0; i < n; i++) {
-    const curr = poly[i];
-    const next = poly[(i + 1) % n];
-    const dc = (curr.x - mx) * nx + (curr.y - my) * ny;
-    const dn = (next.x - mx) * nx + (next.y - my) * ny;
-    if (dc <= 0) output.push(curr);
-    if ((dc <= 0) !== (dn <= 0)) {
-      const t = dc / (dc - dn);
-      output.push({
-        x: curr.x + t * (next.x - curr.x),
-        y: curr.y + t * (next.y - curr.y)
-      });
-    }
-  }
-  return output;
-}
-
-// Compute raw Voronoi polygon for a site
-function computeVoronoiPoly(site, bx, by, bw, bh) {
-  let poly = [
-    { x: bx, y: by },
-    { x: bx + bw, y: by },
-    { x: bx + bw, y: by + bh },
-    { x: bx, y: by + bh }
-  ];
-  for (const other of territories) {
-    if (other.id === site.id) continue;
-    poly = clipPolygonByBisector(poly, site, other);
-    if (poly.length < 3) return [];
-  }
-  return poly;
-}
-
-// Check if a polygon edge lies on the bounding rectangle
-function isExternalEdge(p1, p2, bx, by, bw, bh) {
-  const eps = 1.0;
-  const onLeft = Math.abs(p1.x - bx) < eps && Math.abs(p2.x - bx) < eps;
-  const onRight = Math.abs(p1.x - (bx + bw)) < eps && Math.abs(p2.x - (bx + bw)) < eps;
-  const onTop = Math.abs(p1.y - by) < eps && Math.abs(p2.y - by) < eps;
-  const onBottom = Math.abs(p1.y - (by + bh)) < eps && Math.abs(p2.y - (by + bh)) < eps;
-  return onLeft || onRight || onTop || onBottom;
-}
-
-// Find which other territory shares an edge (approximate: midpoint closest)
-function findSharedTerritory(site, p1, p2) {
-  const mx = (p1.x + p2.x) / 2;
-  const my = (p1.y + p2.y) / 2;
-  let bestId = -1, bestD = Infinity;
-  for (const t of territories) {
-    if (t.id === site.id) continue;
-    const dx = t.x - mx, dy = t.y - my;
-    const d = dx * dx + dy * dy;
-    if (d < bestD) { bestD = d; bestId = t.id; }
-  }
-  return bestId;
-}
-
-// Midpoint displacement fractal perturbation along an edge
-function perturbEdge(p1, p2, roughness, rng, levels) {
-  levels = levels || 4;
-  let points = [{ x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }];
-
-  for (let level = 0; level < levels; level++) {
-    const newPoints = [points[0]];
-    for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i];
-      const b = points[i + 1];
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-      // Perpendicular direction
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len < 0.5) {
-        newPoints.push(b);
-        continue;
-      }
-      const nx = -dy / len;
-      const ny = dx / len;
-      // Offset with decreasing roughness per level
-      const scale = roughness * Math.pow(0.55, level);
-      const offset = (rng() - 0.5) * 2 * scale;
-      newPoints.push({ x: mx + nx * offset, y: my + ny * offset });
-      newPoints.push(b);
-    }
-    points = newPoints;
-  }
-  return points;
-}
-
-// Convert array of points to smooth SVG path using Catmull-Rom -> cubic bezier
-function pointsToSmoothPath(points, closed) {
-  if (points.length < 3) {
-    let d = `M${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
-    for (let i = 1; i < points.length; i++) {
-      d += `L${points[i].x.toFixed(1)},${points[i].y.toFixed(1)}`;
-    }
-    if (closed) d += 'Z';
-    return d;
-  }
-
-  const pts = closed
-    ? [points[points.length - 1], ...points, points[0], points[1]]
-    : [points[0], ...points, points[points.length - 1]];
-
-  let d = `M${pts[1].x.toFixed(1)},${pts[1].y.toFixed(1)}`;
-  const tension = 0.35;
-
-  for (let i = 1; i < pts.length - 2; i++) {
-    const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2];
-    const cp1x = p1.x + (p2.x - p0.x) * tension;
-    const cp1y = p1.y + (p2.y - p0.y) * tension;
-    const cp2x = p2.x - (p3.x - p1.x) * tension;
-    const cp2y = p2.y - (p3.y - p1.y) * tension;
-    d += `C${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
-  }
-
-  if (closed) d += 'Z';
-  return d;
-}
-
-// Store organic generation data for rendering ocean/sea routes
-let organicShapeData = null;
-
 function generateShapes() {
   if (territories.length < 2) return;
   pushUndo('Generate shapes');
 
   // Compute bounding box
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
   territories.forEach(t => {
     if (t.x < minX) minX = t.x;
     if (t.y < minY) minY = t.y;
@@ -1342,94 +1395,76 @@ function generateShapes() {
   });
   const pad = 80;
   const bx = minX - pad, by = minY - pad;
-  const bw = (maxX - minX) + pad * 2, bh = (maxY - minY) + pad * 2;
+  const bw = (maxX - minX) + pad*2, bh = (maxY - minY) + pad*2;
 
-  // Create seeded RNG for reproducibility per territory
-  const rng = makeRng(42);
-
-  // Find connected components for island detection
-  const components = findComponents();
-
-  // Build connection set for quick lookups
-  const connSet = new Set();
-  connections.forEach(([a, b]) => {
-    connSet.add(a + ',' + b);
-    connSet.add(b + ',' + a);
-  });
-
-  // Compute center of mass for terrain variation
-  const cx = territories.reduce((s, t) => s + t.x, 0) / territories.length;
-  const cy = territories.reduce((s, t) => s + t.y, 0) / territories.length;
-  const maxDist = Math.max(1, Math.sqrt(
-    territories.reduce((s, t) => Math.max(s, (t.x - cx) ** 2 + (t.y - cy) ** 2), 0)
-  ));
-
-  // Generate organic shapes for each territory
+  // Compute Voronoi using half-plane intersection for each site
   for (const t of territories) {
-    const poly = computeVoronoiPoly(t, bx, by, bw, bh);
-    if (poly.length < 3) { t.shape = ''; continue; }
+    t.shape = computeVoronoiCell(t, bx, by, bw, bh);
+  }
+  fullRender();
+  toast('Shapes generated');
+}
 
-    // Perturb each edge of the polygon
-    const allPoints = [];
-    for (let i = 0; i < poly.length; i++) {
-      const p1 = poly[i];
-      const p2 = poly[(i + 1) % poly.length];
+function computeVoronoiCell(site, bx, by, bw, bh) {
+  // Start with bounding rectangle as polygon
+  let poly = [
+    {x: bx, y: by},
+    {x: bx+bw, y: by},
+    {x: bx+bw, y: by+bh},
+    {x: bx, y: by+bh}
+  ];
 
-      const edgeLen = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
-      if (edgeLen < 2) {
-        allPoints.push(p1);
-        continue;
-      }
-
-      // Determine edge type and roughness
-      let roughness;
-      const external = isExternalEdge(p1, p2, bx, by, bw, bh);
-      if (external) {
-        // Coastline: high roughness, extra jaggedness
-        roughness = 15 + rng() * 12;
-      } else {
-        const sharedId = findSharedTerritory(t, p1, p2);
-        if (sharedId >= 0 && connSet.has(t.id + ',' + sharedId)) {
-          // Interior border between connected territories: smooth
-          roughness = 4 + rng() * 6;
-        } else {
-          // Coastline between unconnected territories
-          roughness = 12 + rng() * 10;
-        }
-      }
-
-      // Scale roughness by edge length
-      roughness = Math.min(roughness, edgeLen * 0.3);
-
-      const levels = edgeLen > 30 ? 4 : (edgeLen > 15 ? 3 : 2);
-      const perturbed = perturbEdge(p1, p2, roughness, rng, levels);
-      // Add all points except the last (which is the start of next edge)
-      for (let j = 0; j < perturbed.length - 1; j++) {
-        allPoints.push(perturbed[j]);
-      }
-    }
-
-    // Convert to smooth bezier path
-    t.shape = pointsToSmoothPath(allPoints, true);
+  // Clip by perpendicular bisector with every other site
+  for (const other of territories) {
+    if (other.id === site.id) continue;
+    poly = clipPolygonByBisector(poly, site, other);
+    if (poly.length < 3) return '';
   }
 
-  // Store data for ocean rendering
-  organicShapeData = {
-    bounds: { x: bx, y: by, w: bw, h: bh },
-    components: components,
-    centerX: cx,
-    centerY: cy,
-    maxDist: maxDist
-  };
+  // Convert to SVG path
+  if (poly.length < 3) return '';
+  let d = `M${poly[0].x.toFixed(1)},${poly[0].y.toFixed(1)}`;
+  for (let i = 1; i < poly.length; i++) {
+    d += `L${poly[i].x.toFixed(1)},${poly[i].y.toFixed(1)}`;
+  }
+  d += 'Z';
+  return d;
+}
 
-  fullRender();
+function clipPolygonByBisector(poly, site, other) {
+  // Perpendicular bisector: all points closer to site than other
+  // The bisector passes through midpoint, normal = (other - site)
+  const mx = (site.x + other.x) / 2;
+  const my = (site.y + other.y) / 2;
+  const nx = other.x - site.x;
+  const ny = other.y - site.y;
+
+  // Clip polygon to half-plane dot(p - mid, n) <= 0
+  const output = [];
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const curr = poly[i];
+    const next = poly[(i+1) % n];
+    const dc = (curr.x - mx)*nx + (curr.y - my)*ny;
+    const dn = (next.x - mx)*nx + (next.y - my)*ny;
+    if (dc <= 0) output.push(curr);
+    if ((dc <= 0) !== (dn <= 0)) {
+      // Intersection
+      const t = dc / (dc - dn);
+      output.push({
+        x: curr.x + t*(next.x - curr.x),
+        y: curr.y + t*(next.y - curr.y)
+      });
+    }
+  }
+  return output;
 }
 
 function clearShapes() {
   pushUndo('Clear shapes');
   territories.forEach(t => t.shape = null);
-  organicShapeData = null;
   renderShapes();
+  toast('Shapes cleared');
 }
 
 // ============================================================
@@ -1439,35 +1474,31 @@ function autoClusters() {
   if (territories.length === 0) return;
   pushUndo('Auto-cluster');
 
-  // Build adjacency
-  const adjMap = {};
-  territories.forEach(t => adjMap[t.id] = []);
-  connections.forEach(([a,b]) => {
-    if (adjMap[a]) adjMap[a].push(b);
-    if (adjMap[b]) adjMap[b].push(a);
+  var adjMap = {};
+  territories.forEach(function(t) { adjMap[t.id] = []; });
+  connections.forEach(function(c) {
+    if (adjMap[c[0]]) adjMap[c[0]].push(c[1]);
+    if (adjMap[c[1]]) adjMap[c[1]].push(c[0]);
   });
 
-  // Initialize labels
-  const label = {};
-  territories.forEach(t => label[t.id] = t.id);
+  var label = {};
+  territories.forEach(function(t) { label[t.id] = t.id; });
 
-  // Iterate
-  for (let iter = 0; iter < 30; iter++) {
-    let changed = false;
-    // Shuffle order
-    const order = territories.map(t => t.id).sort(() => Math.random() - 0.5);
-    for (const id of order) {
-      const neighbors = adjMap[id];
+  for (var iter = 0; iter < 30; iter++) {
+    var changed = false;
+    var order = territories.map(function(t) { return t.id; }).sort(function() { return Math.random() - 0.5; });
+    for (var oi = 0; oi < order.length; oi++) {
+      var id = order[oi];
+      var neighbors = adjMap[id];
       if (neighbors.length === 0) continue;
-      // Count neighbor labels
-      const counts = {};
-      neighbors.forEach(n => {
-        const l = label[n];
+      var counts = {};
+      neighbors.forEach(function(n) {
+        var l = label[n];
         counts[l] = (counts[l] || 0) + 1;
       });
-      // Pick most common
-      let maxCount = 0, maxLabel = label[id];
-      for (const [l, c] of Object.entries(counts)) {
+      var maxCount = 0, maxLabel = label[id];
+      for (var l in counts) {
+        var c = counts[l];
         if (c > maxCount || (c === maxCount && Math.random() > 0.5)) {
           maxCount = c; maxLabel = +l;
         }
@@ -1480,122 +1511,186 @@ function autoClusters() {
     if (!changed) break;
   }
 
-  // Collect clusters
-  const clusters = {};
-  territories.forEach(t => {
-    const l = label[t.id];
+  var clusters = {};
+  territories.forEach(function(t) {
+    var l = label[t.id];
     if (!clusters[l]) clusters[l] = [];
     clusters[l].push(t.id);
   });
 
-  // Create bonuses from clusters
   bonuses = [];
   nextBonusId = 0;
-  const clusterKeys = Object.keys(clusters).sort((a,b) => clusters[b].length - clusters[a].length);
-  const regionNames = ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta','Eta','Theta','Iota','Kappa',
-    'Lambda','Mu','Nu','Xi','Omicron','Pi','Rho','Sigma','Tau','Upsilon'];
-  clusterKeys.forEach((k, i) => {
-    const ids = clusters[k];
-    const id = nextBonusId++;
-    const value = Math.max(1, ids.length - 1);
+  var clusterKeys = Object.keys(clusters).sort(function(a, b) { return clusters[b].length - clusters[a].length; });
+  var regionNames = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota', 'Kappa',
+    'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Pi', 'Rho', 'Sigma', 'Tau', 'Upsilon'];
+  clusterKeys.forEach(function(k, i) {
+    var ids = clusters[k];
+    var bid = nextBonusId++;
+    var value = Math.max(1, ids.length - 1);
     bonuses.push({
-      id, name: regionNames[i] || `Region ${i}`,
-      value, color: BONUS_COLORS[i % BONUS_COLORS.length],
+      id: bid, name: regionNames[i] || 'Region ' + i,
+      value: value, color: BONUS_COLORS[i % BONUS_COLORS.length],
       territory_ids: ids
     });
-    ids.forEach(tid => {
-      const t = territories.find(t => t.id === tid);
-      if (t) t.bonus_id = id;
+    ids.forEach(function(tid) {
+      var t = territories.find(function(t) { return t.id === tid; });
+      if (t) t.bonus_id = bid;
     });
   });
 
+  selectedBonus = null;
   fullRender();
+  toast('Created ' + bonuses.length + ' bonus regions from graph structure');
+}
+
+// ============================================================
+//  GRAPH VALIDATION
+// ============================================================
+function validateGraph() {
+  var issues = [];
+  if (territories.length === 0) {
+    toast('No territories to validate', 'error');
+    return;
+  }
+
+  // Check connectivity
+  var visited = new Set();
+  var queue = [territories[0].id];
+  visited.add(territories[0].id);
+  while (queue.length > 0) {
+    var curr = queue.shift();
+    for (var ci = 0; ci < connections.length; ci++) {
+      var neighbor = connections[ci][0] === curr ? connections[ci][1] : (connections[ci][1] === curr ? connections[ci][0] : null);
+      if (neighbor !== null && !visited.has(neighbor)) {
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+  }
+  if (visited.size < territories.length) {
+    var unreachable = territories.length - visited.size;
+    issues.push(unreachable + ' territor' + (unreachable > 1 ? 'ies are' : 'y is') + ' disconnected from the main graph');
+  }
+
+  // Check for territories with no connections
+  var connectedIds = new Set();
+  connections.forEach(function(c) { connectedIds.add(c[0]); connectedIds.add(c[1]); });
+  var isolated = territories.filter(function(t) { return !connectedIds.has(t.id); });
+  if (isolated.length > 0) {
+    issues.push(isolated.length + ' territor' + (isolated.length > 1 ? 'ies have' : 'y has') + ' no connections');
+  }
+
+  // Check for unassigned bonuses
+  var assigned = new Set();
+  bonuses.forEach(function(b) { b.territory_ids.forEach(function(id) { assigned.add(id); }); });
+  var unassigned = territories.filter(function(t) { return !assigned.has(t.id); });
+  if (unassigned.length > 0) {
+    issues.push(unassigned.length + ' territor' + (unassigned.length > 1 ? 'ies are' : 'y is') + ' not in any bonus');
+  }
+
+  // Check bonus connectivity
+  bonuses.forEach(function(b) {
+    if (b.territory_ids.length === 0) {
+      issues.push('Bonus "' + b.name + '" has no territories');
+      return;
+    }
+    var bVisited = new Set();
+    var bQueue = [b.territory_ids[0]];
+    bVisited.add(b.territory_ids[0]);
+    while (bQueue.length > 0) {
+      var curr = bQueue.shift();
+      for (var ci = 0; ci < connections.length; ci++) {
+        var neighbor = connections[ci][0] === curr ? connections[ci][1] : (connections[ci][1] === curr ? connections[ci][0] : null);
+        if (neighbor !== null && b.territory_ids.includes(neighbor) && !bVisited.has(neighbor)) {
+          bVisited.add(neighbor);
+          bQueue.push(neighbor);
+        }
+      }
+    }
+    if (bVisited.size < b.territory_ids.length) {
+      issues.push('Bonus "' + b.name + '" is not internally connected');
+    }
+  });
+
+  if (issues.length === 0) {
+    toast('Map is valid! All territories connected, all bonuses valid.', 'success');
+  } else {
+    toast('Validation issues:\n' + issues.map(function(i) { return '  - ' + i; }).join('\n'), 'error');
+  }
 }
 
 // ============================================================
 //  EXPORT / IMPORT
 // ============================================================
 function buildExportJSON() {
-  // Build adjacency lists
-  const adjMap = {};
-  territories.forEach(t => adjMap[t.id] = []);
-  connections.forEach(([a,b]) => {
-    adjMap[a].push(b);
-    adjMap[b].push(a);
+  var adjMap = {};
+  territories.forEach(function(t) { adjMap[t.id] = []; });
+  connections.forEach(function(c) {
+    adjMap[c[0]].push(c[1]);
+    adjMap[c[1]].push(c[0]);
   });
 
-  // Re-index territories 0..N-1
-  const idMap = {};
-  territories.forEach((t, i) => idMap[t.id] = i);
+  var idMap = {};
+  territories.forEach(function(t, i) { idMap[t.id] = i; });
 
-  const exportTerrs = territories.map((t, i) => {
-    const adj = (adjMap[t.id] || []).map(a => idMap[a]).filter(x => x !== undefined).sort((a,b)=>a-b);
-    const bonusIdx = bonuses.findIndex(b => b.territory_ids.includes(t.id));
-    const obj = {
+  var exportTerrs = territories.map(function(t, i) {
+    var adj = (adjMap[t.id] || []).map(function(a) { return idMap[a]; }).filter(function(x) { return x !== undefined; }).sort(function(a, b) { return a - b; });
+    var bonusIdx = bonuses.findIndex(function(b) { return b.territory_ids.includes(t.id); });
+    return {
       id: i,
       name: t.name,
       bonus_id: bonusIdx >= 0 ? bonusIdx : 0,
       is_wasteland: t.is_wasteland,
       default_armies: t.default_armies,
       adjacent: adj,
+      visual: {
+        path: t.shape || '',
+        label_pos: [Math.round(t.x * 10) / 10, Math.round(t.y * 10) / 10]
+      }
     };
-    // Add visual with shape and label position
-    obj.visual = {
-      path: t.shape || '',
-      label_pos: [Math.round(t.x * 10)/10, Math.round(t.y * 10)/10]
-    };
-    return obj;
   });
 
-  const exportBonuses = bonuses.map((b, i) => ({
-    id: i,
-    name: b.name,
-    value: b.value,
-    territory_ids: b.territory_ids.map(tid => idMap[tid]).filter(x => x !== undefined).sort((a,b)=>a-b)
-  }));
+  var exportBonuses = bonuses.map(function(b, i) {
+    return {
+      id: i,
+      name: b.name,
+      value: b.value,
+      territory_ids: b.territory_ids.map(function(tid) { return idMap[tid]; }).filter(function(x) { return x !== undefined; }).sort(function(a, b) { return a - b; })
+    };
+  });
 
   return {
     id: mapData.id,
     name: mapData.name,
     territories: exportTerrs,
     bonuses: exportBonuses,
-    picking: { ...mapData.picking },
-    settings: { ...mapData.settings }
+    picking: JSON.parse(JSON.stringify(mapData.picking)),
+    settings: JSON.parse(JSON.stringify(mapData.settings))
   };
 }
 
-function showExport() {
-  // Run validation before export
-  if (territories.length > 0) validateGraph();
-  const json = JSON.stringify(buildExportJSON(), null, 2);
-  showModal('Export Map JSON', `<textarea id="export-text">${escapeHtml(json)}</textarea>`,
-    [
-      {label:'Copy to Clipboard', cls:'primary', action:()=>{
-        navigator.clipboard.writeText(document.getElementById('export-text').value);
-      }},
-      {label:'Download', cls:'primary', action:()=>{
-        const blob = new Blob([document.getElementById('export-text').value], {type:'application/json'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = mapData.id + '.json';
-        a.click();
-      }},
-      {label:'Close', action:closeModal}
-    ]
-  );
+function doExport() {
+  var json = JSON.stringify(buildExportJSON(), null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = mapData.id + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Map exported as ' + mapData.id + '.json', 'success');
 }
 
 function showImport() {
-  showModal('Import Map JSON', `<textarea id="import-text" placeholder="Paste map JSON here..."></textarea>`,
+  showModal('Import Map JSON', '<textarea id="import-text" placeholder="Paste map JSON here, or drag a .json file onto the canvas..."></textarea>',
     [
-      {label:'Import', cls:'primary', action:()=>{
+      { label: 'Import', cls: 'primary', action: function() {
         try {
-          const data = JSON.parse(document.getElementById('import-text').value);
+          var data = JSON.parse(document.getElementById('import-text').value);
           importMap(data);
           closeModal();
-        } catch(e) { alert('Invalid JSON: ' + e.message); }
+        } catch (e) { toast('Invalid JSON: ' + e.message, 'error'); }
       }},
-      {label:'Cancel', action:closeModal}
+      { label: 'Cancel', action: closeModal }
     ]
   );
 }
@@ -1610,26 +1705,21 @@ function importMap(data) {
 
   mapData.id = data.id || 'imported';
   mapData.name = data.name || 'Imported Map';
-  if (data.picking) mapData.picking = {...mapData.picking, ...data.picking};
-  if (data.settings) mapData.settings = {...mapData.settings, ...data.settings};
+  if (data.picking) mapData.picking = JSON.parse(JSON.stringify(Object.assign({}, mapData.picking, data.picking)));
+  if (data.settings) mapData.settings = JSON.parse(JSON.stringify(Object.assign({}, mapData.settings, data.settings)));
 
-  // Update settings UI
-  document.getElementById('set-id').value = mapData.id;
-  document.getElementById('set-name').value = mapData.name;
+  document.getElementById('map-name-input').value = mapData.name;
   document.getElementById('set-picks').value = mapData.picking.num_picks;
-  document.getElementById('set-income').value = mapData.settings.base_income;
-  document.getElementById('set-fog').checked = mapData.settings.fog_of_war;
 
-  // Import territories
-  const terrMap = {}; // old id -> new id
+  var terrMap = {};
   if (data.territories) {
-    data.territories.forEach(t => {
-      const lx = t.visual ? t.visual.label_pos[0] : (100 + Math.random()*1000);
-      const ly = t.visual ? t.visual.label_pos[1] : (100 + Math.random()*600);
-      const id = nextTerrId++;
+    data.territories.forEach(function(t) {
+      var lx = t.visual ? t.visual.label_pos[0] : (100 + Math.random() * 1000);
+      var ly = t.visual ? t.visual.label_pos[1] : (100 + Math.random() * 600);
+      var id = nextTerrId++;
       terrMap[t.id] = id;
       territories.push({
-        id, name: t.name, x: lx, y: ly,
+        id: id, name: t.name, x: lx, y: ly,
         bonus_id: t.bonus_id || 0,
         is_wasteland: t.is_wasteland || false,
         default_armies: t.default_armies || 2,
@@ -1637,13 +1727,12 @@ function importMap(data) {
       });
     });
 
-    // Build connections from adjacency lists
-    const connSet = new Set();
-    data.territories.forEach(t => {
-      (t.adjacent || []).forEach(adj => {
-        const a = terrMap[t.id], b = terrMap[adj];
+    var connSet = new Set();
+    data.territories.forEach(function(t) {
+      (t.adjacent || []).forEach(function(adj) {
+        var a = terrMap[t.id], b = terrMap[adj];
         if (a !== undefined && b !== undefined) {
-          const key = Math.min(a,b)+','+Math.max(a,b);
+          var key = Math.min(a, b) + ',' + Math.max(a, b);
           if (!connSet.has(key)) {
             connSet.add(key);
             connections.push([a, b]);
@@ -1653,39 +1742,77 @@ function importMap(data) {
     });
   }
 
-  // Import bonuses
   if (data.bonuses) {
-    data.bonuses.forEach((b, i) => {
-      const id = nextBonusId++;
+    data.bonuses.forEach(function(b, i) {
+      var id = nextBonusId++;
       bonuses.push({
-        id, name: b.name, value: b.value,
+        id: id, name: b.name, value: b.value,
         color: BONUS_COLORS[i % BONUS_COLORS.length],
-        territory_ids: (b.territory_ids || []).map(tid => terrMap[tid]).filter(x => x !== undefined)
+        territory_ids: (b.territory_ids || []).map(function(tid) { return terrMap[tid]; }).filter(function(x) { return x !== undefined; })
       });
     });
   }
 
-  selectedTerr = null; selectedBonus = null;
+  selectedTerrs.clear();
+  selectedBonus = null;
   fullRender();
   fitView();
+  toast('Imported "' + mapData.name + '" (' + territories.length + ' territories, ' + bonuses.length + ' bonuses)', 'success');
 }
+
+// ============================================================
+//  FILE DRAG-AND-DROP IMPORT
+// ============================================================
+var canvasWrap = document.getElementById('canvas-wrap');
+var dropZone = document.getElementById('drop-zone');
+
+canvasWrap.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  dropZone.style.display = 'flex';
+});
+canvasWrap.addEventListener('dragleave', function(e) {
+  if (!canvasWrap.contains(e.relatedTarget)) {
+    dropZone.style.display = 'none';
+  }
+});
+canvasWrap.addEventListener('drop', function(e) {
+  e.preventDefault();
+  dropZone.style.display = 'none';
+  var file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!file.name.endsWith('.json')) {
+    toast('Please drop a .json file', 'error');
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function() {
+    try {
+      var data = JSON.parse(reader.result);
+      importMap(data);
+    } catch (err) {
+      toast('Invalid JSON file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+});
 
 // ============================================================
 //  MODAL SYSTEM
 // ============================================================
-let currentModal = null;
+var currentModal = null;
 function showModal(title, bodyHtml, buttons) {
   closeModal();
-  const overlay = document.createElement('div');
+  var overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.onclick = e => { if (e.target === overlay) closeModal(); };
-  const modal = document.createElement('div');
+  overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
+  var modal = document.createElement('div');
   modal.className = 'modal';
-  modal.innerHTML = `<h3>${title}</h3>${bodyHtml}<div class="actions">${
-    buttons.map(b => `<button class="${b.cls||''}" data-action="${b.label}">${b.label}</button>`).join('')
-  }</div>`;
-  buttons.forEach(b => {
-    modal.querySelector(`[data-action="${b.label}"]`).onclick = b.action;
+  modal.innerHTML = '<h3>' + title + '</h3>' + bodyHtml + '<div class="actions">' +
+    buttons.map(function(b) { return '<button class="' + (b.cls || '') + '" data-action="' + b.label + '">' + b.label + '</button>'; }).join('') +
+  '</div>';
+  buttons.forEach(function(b) {
+    modal.querySelector('[data-action="' + b.label + '"]').onclick = b.action;
   });
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
@@ -1696,40 +1823,59 @@ function closeModal() {
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttr(s) {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ============================================================
+//  HELP PANEL
+// ============================================================
+function toggleHelp() {
+  var panel = document.getElementById('help-panel');
+  var overlay = document.getElementById('help-overlay');
+  var visible = panel.style.display === 'block';
+  panel.style.display = visible ? 'none' : 'block';
+  overlay.style.display = visible ? 'none' : 'block';
 }
 
 // ============================================================
 //  KEYBOARD SHORTCUTS
 // ============================================================
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', function(e) {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-  if (e.key === 's' || e.key === 'S') setMode('select');
-  else if (e.key === 't' || e.key === 'T') setMode('territory');
-  else if (e.key === 'c' || e.key === 'C') setMode('connection');
-  else if (e.key === 'l' || e.key === 'L') autoLayout();
-  else if (e.key === 'g' || e.key === 'G') generateShapes();
-  else if (e.key === 'k' || e.key === 'K') autoClusters();
-  else if (e.key === 'v' || e.key === 'V') validateGraph();
+
+  if (e.key === 'l' || e.key === 'L') { autoLayout(); }
+  else if (e.key === 'g' || e.key === 'G') { generateShapes(); }
+  else if (e.key === 'k' || e.key === 'K') { autoClusters(); }
+  else if (e.key === 'e' || e.key === 'E') { doExport(); }
+  else if (e.key === 'f' || e.key === 'F') { fitView(); }
+  else if (e.key === '?') { toggleHelp(); }
   else if (e.key === 'Delete' || e.key === 'Backspace') {
-    if (selectedTerr !== null) deleteSelectedTerritory();
+    if (selectedTerrs.size > 0) deleteSelected();
   }
   else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
   else if (e.key === 'Escape') {
-    connStart = null;
-    addingTerrToBonus = false;
-    document.getElementById('conn-preview').style.display = 'none';
-    setMode('select');
+    selectedTerrs.clear();
+    selectedBonus = null;
+    dragConnecting = false;
+    dragConnStart = null;
+    clearDragLine();
+    document.getElementById('bonus-mode-hint').style.display = 'none';
+    document.getElementById('canvas-wrap').classList.remove('dragging-connection');
+    fullRender();
+    updateStatusHint();
   }
-  else if (e.key === 'f' || e.key === 'F') fitView();
 });
 
 // ============================================================
 //  INIT
 // ============================================================
-window.addEventListener('resize', () => { initView(); fullRender(); });
+window.addEventListener('resize', function() { initView(); fullRender(); });
 initView();
 fullRender();
+updateStatusHint();
 </script>
 </body>
 </html>
