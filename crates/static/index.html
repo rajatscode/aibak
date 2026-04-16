@@ -232,6 +232,25 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .bonus-row.complete{animation:glow-green .6s ease-out}
 @keyframes glow-green{0%{background:rgba(63,185,80,.2)}100%{background:transparent}}
 
+/* KEYBOARD FOCUS RING */
+.territory-path.kb-focused{filter:brightness(1.35) drop-shadow(0 0 8px rgba(255,255,255,.2)) drop-shadow(0 0 16px rgba(255,255,255,.08))}
+.kb-focus-ring{pointer-events:none;fill:none;stroke:var(--gold);stroke-width:3;animation:kb-pulse 1s ease-in-out infinite}
+@keyframes kb-pulse{0%,100%{stroke-width:3;stroke-opacity:1}50%{stroke-width:5;stroke-opacity:.5}}
+
+/* KEYBOARD SHORTCUTS OVERLAY */
+#kb-help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:1100;backdrop-filter:blur(4px)}
+#kb-help-overlay.show{display:flex}
+#kb-help-overlay .kb-card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:32px 40px;max-width:680px;max-height:85vh;overflow-y:auto;width:100%}
+#kb-help-overlay .kb-card h2{font-size:22px;font-weight:700;color:var(--gold);margin-bottom:4px}
+#kb-help-overlay .kb-card .kb-subtitle{font-size:12px;color:var(--text3);margin-bottom:20px}
+#kb-help-overlay .kb-section{margin-bottom:16px}
+#kb-help-overlay .kb-section h3{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px}
+#kb-help-overlay .kb-grid{display:grid;grid-template-columns:120px 1fr;gap:4px 12px;font-size:13px}
+#kb-help-overlay .kb-key{color:var(--gold);font-weight:600;font-family:monospace;font-size:12px}
+#kb-help-overlay .kb-desc{color:var(--text)}
+#kb-help-overlay .kb-close{position:absolute;top:16px;right:20px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
+#kb-help-overlay .kb-close:hover{color:var(--text)}
+
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -382,6 +401,52 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     </div>
   </div>
 </div>
+<div id="kb-help-overlay">
+  <div class="kb-card" style="position:relative">
+    <button class="kb-close" onclick="toggleKbHelp()">&times;</button>
+    <h2>Keyboard Shortcuts</h2>
+    <div class="kb-subtitle">Play the entire game without touching the mouse</div>
+    <div class="kb-section">
+      <h3>Navigation</h3>
+      <div class="kb-grid">
+        <span class="kb-key">Tab</span><span class="kb-desc">Cycle forward through owned territories</span>
+        <span class="kb-key">Shift+Tab</span><span class="kb-desc">Cycle backward through owned territories</span>
+        <span class="kb-key">Space</span><span class="kb-desc">Deploy +1 army to focused territory</span>
+        <span class="kb-key">Enter</span><span class="kb-desc">Select focused territory as attack source / End Turn</span>
+      </div>
+    </div>
+    <div class="kb-section">
+      <h3>Army Popup</h3>
+      <div class="kb-grid">
+        <span class="kb-key">1-9</span><span class="kb-desc">Set army count directly</span>
+        <span class="kb-key">0</span><span class="kb-desc">Set army count to 10</span>
+        <span class="kb-key">+ / =</span><span class="kb-desc">Increase army count by 1</span>
+        <span class="kb-key">-</span><span class="kb-desc">Decrease army count by 1</span>
+        <span class="kb-key">Enter</span><span class="kb-desc">Confirm order</span>
+        <span class="kb-key">Escape</span><span class="kb-desc">Cancel order</span>
+      </div>
+    </div>
+    <div class="kb-section">
+      <h3>Quick Deploy</h3>
+      <div class="kb-grid">
+        <span class="kb-key">Q</span><span class="kb-desc">Deploy all remaining armies to focused territory</span>
+        <span class="kb-key">W</span><span class="kb-desc">Deploy half remaining armies to focused territory</span>
+      </div>
+    </div>
+    <div class="kb-section">
+      <h3>Game Flow</h3>
+      <div class="kb-grid">
+        <span class="kb-key">Escape</span><span class="kb-desc">Cancel selection / close popup</span>
+        <span class="kb-key">Enter</span><span class="kb-desc">End Turn (when nothing is selected)</span>
+        <span class="kb-key">N</span><span class="kb-desc">New Game</span>
+        <span class="kb-key">M</span><span class="kb-desc">Toggle mute</span>
+        <span class="kb-key">T</span><span class="kb-desc">Toggle threats overlay</span>
+        <span class="kb-key">R</span><span class="kb-desc">Enter replay mode (after game ends)</span>
+        <span class="kb-key">?</span><span class="kb-desc">Show / hide this help overlay</span>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="toast-container"></div>
 
 <script>
@@ -413,6 +478,135 @@ let muted = false;
 let winProbHistory = []; // track win% over turns for sparkline
 let gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
 let selectedTemplate = null;
+let kbFocusIndex = -1; // index into owned territories list for Tab cycling
+let kbHelpVisible = false;
+
+// ========== KEYBOARD FOCUS ==========
+function getOwnedTerritoryIds() {
+  if (!G || !G.territories) return [];
+  return G.territories.filter(t => t.owner === 0).map(t => t.id);
+}
+
+function getPickOptionIds() {
+  if (!G || !G.pick_options) return [];
+  return G.pick_options;
+}
+
+function kbCycleFocus(dir) {
+  let ids;
+  if (phase === 'picking') {
+    ids = getPickOptionIds();
+  } else {
+    ids = getOwnedTerritoryIds();
+  }
+  if (ids.length === 0) return;
+  if (kbFocusIndex < 0 || kbFocusIndex >= ids.length) {
+    kbFocusIndex = dir > 0 ? 0 : ids.length - 1;
+  } else {
+    kbFocusIndex += dir;
+    if (kbFocusIndex >= ids.length) kbFocusIndex = 0;
+    if (kbFocusIndex < 0) kbFocusIndex = ids.length - 1;
+  }
+  updateKbFocusRing();
+  scrollToFocusedTerritory();
+  playSound('tick');
+}
+
+function getFocusedTerritoryId() {
+  let ids;
+  if (phase === 'picking') {
+    ids = getPickOptionIds();
+  } else {
+    ids = getOwnedTerritoryIds();
+  }
+  if (kbFocusIndex < 0 || kbFocusIndex >= ids.length) return null;
+  return ids[kbFocusIndex];
+}
+
+function updateKbFocusRing() {
+  // Remove existing focus rings
+  const existing = document.querySelectorAll('.kb-focus-ring');
+  existing.forEach(el => el.remove());
+  // Remove focus class from all territories
+  document.querySelectorAll('.territory-path.kb-focused').forEach(el => el.classList.remove('kb-focused'));
+
+  const focusedId = getFocusedTerritoryId();
+  if (focusedId === null) return;
+
+  const pathEl = document.getElementById('terr-' + focusedId);
+  if (!pathEl) return;
+  pathEl.classList.add('kb-focused');
+
+  // Add a pulsing ring
+  const svg = document.getElementById('map-svg');
+  if (!svg) return;
+  const pos = POS[focusedId];
+  if (!pos) return;
+
+  if (pathEl.tagName === 'path') {
+    const d = pathEl.getAttribute('d');
+    const ring = svgEl('path', {
+      d: d,
+      class: 'kb-focus-ring',
+      id: 'kb-ring'
+    });
+    svg.appendChild(ring);
+  } else {
+    const cx = pathEl.getAttribute('cx');
+    const cy = pathEl.getAttribute('cy');
+    const ring = svgEl('circle', {
+      cx: cx, cy: cy, r: 22,
+      class: 'kb-focus-ring',
+      id: 'kb-ring'
+    });
+    svg.appendChild(ring);
+  }
+}
+
+function clearKbFocus() {
+  kbFocusIndex = -1;
+  const existing = document.querySelectorAll('.kb-focus-ring');
+  existing.forEach(el => el.remove());
+  document.querySelectorAll('.territory-path.kb-focused').forEach(el => el.classList.remove('kb-focused'));
+}
+
+function scrollToFocusedTerritory() {
+  const focusedId = getFocusedTerritoryId();
+  if (focusedId === null) return;
+  const pos = POS[focusedId];
+  if (!pos) return;
+  // Show tooltip for the focused territory
+  const pathEl = document.getElementById('terr-' + focusedId);
+  if (pathEl) {
+    const svgElem = document.getElementById('map-svg');
+    const container = document.getElementById('map-container');
+    if (svgElem && container) {
+      const pt = svgElem.createSVGPoint();
+      pt.x = pos[0];
+      pt.y = pos[1];
+      const ctm = svgElem.getScreenCTM();
+      if (ctm) {
+        const screenPt = pt.matrixTransform(ctm);
+        const containerRect = container.getBoundingClientRect();
+        const fakeEvent = {
+          clientX: screenPt.x,
+          clientY: screenPt.y
+        };
+        showTooltip(focusedId, fakeEvent);
+      }
+    }
+  }
+}
+
+function toggleKbHelp() {
+  kbHelpVisible = !kbHelpVisible;
+  const overlay = document.getElementById('kb-help-overlay');
+  if (kbHelpVisible) {
+    overlay.classList.add('show');
+  } else {
+    overlay.classList.remove('show');
+  }
+}
 
 // ========== SOUND ENGINE (Web Audio API) ==========
 let audioCtx = null;
@@ -1079,6 +1273,9 @@ function updateMap() {
 
   // Apply threat overlay if enabled
   if (threatsEnabled) updateThreatOverlay();
+
+  // Reapply keyboard focus ring if active
+  updateKbFocusRing();
 
   drawOrderLines();
 }
@@ -2119,6 +2316,23 @@ function onTerritoryRightClick(id) {
 
 // ========== KEYBOARD ==========
 document.addEventListener('keydown', e => {
+  // Ignore keystrokes when typing in chat input
+  const active = document.activeElement;
+  if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+    return;
+  }
+
+  // Keyboard shortcuts help overlay — ? toggles, Escape closes
+  if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+    e.preventDefault();
+    toggleKbHelp();
+    return;
+  }
+  if (kbHelpVisible) {
+    if (e.key === 'Escape') { toggleKbHelp(); e.preventDefault(); }
+    return;
+  }
+
   // Replay mode keyboard controls
   if (replayMode) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); replayStep(-1); return; }
@@ -2129,31 +2343,162 @@ document.addEventListener('keydown', e => {
   }
 
   if (resolving) return;
-  const key = e.key.toLowerCase();
+  const key = e.key;
+  const keyLower = key.toLowerCase();
 
-  if (key === 'escape') {
-    if (pendingTarget !== null) {
-      cancelPending();
+  // --- Army popup is showing (pendingTarget set) ---
+  if (pendingTarget !== null) {
+    if (key === 'Escape') { e.preventDefault(); cancelPending(); return; }
+    if (key === 'Enter') { e.preventDefault(); popupConfirm(); return; }
+    if (key === '+' || key === '=') { e.preventDefault(); popupAdjust(1); return; }
+    if (key === '-') { e.preventDefault(); popupAdjust(-1); return; }
+    if (key >= '1' && key <= '9') {
+      e.preventDefault();
+      const val = parseInt(key);
+      pendingArmies = Math.max(1, Math.min(pendingMax, val));
+      document.getElementById('popup-count').textContent = pendingArmies;
       return;
     }
-    selectedSource = null;
-    pendingTarget = null;
-    updateMap();
-    renderSidebar();
-  }
-  if (key === 'enter' && phase === 'orders') {
-    if (pendingTarget !== null) {
-      popupConfirm();
+    if (key === '0') {
+      e.preventDefault();
+      pendingArmies = Math.max(1, Math.min(pendingMax, 10));
+      document.getElementById('popup-count').textContent = pendingArmies;
       return;
     }
-    endTurn();
+    return; // Swallow other keys while popup is open
   }
-  if (key === 'n') {
-    newGame();
+
+  // --- Tab cycling through territories ---
+  if (key === 'Tab') {
+    e.preventDefault();
+    kbCycleFocus(e.shiftKey ? -1 : 1);
+    return;
   }
-  if (key === 'm') {
-    toggleMute();
+
+  // --- Escape: cancel selection / close popup ---
+  if (key === 'Escape') {
+    e.preventDefault();
+    if (selectedSource !== null) {
+      selectedSource = null;
+      updateMap();
+      renderSidebar();
+    }
+    clearKbFocus();
+    hideTooltip();
+    return;
   }
+
+  // --- Space: deploy +1 to focused territory ---
+  if (key === ' ') {
+    e.preventDefault();
+    const focusedId = getFocusedTerritoryId();
+    if (focusedId !== null && phase === 'orders' && isOwned(focusedId) && deployLeft > 0) {
+      if (!deploys[focusedId]) deploys[focusedId] = 0;
+      deploys[focusedId]++;
+      deployLeft--;
+      floatText(focusedId, '+1');
+      playSound('deploy');
+      updateMap();
+      renderSidebar();
+    } else if (focusedId !== null && phase === 'picking') {
+      onPickClick(focusedId);
+    }
+    return;
+  }
+
+  // --- Enter: select focused territory as attack source, or end turn ---
+  if (key === 'Enter') {
+    e.preventDefault();
+    const focusedId = getFocusedTerritoryId();
+    if (phase === 'picking') {
+      // In picking phase, Enter confirms picks if all are selected
+      const totalOptions = (G.pick_options || []).length;
+      if (picks.length >= totalOptions) {
+        confirmPicks();
+      }
+      return;
+    }
+    if (phase === 'orders') {
+      if (focusedId !== null && selectedSource === null && isOwned(focusedId)) {
+        // Select as attack/transfer source
+        if (deployLeft > 0) {
+          // If we still have armies to deploy, don't select as source
+          // Instead try to deploy
+          toast('Deploy your armies first', 'error');
+          return;
+        }
+        if (availableArmies(focusedId) <= 0) {
+          toast('No armies available', 'error');
+          return;
+        }
+        selectedSource = focusedId;
+        playSound('tick');
+        updateMap();
+        renderSidebar();
+        // Now switch focus to cycle through adjacent territories
+        return;
+      }
+      if (focusedId !== null && selectedSource !== null) {
+        // A source is selected and we have a focused territory — treat as target click
+        const src = terr(selectedSource);
+        if (src && src.adjacent && src.adjacent.includes(focusedId)) {
+          const tgt = terr(focusedId);
+          if (tgt) {
+            const max = availableArmies(selectedSource);
+            if (max <= 0) { toast('No armies available', 'error'); selectedSource = null; updateMap(); renderSidebar(); return; }
+            const orderType = (tgt.owner === 0) ? 'transfer' : 'attack';
+            pendingTarget = focusedId;
+            pendingType = orderType;
+            pendingMax = max;
+            pendingArmies = max;
+            showMapArmyPopup(focusedId);
+            updateMap();
+            renderSidebar();
+            return;
+          }
+        }
+      }
+      // No focus or not adjacent — end turn
+      endTurn();
+    }
+    return;
+  }
+
+  // --- Quick deploy: Q = all, W = half ---
+  if (keyLower === 'q' && phase === 'orders') {
+    const focusedId = getFocusedTerritoryId();
+    if (focusedId !== null && isOwned(focusedId) && deployLeft > 0) {
+      if (!deploys[focusedId]) deploys[focusedId] = 0;
+      deploys[focusedId] += deployLeft;
+      floatText(focusedId, '+' + deployLeft);
+      deployLeft = 0;
+      playSound('deploy');
+      updateMap();
+      renderSidebar();
+    }
+    return;
+  }
+
+  if (keyLower === 'w' && phase === 'orders') {
+    const focusedId = getFocusedTerritoryId();
+    if (focusedId !== null && isOwned(focusedId) && deployLeft > 0) {
+      const half = Math.max(1, Math.ceil(deployLeft / 2));
+      if (!deploys[focusedId]) deploys[focusedId] = 0;
+      deploys[focusedId] += half;
+      deployLeft -= half;
+      floatText(focusedId, '+' + half);
+      playSound('deploy');
+      updateMap();
+      renderSidebar();
+    }
+    return;
+  }
+
+  // --- Game flow shortcuts ---
+  if (keyLower === 'n') { newGame(); return; }
+  if (keyLower === 'm') { toggleMute(); return; }
+  if (keyLower === 't') { toggleThreats(); return; }
+  if (keyLower === 'r' && phase === 'finished') { enterReplayMode(); return; }
 });
 
 // ========== UTIL ==========
