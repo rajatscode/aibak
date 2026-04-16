@@ -220,6 +220,22 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .template-card h3{font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px}
 .template-card .template-info{font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5}
 .template-card .template-icon{font-size:36px;margin-bottom:12px}
+.template-card.selected{border-color:var(--gold);box-shadow:0 0 16px rgba(227,179,65,.3)}
+
+/* GAME SETTINGS */
+#game-settings{margin-top:24px;text-align:left;max-width:520px;margin-left:auto;margin-right:auto}
+#game-settings h3{font-size:14px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;text-align:center}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.setting-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px}
+.setting-row label{font-size:12px;color:var(--text2);font-weight:500}
+.setting-row select,.setting-row .toggle-wrap{font-size:12px}
+.setting-row select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;cursor:pointer}
+.toggle-wrap{display:flex;align-items:center;gap:6px}
+.toggle-wrap input[type=checkbox]{width:16px;height:16px;accent-color:var(--green);cursor:pointer}
+.toggle-wrap span{font-size:11px;color:var(--text3)}
+#start-game-btn{margin-top:20px;display:block;margin-left:auto;margin-right:auto;padding:12px 40px;background:var(--green);color:#000;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s}
+#start-game-btn:hover{background:#4ade80;transform:translateY(-1px)}
+#start-game-btn:disabled{opacity:.4;cursor:not-allowed}
 
 /* TRANSITION FLASH */
 .phase-flash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:500;pointer-events:none;opacity:0;transition:opacity .3s}
@@ -386,18 +402,64 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 <div id="template-modal">
   <div class="modal-content">
     <h2>Choose Your Battlefield</h2>
-    <p>Select a map template to begin</p>
+    <p>Select a map template and customize settings</p>
     <div class="template-cards">
-      <div class="template-card" onclick="selectTemplate('small_earth')">
+      <div class="template-card" id="tpl-small_earth" onclick="selectTemplate('small_earth')">
         <div class="template-icon">&#127758;</div>
         <h3>Small Earth</h3>
         <div class="template-info">42 territories<br>6 bonuses<br>Classic layout</div>
       </div>
-      <div class="template-card" onclick="selectTemplate('mme')">
+      <div class="template-card" id="tpl-mme" onclick="selectTemplate('mme')">
         <div class="template-icon">&#127757;</div>
         <h3>Modified Medium Earth</h3>
         <div class="template-info">89 territories<br>22 bonuses<br>Extended map</div>
       </div>
+    </div>
+    <div id="game-settings">
+      <h3>Game Settings</h3>
+      <div class="settings-grid">
+        <div class="setting-row">
+          <label>Fog of War</label>
+          <div class="toggle-wrap">
+            <input type="checkbox" id="set-fog" checked>
+            <span id="fog-label">On</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label>AI Difficulty</label>
+          <select id="set-ai">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard" selected>Hard</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label>Starting Armies</label>
+          <select id="set-armies">
+            <option value="3">3</option>
+            <option value="5" selected>5</option>
+            <option value="7">7</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label>Base Income</label>
+          <select id="set-income">
+            <option value="3">3</option>
+            <option value="5" selected>5</option>
+            <option value="7">7</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label>Number of Picks</label>
+          <select id="set-picks">
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </div>
+      </div>
+      <button id="start-game-btn" onclick="startGameWithSettings()">Start Game</button>
     </div>
   </div>
 </div>
@@ -759,6 +821,19 @@ async function setDifficulty(level) {
 
 // ========== TEMPLATE SELECTION ==========
 function showTemplateModal() {
+  // Reset selection highlight
+  document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+  if (selectedTemplate) {
+    const el = document.getElementById('tpl-' + selectedTemplate);
+    if (el) el.classList.add('selected');
+  }
+  // Reset settings to defaults
+  document.getElementById('set-fog').checked = true;
+  document.getElementById('fog-label').textContent = 'On';
+  document.getElementById('set-armies').value = '5';
+  document.getElementById('set-income').value = '5';
+  document.getElementById('set-picks').value = '4';
+  document.getElementById('set-ai').value = 'hard';
   document.getElementById('template-modal').classList.add('show');
 }
 
@@ -766,11 +841,36 @@ function hideTemplateModal() {
   document.getElementById('template-modal').classList.remove('show');
 }
 
-async function selectTemplate(tmpl) {
-  hideTemplateModal();
+function selectTemplate(tmpl) {
   selectedTemplate = tmpl;
   playSound('tick');
-  const res = await api('POST', '/api/new', {template: tmpl});
+  document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+  const el = document.getElementById('tpl-' + tmpl);
+  if (el) el.classList.add('selected');
+}
+
+async function startGameWithSettings() {
+  if (!selectedTemplate) {
+    toast('Select a map first', 'error');
+    return;
+  }
+  const fog = document.getElementById('set-fog').checked;
+  const armies = parseInt(document.getElementById('set-armies').value);
+  const income = parseInt(document.getElementById('set-income').value);
+  const numPicks = parseInt(document.getElementById('set-picks').value);
+  const aiDiff = document.getElementById('set-ai').value;
+  hideTemplateModal();
+  playSound('tick');
+  const res = await api('POST', '/api/new', {
+    template: selectedTemplate,
+    settings: {
+      fog_of_war: fog,
+      starting_armies: armies,
+      base_income: income,
+      num_picks: numPicks,
+      ai_difficulty: aiDiff
+    }
+  });
   if (res) await fetchState();
 }
 
@@ -2945,6 +3045,9 @@ function clearChat() {
 }
 
 // ========== INIT ==========
+document.getElementById('set-fog').addEventListener('change', function() {
+  document.getElementById('fog-label').textContent = this.checked ? 'On' : 'Off';
+});
 buildMap();
 fetchState();
 </script>

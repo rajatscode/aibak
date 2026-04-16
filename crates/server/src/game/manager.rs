@@ -240,6 +240,7 @@ impl GameManager {
             &mut state,
             [&player_picks[0], &player_picks[1]],
             &map,
+            picking::DEFAULT_STARTING_ARMIES,
         );
 
         let state_json = serde_json::to_value(&state)

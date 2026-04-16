@@ -83,6 +83,8 @@ pub struct LocalState {
     pick_options: Vec<usize>,
     turn_history: Vec<TurnLog>,
     ai_strength: AiStrength,
+    /// Starting armies per picked territory (customizable via game settings).
+    starting_armies: u32,
     /// Complete game state snapshots before each turn's orders (for replay).
     state_history: Vec<GameState>,
     /// Player 0 win probability recorded after each turn resolves.
@@ -360,7 +362,8 @@ async fn submit_local_picks(
     let ai_picks = ai::generate_picks(&app.game, &app.map);
     let map = app.map.clone();
 
-    picking::resolve_picks(&mut app.game, [&body.picks, &ai_picks], &map);
+    let starting_armies = app.starting_armies;
+    picking::resolve_picks(&mut app.game, [&body.picks, &ai_picks], &map, starting_armies);
 
     // Record starting territories for flawless victory tracking.
     app.starting_territories = (0..app.game.territory_owners.len())
@@ -523,16 +526,34 @@ async fn submit_local_orders(
 }
 
 #[derive(Deserialize, Default)]
+struct GameSettings {
+    #[serde(default)]
+    fog_of_war: Option<bool>,
+    #[serde(default)]
+    starting_armies: Option<u32>,
+    #[serde(default)]
+    base_income: Option<u32>,
+    #[serde(default)]
+    num_picks: Option<usize>,
+    #[serde(default)]
+    ai_difficulty: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
 struct NewGameRequest {
     #[serde(default)]
     template: Option<String>,
+    #[serde(default)]
+    settings: Option<GameSettings>,
 }
 
 async fn new_local_game(
     State(state): State<AppState>,
     body: Option<Json<NewGameRequest>>,
 ) -> Json<ActionResult> {
-    let template = body.and_then(|b| b.0.template).unwrap_or_default();
+    let (template, settings) = body
+        .map(|b| (b.0.template.unwrap_or_default(), b.0.settings))
+        .unwrap_or_default();
 
     let mut app = state.local.lock().unwrap();
 
@@ -553,6 +574,32 @@ async fn new_local_game(
             }
         }
     }
+
+    // Apply custom game settings if provided.
+    if let Some(ref s) = settings {
+        if let Some(fog) = s.fog_of_war {
+            app.map.settings.fog_of_war = fog;
+        }
+        if let Some(income) = s.base_income {
+            app.map.settings.base_income = income;
+        }
+        if let Some(num_picks) = s.num_picks {
+            app.map.picking.num_picks = num_picks;
+        }
+        if let Some(ref difficulty) = s.ai_difficulty {
+            app.ai_strength = match difficulty.as_str() {
+                "easy" => AiStrength::Easy,
+                "medium" => AiStrength::Medium,
+                _ => AiStrength::Hard,
+            };
+        }
+    }
+
+    // Set starting armies (default 5).
+    app.starting_armies = settings
+        .as_ref()
+        .and_then(|s| s.starting_armies)
+        .unwrap_or(picking::DEFAULT_STARTING_ARMIES);
 
     let map = app.map.clone();
     app.game = GameState::new(&map);
@@ -1025,6 +1072,7 @@ async fn main() {
         pick_options,
         turn_history: Vec::new(),
         ai_strength: AiStrength::Hard,
+        starting_armies: picking::DEFAULT_STARTING_ARMIES,
         state_history: Vec::new(),
         win_prob_history: Vec::new(),
         local_stats: LocalStats::default(),

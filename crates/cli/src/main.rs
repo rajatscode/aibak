@@ -44,7 +44,7 @@ fn main() {
     let player_picks = read_picks(&map, &options);
     let ai_picks = ai::generate_picks(&state, &map);
 
-    picking::resolve_picks(&mut state, [&player_picks, &ai_picks], &map);
+    picking::resolve_picks(&mut state, [&player_picks, &ai_picks], &map, picking::DEFAULT_STARTING_ARMIES);
     println!("\n\x1b[1mPicking complete! Game begins.\x1b[0m");
 
     // Main game loop.
