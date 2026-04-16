@@ -190,11 +190,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .tooltip .tip-bonus .bonus-dot{width:6px;height:6px;border-radius:2px;display:inline-block}
 .tooltip .tip-hint{color:var(--text3);font-size:10px;margin-top:2px}
 
-/* SUB-PHASE TABS */
-.subphase-tabs{display:flex;gap:4px;margin-bottom:8px}
-.subphase-tab{flex:1;padding:6px;text-align:center;font-size:11px;font-weight:600;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text2);transition:all .15s}
-.subphase-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-.subphase-tab.done{background:var(--bg3);color:var(--green);border-color:var(--green)}
+/* UNDEPLOYED WARNING */
+.undeployed-warning{color:#f59e0b;font-size:12px;font-weight:600;text-align:center;padding:4px 0}
 
 /* THREAT HEATMAP */
 .territory-path.threat-overlay{transition:fill .3s ease}
@@ -280,7 +277,7 @@ const FOG_COLOR='#1f2937';
 
 // ========== STATE ==========
 let G = null; // game state
-let phase = 'loading'; // picking | deploy | attack | finished
+let phase = 'loading'; // picking | orders | finished
 let picks = [];
 let deploys = {}; // territory_id -> count
 let deployLeft = 0;
@@ -844,7 +841,7 @@ function showTooltip(id, e) {
   }
 
   // Deploy hint
-  if (phase === 'deploy' && t.owner === 0 && deployLeft > 0) {
+  if (phase === 'orders' && t.owner === 0 && deployLeft > 0) {
     html += '<div class="tip-hint">Click to deploy (+1, Shift+5)</div>';
   }
 
@@ -895,11 +892,11 @@ function onStateUpdate() {
     phase = 'picking';
     picks = [];
   } else if (G.phase === 'play') {
-    // Reset deploy state on new turn or first entry
+    // Reset state on new turn or first entry
     const currentTurn = G.turn || 1;
-    if (phase !== 'attack' && phase !== 'deploy' || !window._lastTurn || window._lastTurn !== currentTurn) {
+    if (phase !== 'orders' || !window._lastTurn || window._lastTurn !== currentTurn) {
       window._lastTurn = currentTurn;
-      phase = 'deploy';
+      phase = 'orders';
       deploys = {};
       deployLeft = G.income || 5;
       orders = [];
@@ -930,10 +927,8 @@ function renderSidebar() {
 
   if (phase === 'picking') {
     renderPickingPanel(pp, cp);
-  } else if (phase === 'deploy') {
-    renderDeployPanel(pp, cp);
-  } else if (phase === 'attack') {
-    renderAttackPanel(pp, cp);
+  } else if (phase === 'orders') {
+    renderOrdersPanel(pp, cp);
   } else {
     pp.innerHTML = '<div class="sb-phase">Waiting...</div>';
     cp.innerHTML = '';
@@ -954,43 +949,35 @@ function renderPickingPanel(pp, cp) {
   cp.innerHTML = '<button class="btn btn-gold" ' + (picks.length < needed ? 'disabled' : '') + ' onclick="confirmPicks()">Confirm Picks</button>';
 }
 
-function renderDeployPanel(pp, cp) {
-  pp.innerHTML = '<div class="sb-phase">Deploy Phase</div>' +
-    '<div class="sb-sub">Click your territories to deploy armies</div>' +
-    '<div class="deploy-counter">' + deployLeft + '</div>' +
-    '<div class="deploy-hint">Click +1 | Shift+Click +5 | Right-click -1</div>';
-
-  let html = '<h3>Deployments</h3>';
-  const entries = Object.entries(deploys).filter(function(kv) { return kv[1] > 0; });
-  if (entries.length === 0) {
-    html += '<div style="font-size:12px;color:var(--text3)">No deployments yet</div>';
-  } else {
-    entries.forEach(function(kv) {
-      var id = kv[0], count = kv[1];
-      var t = terr(parseInt(id));
-      html += '<div class="order-item"><span>+' + count + ' to ' + (t?t.name:id) + '</span><button class="remove-btn" onclick="removeDeploy(' + id + ')">x</button></div>';
-    });
+function renderOrdersPanel(pp, cp) {
+  // Phase header with deploy counter
+  let subText = '';
+  if (selectedSource !== null && pendingTarget === null) {
+    subText = 'Select target for ' + ((terr(selectedSource)||{}).name||'');
+  } else if (deployLeft > 0 && selectedSource === null) {
+    subText = 'Click your territories to deploy, or select a source to move';
+  } else if (selectedSource === null) {
+    subText = 'Click a territory to select source for move';
   }
-  html += renderBonusInfo();
-  cp.innerHTML = html;
-}
 
-function renderAttackPanel(pp, cp) {
-  pp.innerHTML = '<div class="sb-phase">Move</div>' +
-    '<div class="sb-sub">' + (selectedSource !== null ? 'Select target for ' + ((terr(selectedSource)||{}).name||'') : 'Click a territory to select source') + '</div>' +
-    '<div class="subphase-tabs">' +
-      '<div class="subphase-tab done">Deploy</div>' +
-      '<div class="subphase-tab active">Move</div>' +
-    '</div>';
+  let headerHtml = '<div class="sb-phase">Orders</div>' +
+    '<div class="sb-sub">' + subText + '</div>';
+
+  if (deployLeft > 0) {
+    headerHtml += '<div class="deploy-counter">' + deployLeft + '</div>' +
+      '<div class="deploy-hint">' + deployLeft + ' armies to deploy &mdash; Click +1 | Shift +5 | Right-click -1</div>';
+  }
+
+  pp.innerHTML = headerHtml;
 
   let html = '';
 
-  // Pending army selector
+  // Pending army selector (when choosing armies for attack/transfer)
   if (pendingTarget !== null) {
     const srcT = terr(selectedSource);
     const tgtT = terr(pendingTarget);
     const label = pendingType === 'attack' ? 'Attack' : 'Move';
-    html += '<div style="font-size:12px;margin-bottom:4px;color:var(--text2)">' + label + ': ' + (srcT?srcT.name:'?') + ' -> ' + (tgtT?tgtT.name:'?') + '</div>' +
+    html += '<div style="font-size:12px;margin-bottom:4px;color:var(--text2)">' + label + ': ' + (srcT?srcT.name:'?') + ' \u2192 ' + (tgtT?tgtT.name:'?') + '</div>' +
       '<div class="army-selector">' +
         '<button onclick="adjustPending(-1)">-</button>' +
         '<span class="army-count">' + pendingArmies + '</span>' +
@@ -1000,17 +987,33 @@ function renderAttackPanel(pp, cp) {
       '</div>';
   }
 
-  // Order list
+  // Unified order list: deploys + attacks/transfers in creation order
   html += '<h3 style="margin-top:8px">Orders</h3>';
-  if (orders.length === 0) {
-    html += '<div style="font-size:12px;color:var(--text3)">No orders queued</div>';
+
+  const deployEntries = Object.entries(deploys).filter(function(kv) { return kv[1] > 0; });
+  const hasAnyOrders = deployEntries.length > 0 || orders.length > 0;
+
+  if (!hasAnyOrders) {
+    html += '<div style="font-size:12px;color:var(--text3)">No orders yet</div>';
   } else {
+    // Show deploy orders first
+    deployEntries.forEach(function(kv) {
+      var id = kv[0], count = kv[1];
+      var t = terr(parseInt(id));
+      html += '<div class="order-item"><span>\u2795 Deploy +' + count + ' to ' + (t?t.name:id) + '</span><button class="remove-btn" onclick="removeDeploy(' + id + ')">\u2715</button></div>';
+    });
+    // Then attack/transfer orders
     orders.forEach(function(o, i) {
       var icon = o.type === 'attack' ? '\u2694' : '\u2192';
       var fromT = terr(o.from);
       var toT = terr(o.to);
-      html += '<div class="order-item"><span>' + icon + ': ' + (fromT?fromT.name:o.from) + ' -> ' + (toT?toT.name:o.to) + ' (' + o.armies + ')</span><button class="remove-btn" onclick="removeOrder(' + i + ')">x</button></div>';
+      html += '<div class="order-item"><span>' + icon + ' ' + (fromT?fromT.name:o.from) + ' \u2192 ' + (toT?toT.name:o.to) + ' (' + o.armies + ')</span><button class="remove-btn" onclick="removeOrder(' + i + ')">\u2715</button></div>';
     });
+  }
+
+  // Undeployed warning
+  if (deployLeft > 0) {
+    html += '<div class="undeployed-warning">' + deployLeft + ' armies undeployed</div>';
   }
 
   html += '<button class="btn btn-green" style="margin-top:12px" onclick="endTurn()">End Turn</button>';
@@ -1115,6 +1118,82 @@ async function confirmPicks() {
   }
 }
 
+// ========== UNIFIED ORDERS CLICK ==========
+function onOrdersClick(id, e) {
+  // If pending army selector is open, ignore map clicks
+  if (pendingTarget !== null) return;
+
+  // Alt-click to remove deploys
+  if (e.altKey && isOwned(id)) {
+    onDeployRightClick(id);
+    return;
+  }
+
+  if (selectedSource === null) {
+    // No source selected
+    if (isOwned(id)) {
+      if (deployLeft > 0) {
+        // Deploy to this territory
+        onDeployClick(id, e);
+      } else {
+        // Select as source for attack/transfer
+        if (availableArmies(id) <= 0) { toast('No armies available', 'error'); return; }
+        selectedSource = id;
+        playSound('tick');
+        updateMap();
+        renderSidebar();
+      }
+    } else {
+      // Clicked enemy/neutral with no source
+      toast('Select your territory first', 'error');
+    }
+  } else {
+    // Source is selected
+    if (selectedSource === id) {
+      // Deselect
+      selectedSource = null;
+      updateMap();
+      renderSidebar();
+    } else {
+      // Attempt to target
+      const src = terr(selectedSource);
+      if (!src || !src.adjacent.includes(id)) {
+        // Not adjacent — if owned, either deploy or select as new source
+        if (isOwned(id)) {
+          if (deployLeft > 0) {
+            selectedSource = null;
+            onDeployClick(id, e);
+          } else if (availableArmies(id) > 0) {
+            selectedSource = id;
+            playSound('tick');
+          } else {
+            selectedSource = null;
+          }
+        } else {
+          selectedSource = null;
+        }
+        updateMap();
+        renderSidebar();
+        return;
+      }
+      // Adjacent target
+      const tgt = terr(id);
+      if (!tgt) return;
+
+      const max = availableArmies(selectedSource);
+      if (max <= 0) { toast('No armies available', 'error'); selectedSource = null; updateMap(); renderSidebar(); return; }
+
+      pendingTarget = id;
+      pendingType = (tgt.owner === 0) ? 'transfer' : 'attack';
+      pendingArmies = max;
+      pendingMax = max;
+      playSound('tick');
+      updateMap();
+      renderSidebar();
+    }
+  }
+}
+
 // ========== DEPLOY ==========
 function onDeployClick(id, e) {
   if (!isOwned(id)) return;
@@ -1130,18 +1209,6 @@ function onDeployClick(id, e) {
   playSound('deploy');
   updateMap();
   renderSidebar();
-
-  // Auto advance when all deployed
-  if (deployLeft <= 0) {
-    setTimeout(() => {
-      phase = 'attack';
-      selectedSource = null;
-      pendingTarget = null;
-      updateMap();
-      renderSidebar();
-      flash('Move Phase', 500);
-    }, 300);
-  }
 }
 
 function onDeployRightClick(id) {
@@ -1163,56 +1230,6 @@ function removeDeploy(id) {
 }
 
 // ========== ATTACK/TRANSFER ==========
-function onAttackClick(id) {
-  if (pendingTarget !== null) {
-    // Pending army selector open, ignore map clicks
-    return;
-  }
-
-  if (selectedSource === null) {
-    // Select source
-    if (!isOwned(id)) return;
-    if (availableArmies(id) <= 0) { toast('No armies available', 'error'); return; }
-    selectedSource = id;
-    playSound('tick');
-    updateMap();
-    renderSidebar();
-  } else if (selectedSource === id) {
-    // Deselect
-    selectedSource = null;
-    updateMap();
-    renderSidebar();
-  } else {
-    // Select target
-    const src = terr(selectedSource);
-    if (!src || !src.adjacent.includes(id)) {
-      // Not adjacent - select new source if owned
-      if (isOwned(id) && availableArmies(id) > 0) {
-        selectedSource = id;
-        playSound('tick');
-      } else {
-        selectedSource = null;
-      }
-      updateMap();
-      renderSidebar();
-      return;
-    }
-    const tgt = terr(id);
-    if (!tgt) return;
-
-    const max = availableArmies(selectedSource);
-    if (max <= 0) { toast('No armies available', 'error'); selectedSource = null; updateMap(); renderSidebar(); return; }
-
-    pendingTarget = id;
-    pendingType = (tgt.owner === 0) ? 'transfer' : 'attack';
-    pendingArmies = max;
-    pendingMax = max;
-    playSound('tick');
-    updateMap();
-    renderSidebar();
-  }
-}
-
 function adjustPending(delta) {
   pendingArmies = Math.max(1, Math.min(pendingMax, pendingArmies + delta));
   renderSidebar();
@@ -1309,7 +1326,7 @@ async function endTurn() {
   orders = [];
   selectedSource = null;
   pendingTarget = null;
-  window._lastTurn = null; // Force deploy re-init on next fetchState
+  window._lastTurn = null; // Force orders re-init on next fetchState
   resolving = false;
 
   await fetchState();
@@ -1467,20 +1484,14 @@ function onTerritoryClick(id, e) {
   if (resolving) return;
   if (phase === 'picking') {
     onPickClick(id);
-  } else if (phase === 'deploy') {
-    if (e.altKey) {
-      onDeployRightClick(id);
-    } else {
-      onDeployClick(id, e);
-    }
-  } else if (phase === 'attack') {
-    onAttackClick(id);
+  } else if (phase === 'orders') {
+    onOrdersClick(id, e);
   }
 }
 
 function onTerritoryRightClick(id) {
   if (resolving) return;
-  if (phase === 'deploy') {
+  if (phase === 'orders') {
     onDeployRightClick(id);
   }
 }
@@ -1496,7 +1507,7 @@ document.addEventListener('keydown', e => {
     updateMap();
     renderSidebar();
   }
-  if (key === 'enter' && phase === 'attack') {
+  if (key === 'enter' && phase === 'orders') {
     endTurn();
   }
   if (key === 'n') {
@@ -1504,14 +1515,6 @@ document.addEventListener('keydown', e => {
   }
   if (key === 'm') {
     toggleMute();
-  }
-  if ((key === '1' || key === 'd') && G && G.phase === 'play' && phase === 'attack') {
-    // Can't go back to deploy in current turn
-  }
-  if ((key === '2' || key === 'a' || key === '3' || key === 't') && phase === 'deploy' && deployLeft <= 0) {
-    phase = 'attack';
-    updateMap();
-    renderSidebar();
   }
 });
 

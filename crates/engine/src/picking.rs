@@ -148,4 +148,164 @@ mod tests {
         let order = snake_draft_order(5);
         assert_eq!(order, vec![0, 1, 1, 0, 0]);
     }
+
+    #[test]
+    fn test_snake_draft_order_various_sizes() {
+        // 0 picks
+        assert_eq!(snake_draft_order(0), Vec::<usize>::new());
+        // 1 pick: just A
+        assert_eq!(snake_draft_order(1), vec![0]);
+        // 2 picks: A, B
+        assert_eq!(snake_draft_order(2), vec![0, 1]);
+        // 3 picks: A, B, B
+        assert_eq!(snake_draft_order(3), vec![0, 1, 1]);
+        // 4 picks: A, B, B, A
+        assert_eq!(snake_draft_order(4), vec![0, 1, 1, 0]);
+        // 12 picks: 3 full cycles
+        let order = snake_draft_order(12);
+        assert_eq!(order, vec![0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0]);
+        // Each player gets exactly 6 picks
+        assert_eq!(order.iter().filter(|&&s| s == 0).count(), 6);
+        assert_eq!(order.iter().filter(|&&s| s == 1).count(), 6);
+    }
+
+    #[test]
+    fn test_resolve_picks_contested() {
+        use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+        // Map with 6 territories, 2 bonuses, num_picks=2.
+        let map = Map {
+            id: "contest".into(),
+            name: "Contest".into(),
+            territories: (0..6)
+                .map(|i| Territory {
+                    id: i,
+                    name: format!("T{}", i),
+                    bonus_id: i / 3,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: if i == 0 { vec![1] }
+                        else if i == 5 { vec![4] }
+                        else { vec![i - 1, i + 1] },
+                    visual: None,
+                })
+                .collect(),
+            bonuses: vec![
+                Bonus { id: 0, name: "A".into(), value: 3, territory_ids: vec![0, 1, 2], visual: None },
+                Bonus { id: 1, name: "B".into(), value: 3, territory_ids: vec![3, 4, 5], visual: None },
+            ],
+            picking: PickingConfig { num_picks: 2, method: PickingMethod::RandomWarlords },
+            settings: MapSettings {
+                luck_pct: 0, base_income: 5, wasteland_armies: 10,
+                unpicked_neutral_armies: 4, fog_of_war: true,
+                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+            },
+        };
+
+        let mut state = GameState::new(&map);
+        // Both players submit identical pick lists.
+        let picks = vec![0, 1, 2, 3, 4, 5];
+        resolve_picks(&mut state, [&picks, &picks], &map);
+
+        // Each player should get exactly 2 territories.
+        assert_eq!(state.territory_count_for(0), 2);
+        assert_eq!(state.territory_count_for(1), 2);
+        // No territory should be owned by both.
+        for tid in 0..6 {
+            let owner = state.territory_owners[tid];
+            if owner != NEUTRAL {
+                assert!(owner == 0 || owner == 1);
+            }
+        }
+    }
+
+    #[test]
+    fn test_all_assigned_get_starting_armies() {
+        use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+        let map = Map {
+            id: "test".into(),
+            name: "Test".into(),
+            territories: (0..8)
+                .map(|i| Territory {
+                    id: i,
+                    name: format!("T{}", i),
+                    bonus_id: i / 4,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: if i == 0 { vec![1] }
+                        else if i == 7 { vec![6] }
+                        else { vec![i - 1, i + 1] },
+                    visual: None,
+                })
+                .collect(),
+            bonuses: vec![
+                Bonus { id: 0, name: "A".into(), value: 3, territory_ids: vec![0, 1, 2, 3], visual: None },
+                Bonus { id: 1, name: "B".into(), value: 3, territory_ids: vec![4, 5, 6, 7], visual: None },
+            ],
+            picking: PickingConfig { num_picks: 3, method: PickingMethod::RandomWarlords },
+            settings: MapSettings {
+                luck_pct: 0, base_income: 5, wasteland_armies: 10,
+                unpicked_neutral_armies: 4, fog_of_war: true,
+                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+            },
+        };
+
+        let mut state = GameState::new(&map);
+        let picks_a = vec![0, 1, 2];
+        let picks_b = vec![4, 5, 6];
+        resolve_picks(&mut state, [&picks_a, &picks_b], &map);
+
+        // Every assigned territory should have exactly STARTING_ARMIES (5).
+        for tid in 0..8 {
+            if state.territory_owners[tid] != NEUTRAL {
+                assert_eq!(
+                    state.territory_armies[tid], STARTING_ARMIES,
+                    "Territory {} owned by {} should have {} armies, got {}",
+                    tid, state.territory_owners[tid], STARTING_ARMIES, state.territory_armies[tid]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_random_fallback_for_insufficient_picks() {
+        use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+        let map = Map {
+            id: "fallback".into(),
+            name: "Fallback".into(),
+            territories: (0..6)
+                .map(|i| Territory {
+                    id: i,
+                    name: format!("T{}", i),
+                    bonus_id: i / 3,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: if i == 0 { vec![1] }
+                        else if i == 5 { vec![4] }
+                        else { vec![i - 1, i + 1] },
+                    visual: None,
+                })
+                .collect(),
+            bonuses: vec![
+                Bonus { id: 0, name: "A".into(), value: 3, territory_ids: vec![0, 1, 2], visual: None },
+                Bonus { id: 1, name: "B".into(), value: 3, territory_ids: vec![3, 4, 5], visual: None },
+            ],
+            picking: PickingConfig { num_picks: 2, method: PickingMethod::RandomWarlords },
+            settings: MapSettings {
+                luck_pct: 0, base_income: 5, wasteland_armies: 10,
+                unpicked_neutral_armies: 4, fog_of_war: true,
+                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+            },
+        };
+
+        let mut state = GameState::new(&map);
+        // Player A submits only 1 pick, player B submits 0 picks.
+        let picks_a: Vec<usize> = vec![0];
+        let picks_b: Vec<usize> = vec![];
+        resolve_picks(&mut state, [&picks_a, &picks_b], &map);
+
+        // Both players should still get their quota via random fallback.
+        assert_eq!(state.territory_count_for(0), 2);
+        assert_eq!(state.territory_count_for(1), 2);
+        assert_eq!(state.phase, Phase::Play);
+    }
 }

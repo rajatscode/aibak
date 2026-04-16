@@ -127,5 +127,69 @@ mod tests {
         assert_eq!(filtered.territory_armies[0], 5);
     }
 
+    use crate::cards::Card;
     use crate::state::GameState;
+
+    #[test]
+    fn test_visibility_union_of_owned_territories() {
+        let map = test_map();
+        let mut state = GameState::new(&map);
+        // Player 0 owns territories 0 and 3 (opposite ends of the line).
+        state.territory_owners[0] = 0;
+        state.territory_owners[3] = 0;
+
+        let vis = visible_territories(&state, 0, &map);
+        // From 0: sees 0, 1. From 3: sees 2, 3. Union = all 4.
+        assert!(vis.contains(&0));
+        assert!(vis.contains(&1));
+        assert!(vis.contains(&2));
+        assert!(vis.contains(&3));
+        assert_eq!(vis.len(), 4);
+    }
+
+    #[test]
+    fn test_fog_filter_hides_opponent_cards() {
+        let map = test_map();
+        let mut state = GameState::new(&map);
+        state.territory_owners[0] = 0;
+        state.territory_owners[3] = 1;
+        // Give opponent cards and card pieces.
+        state.hands[1] = vec![Card::Reinforcement(5), Card::Blockade];
+        state.card_pieces[1] = 2;
+
+        let filtered = fog_filter(&state, 0, &map);
+        // Opponent's hand should be empty in the filtered view.
+        assert!(filtered.hands[1].is_empty());
+        assert_eq!(filtered.card_pieces[1], 0);
+        // Player's own hand should be preserved.
+        assert_eq!(filtered.hands[0], state.hands[0]);
+    }
+
+    #[test]
+    fn test_visibility_on_small_earth() {
+        use std::path::PathBuf;
+        let maps_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent().unwrap()
+            .parent().unwrap()
+            .join("maps");
+        let map = Map::load(&maps_dir.join("small_earth.json")).expect("load map");
+
+        let mut state = GameState::new(&map);
+        // Player 0 owns Alaska (0) and NW Territory (1).
+        state.territory_owners[0] = 0;
+        state.territory_owners[1] = 0;
+
+        let vis = visible_territories(&state, 0, &map);
+        // Should see owned territories.
+        assert!(vis.contains(&0));
+        assert!(vis.contains(&1));
+        // Should see all neighbors of both.
+        for &owned in &[0, 1] {
+            for &adj in &map.territories[owned].adjacent {
+                assert!(vis.contains(&adj), "should see neighbor {} of territory {}", adj, owned);
+            }
+        }
+        // Should NOT see distant territories like Argentina (12).
+        assert!(!vis.contains(&12));
+    }
 }

@@ -161,4 +161,41 @@ mod tests {
         assert!(r.captured);
         assert_eq!(r.surviving_attackers, 10);
     }
+
+    #[test]
+    fn test_large_army_captures_with_minimal_losses() {
+        // 100 vs 1: 100*0.6=60 kills (capped at 1). 1*0.7=0.7->1 kill.
+        let r = resolve_attack(100, 1, &default_settings());
+        assert!(r.captured);
+        assert_eq!(r.defenders_killed, 1);
+        assert_eq!(r.attackers_killed, 1);
+        assert_eq!(r.surviving_attackers, 99);
+    }
+
+    #[test]
+    fn test_offense_defense_asymmetry() {
+        let s = default_settings();
+        // resolve_attack(a, b) should differ from resolve_attack(b, a) because
+        // offense (0.6) and defense (0.7) kill rates are different.
+        let r1 = resolve_attack(5, 3, &s);
+        let r2 = resolve_attack(3, 5, &s);
+        // In r1: 5 atk -> 3.0->3 kills; 3 def -> 2.1->2 kills. Capture, 3 survive.
+        // In r2: 3 atk -> 1.8->2 kills; 5 def -> 3.5->4 kills. No capture.
+        assert!(r1.captured);
+        assert!(!r2.captured);
+        // The key asymmetry: attacking with 5 captures, but attacking with 3 doesn't.
+        // Same army counts, different outcomes — offense/defense rates matter.
+        assert_ne!(r1.captured, r2.captured);
+    }
+
+    #[test]
+    fn test_zero_defenders_immediate_capture() {
+        let s = default_settings();
+        let r = resolve_attack(5, 0, &s);
+        assert!(r.captured);
+        assert_eq!(r.defenders_killed, 0);
+        assert_eq!(r.attackers_killed, 0);
+        assert_eq!(r.surviving_attackers, 5);
+        assert_eq!(r.surviving_defenders, 0);
+    }
 }

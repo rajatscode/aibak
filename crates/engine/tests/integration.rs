@@ -7,7 +7,7 @@ use strat_engine::ai;
 use strat_engine::combat::resolve_attack;
 use strat_engine::fog::{fog_filter, visible_territories};
 use strat_engine::map::{Map, MapSettings};
-use strat_engine::orders::Order;
+use strat_engine::orders::{Order, validate_orders};
 use strat_engine::picking;
 use strat_engine::state::{GameState, Phase, NEUTRAL};
 use strat_engine::turn::resolve_turn;
