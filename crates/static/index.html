@@ -202,6 +202,24 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #game-over .btn-rematch{background:var(--green);color:#000;border:none;border-radius:8px;padding:14px 40px;font-size:17px;font-weight:800;cursor:pointer;transition:background .15s,transform .15s;letter-spacing:.5px}
 #game-over .btn-rematch:hover{background:#4ade80;transform:translateY(-2px)}
 #game-over .go-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+#game-over .go-social{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+#game-over .go-social button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s}
+#game-over .go-social button:hover{background:var(--border);border-color:var(--text3)}
+#game-over .go-social .btn-share{border-color:var(--blue);color:var(--blue)}
+#game-over .go-social .btn-share:hover{background:rgba(37,99,235,0.15)}
+#game-over .go-social .btn-export{border-color:var(--gold);color:var(--gold)}
+#game-over .go-social .btn-export:hover{background:rgba(227,179,65,0.15)}
+#game-over .go-social .btn-import{border-color:var(--text3);color:var(--text2)}
+#game-over .go-social .btn-import:hover{background:rgba(110,118,129,0.15)}
+#import-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1001}
+#import-overlay.show{display:flex}
+#import-overlay .import-box{background:var(--bg2);border:2px dashed var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:480px;cursor:pointer;transition:border-color .2s}
+#import-overlay .import-box.dragover{border-color:var(--blue)}
+#import-overlay .import-box h3{font-size:20px;margin-bottom:8px}
+#import-overlay .import-box p{color:var(--text2);font-size:13px;margin-bottom:16px}
+#import-overlay .import-box button{padding:10px 24px;font-size:14px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer}
+#import-overlay .import-box button:hover{background:var(--border)}
+#import-overlay .import-close{position:absolute;top:20px;right:20px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
 #game-over .sparkline-container h4{font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px}
 #game-over .analysis-section{margin-top:20px;text-align:left}
 #game-over .analysis-section h3{font-size:14px;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
@@ -398,6 +416,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #game-over .go-actions{flex-direction:column;align-items:stretch}
   #game-over .go-actions button{width:100%}
   #game-over .btn-rematch{padding:10px 20px;font-size:15px}
+  #game-over .go-social{flex-direction:column;align-items:stretch}
+  #game-over .go-social button{width:100%;font-size:12px;padding:8px 12px}
+  #import-overlay .import-box{padding:24px 20px;margin:16px}
   /* KB help overlay */
   #kb-help-overlay .kb-card{padding:20px;max-width:95vw}
   #kb-help-overlay .kb-grid{grid-template-columns:80px 1fr;font-size:12px}
@@ -508,6 +529,21 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <button class="btn btn-gold" style="width:auto;padding:12px 32px" onclick="newGame()">New Map</button>
       <button class="btn btn-primary" style="width:auto;padding:12px 32px" id="go-review-btn" onclick="enterReplayMode()">Review Game</button>
     </div>
+    <div class="go-social">
+      <button class="btn-share" onclick="shareGameResult()">&#128203; Share Result</button>
+      <button class="btn-share" onclick="shareAsImage()">&#128247; Share as Image</button>
+      <button class="btn-export" onclick="exportGame()">&#128190; Export Game</button>
+      <button class="btn-import" onclick="showImportOverlay()">&#128194; Import Game</button>
+    </div>
+  </div>
+</div>
+<div id="import-overlay">
+  <button class="import-close" onclick="hideImportOverlay()">&times;</button>
+  <div class="import-box" id="import-drop-zone">
+    <h3>Import Game</h3>
+    <p>Drag &amp; drop an exported .json file here, or click to browse</p>
+    <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="handleImportFile(this)">
+    <button onclick="document.getElementById('import-file-input').click()">Choose File</button>
   </div>
 </div>
 <div id="template-modal">
@@ -3526,6 +3562,289 @@ function toggleMobileSidebar() {
     currentScale = Math.max(0.5, Math.min(4, currentScale * delta));
     applyTransform();
   }, { passive: false });
+})();
+
+// ========== SHARE & EXPORT ==========
+
+function getMapDisplayName() {
+  if (lastGameSettings && lastGameSettings.template) {
+    var t = lastGameSettings.template;
+    if (t === 'small_earth') return 'Small Earth';
+    if (t === 'mme') return 'Medium Earth';
+    return t.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+  }
+  return 'Custom Map';
+}
+
+function getAiDifficultyName() {
+  if (lastGameSettings && lastGameSettings.settings && lastGameSettings.settings.ai_difficulty) {
+    var d = lastGameSettings.settings.ai_difficulty;
+    return d.charAt(0).toUpperCase() + d.slice(1);
+  }
+  return 'Hard';
+}
+
+function buildTerritoryBar(my, total) {
+  var filled = Math.round((my / Math.max(1, total)) * 15);
+  var bar = '';
+  for (var i = 0; i < 15; i++) {
+    bar += i < filled ? '\u2588' : '\u2591';
+  }
+  return bar;
+}
+
+function shareGameResult() {
+  if (!G) { toast('No game to share', 'error'); return; }
+  var won = G.winner === 0;
+  var turns = gameStats.turnsPlayed || G.turn || 0;
+  var mapName = getMapDisplayName();
+  var difficulty = getAiDifficultyName();
+  var myTerr = G.my_territories || 0;
+  var totalTerr = (G.my_territories || 0) + (G.enemy_territories || 0);
+
+  var startProb = winProbHistory.length > 0 ? Math.round(winProbHistory[0] * 100) : 50;
+  var endProb = won ? 100 : 0;
+
+  var bar = buildTerritoryBar(myTerr, totalTerr);
+
+  var lines = [
+    'strat.club ' + (won ? '\uD83C\uDFC6 Victory' : '\uD83D\uDCA5 Defeat') + ' in ' + turns + ' turns',
+    difficulty + ' ' + mapName + ' | Win Prob: ' + startProb + '% \u2192 ' + endProb + '%',
+    bar + ' ' + myTerr + '/' + totalTerr + ' territories',
+    'Play at strat.club'
+  ];
+  var text = lines.join('\n');
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      toast('Copied to clipboard!', 'success');
+    }).catch(function() {
+      fallbackCopy(text);
+    });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); toast('Copied to clipboard!', 'success'); }
+  catch(e) { toast('Copy failed - select manually', 'error'); }
+  document.body.removeChild(ta);
+}
+
+function shareAsImage() {
+  if (!G) { toast('No game to share', 'error'); return; }
+  var svg = document.getElementById('map-svg');
+  if (!svg) { toast('Map not available', 'error'); return; }
+
+  var won = G.winner === 0;
+  var turns = gameStats.turnsPlayed || G.turn || 0;
+  var mapName = getMapDisplayName();
+  var difficulty = getAiDifficultyName();
+  var myTerr = G.my_territories || 0;
+  var totalTerr = (G.my_territories || 0) + (G.enemy_territories || 0);
+  var startProb = winProbHistory.length > 0 ? Math.round(winProbHistory[0] * 100) : 50;
+
+  // Serialize SVG
+  var serializer = new XMLSerializer();
+  var svgStr = serializer.serializeToString(svg);
+
+  // Create canvas
+  var canvas = document.createElement('canvas');
+  var cw = 1200, ch = 900;
+  canvas.width = cw;
+  canvas.height = ch;
+  var ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Header
+  ctx.fillStyle = won ? '#3fb950' : '#dc2626';
+  ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText((won ? 'Victory' : 'Defeat') + ' in ' + turns + ' turns', cw / 2, 50);
+
+  // Sub-header
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '18px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText(difficulty + ' ' + mapName + ' | ' + myTerr + '/' + totalTerr + ' territories | Start: ' + startProb + '%', cw / 2, 80);
+
+  // Branding
+  ctx.fillStyle = '#e3b341';
+  ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('strat.club', cw / 2, ch - 20);
+
+  // Draw SVG onto canvas
+  var img = new Image();
+  var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  img.onload = function() {
+    var mapY = 100;
+    var mapH = ch - 160;
+    var mapW = Math.min(cw - 40, img.width * (mapH / img.height));
+    var mapX = (cw - mapW) / 2;
+    ctx.drawImage(img, mapX, mapY, mapW, mapH);
+    URL.revokeObjectURL(url);
+
+    canvas.toBlob(function(blob) {
+      if (!blob) { toast('Image generation failed', 'error'); return; }
+      if (navigator.clipboard && window.ClipboardItem) {
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function() {
+          toast('Image copied to clipboard!', 'success');
+        }).catch(function() {
+          downloadBlob(blob, 'strat-club-result.png');
+        });
+      } else {
+        downloadBlob(blob, 'strat-club-result.png');
+      }
+    }, 'image/png');
+  };
+  img.onerror = function() {
+    URL.revokeObjectURL(url);
+    toast('Image generation failed', 'error');
+  };
+  img.src = url;
+}
+
+function downloadBlob(blob, filename) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+  toast('Image downloaded!', 'success');
+}
+
+function exportGame() {
+  // Trigger download via the server endpoint.
+  window.location.href = '/api/game/export';
+  toast('Exporting game...', 'success');
+}
+
+// ========== IMPORT ==========
+
+function showImportOverlay() {
+  document.getElementById('import-overlay').classList.add('show');
+}
+
+function hideImportOverlay() {
+  document.getElementById('import-overlay').classList.remove('show');
+}
+
+function handleImportFile(input) {
+  if (!input.files || !input.files[0]) return;
+  readAndImport(input.files[0]);
+  input.value = ''; // reset so same file can be picked again
+}
+
+function readAndImport(file) {
+  if (!file.name.endsWith('.json')) {
+    toast('Please select a .json file', 'error');
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      importGameData(data);
+    } catch(err) {
+      toast('Invalid JSON file: ' + err.message, 'error');
+    }
+  };
+  reader.onerror = function() { toast('Failed to read file', 'error'); };
+  reader.readAsText(file);
+}
+
+async function importGameData(data) {
+  if (!data.version || !data.map) {
+    toast('Invalid game export file', 'error');
+    return;
+  }
+  hideImportOverlay();
+  toast('Importing game...', '');
+  var res = await api('POST', '/api/game/import', data);
+  if (res) {
+    // Clear local state and fetch the imported game.
+    phase = 'loading';
+    picks = [];
+    deploys = {};
+    orders = [];
+    deployLeft = 0;
+    selectedSource = null;
+    pendingTarget = null;
+    editingOrderIdx = null;
+    resolving = false;
+    winProbHistory = [];
+    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+    document.getElementById('game-over').classList.remove('show');
+    document.getElementById('turn-log').innerHTML = '';
+    await fetchState();
+    // If the imported game is finished, go directly into replay mode.
+    if (G && G.phase === 'finished') {
+      // Populate winProbHistory from the imported data.
+      if (G.win_prob_history && G.win_prob_history.length > 0) {
+        winProbHistory = G.win_prob_history;
+      }
+      toast('Game imported! Entering replay mode.', 'success');
+      enterReplayMode();
+    } else {
+      toast('Game imported!', 'success');
+    }
+  }
+}
+
+// Drag & drop on import overlay
+(function() {
+  var dropZone = document.getElementById('import-drop-zone');
+  if (!dropZone) return;
+  dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.add('dragover');
+  });
+  dropZone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('dragover');
+  });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      readAndImport(e.dataTransfer.files[0]);
+    }
+  });
+})();
+
+// Global drag-and-drop: allow dropping .json anywhere on the game area
+(function() {
+  var body = document.body;
+  body.addEventListener('dragover', function(e) {
+    // Only react if dragging files
+    if (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.indexOf('Files') !== -1) {
+      e.preventDefault();
+    }
+  });
+  body.addEventListener('drop', function(e) {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      var file = e.dataTransfer.files[0];
+      if (file.name.endsWith('.json')) {
+        e.preventDefault();
+        readAndImport(file);
+      }
+    }
+  });
 })();
 
 // ========== INIT ==========

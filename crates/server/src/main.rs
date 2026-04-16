@@ -127,7 +127,7 @@ struct LocalStats {
     pick_choices: Vec<(String, u32)>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct TurnLog {
     turn: u32,
     events: Vec<TurnEvent>,
@@ -874,6 +874,247 @@ async fn get_analysis(State(state): State<AppState>) -> Json<serde_json::Value> 
     }))
 }
 
+/// Export the complete game data as a JSON download (for sharing/replay).
+async fn export_game(State(state): State<AppState>) -> impl IntoResponse {
+    let app = state.local.lock().unwrap();
+
+    let map_data = serde_json::to_value(&app.map).unwrap_or_default();
+
+    // Build territory snapshot for current (final) state.
+    let territories_final: Vec<serde_json::Value> = app
+        .map
+        .territories
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            serde_json::json!({
+                "id": i,
+                "name": t.name,
+                "owner": app.game.territory_owners[i],
+                "armies": app.game.territory_armies[i],
+            })
+        })
+        .collect();
+
+    // Build state history snapshots.
+    let state_snapshots: Vec<serde_json::Value> = app
+        .state_history
+        .iter()
+        .enumerate()
+        .map(|(idx, gs)| {
+            let terrs: Vec<serde_json::Value> = (0..gs.territory_owners.len())
+                .map(|i| {
+                    serde_json::json!({
+                        "id": i,
+                        "owner": gs.territory_owners[i],
+                        "armies": gs.territory_armies[i],
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "turn": idx,
+                "phase": match gs.phase {
+                    Phase::Picking => "picking",
+                    Phase::Play => "play",
+                    Phase::Finished => "finished",
+                },
+                "territories": terrs,
+            })
+        })
+        .collect();
+
+    let export = serde_json::json!({
+        "version": 1,
+        "exported_at": chrono::Utc::now().to_rfc3339(),
+        "app": "strat.club",
+        "map": map_data,
+        "game": {
+            "turn": app.game.turn,
+            "phase": match app.game.phase {
+                Phase::Picking => "picking",
+                Phase::Play => "play",
+                Phase::Finished => "finished",
+            },
+            "winner": app.game.winner,
+            "territories_final": territories_final,
+        },
+        "turn_history": app.turn_history,
+        "state_history": state_snapshots,
+        "win_prob_history": app.win_prob_history,
+        "ai_strength": format!("{:?}", app.ai_strength),
+    });
+
+    let json_str = serde_json::to_string_pretty(&export).unwrap_or_default();
+    let filename = format!(
+        "strat-club-{}-turn{}.json",
+        app.map.name.to_lowercase().replace(' ', "-"),
+        app.game.turn
+    );
+
+    (
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/json".to_string(),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{}\"", filename),
+            ),
+        ],
+        json_str,
+    )
+}
+
+/// Import a previously exported game for replay.
+async fn import_game(
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<ActionResult>, (StatusCode, String)> {
+    // Validate the import data.
+    let version = body
+        .get("version")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    if version != 1 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Unsupported export version".to_string(),
+        ));
+    }
+
+    // Parse the map.
+    let map_val = body
+        .get("map")
+        .ok_or((StatusCode::BAD_REQUEST, "Missing map data".to_string()))?;
+    let map: Map = serde_json::from_value(map_val.clone())
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid map data: {}", e)))?;
+
+    // Parse turn history.
+    let turn_history: Vec<TurnLog> = body
+        .get("turn_history")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    // Parse win prob history.
+    let win_prob_history: Vec<f64> = body
+        .get("win_prob_history")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    // Parse state history snapshots back into GameState objects.
+    let mut state_history: Vec<GameState> = Vec::new();
+    if let Some(snapshots) = body.get("state_history").and_then(|v| v.as_array()) {
+        for snap in snapshots {
+            let terrs = snap
+                .get("territories")
+                .and_then(|v| v.as_array())
+                .ok_or((
+                    StatusCode::BAD_REQUEST,
+                    "Invalid state history".to_string(),
+                ))?;
+            let mut owners: Vec<u8> = vec![NEUTRAL; map.territory_count()];
+            let mut armies: Vec<u32> = vec![0; map.territory_count()];
+            for t in terrs {
+                let id = t.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                if id < owners.len() {
+                    owners[id] = t
+                        .get("owner")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(255)
+                        as u8;
+                    armies[id] =
+                        t.get("armies").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                }
+            }
+            let phase_str = snap
+                .get("phase")
+                .and_then(|v| v.as_str())
+                .unwrap_or("play");
+            let phase = match phase_str {
+                "picking" => Phase::Picking,
+                "finished" => Phase::Finished,
+                _ => Phase::Play,
+            };
+            state_history.push(GameState {
+                territory_owners: owners,
+                territory_armies: armies,
+                turn: snap.get("turn").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                phase,
+                hands: [Vec::new(), Vec::new()],
+                card_pieces: [0; 2],
+                alive: [true; 2],
+                winner: None,
+            });
+        }
+    }
+
+    // Build the final game state from export.
+    let game_data = body
+        .get("game")
+        .ok_or((StatusCode::BAD_REQUEST, "Missing game data".to_string()))?;
+    let final_turn = game_data
+        .get("turn")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+    let winner = game_data
+        .get("winner")
+        .and_then(|v| v.as_u64())
+        .map(|w| w as u8);
+    let final_phase = game_data
+        .get("phase")
+        .and_then(|v| v.as_str())
+        .unwrap_or("finished");
+
+    let mut final_state = GameState::new(&map);
+    final_state.turn = final_turn;
+    final_state.phase = match final_phase {
+        "picking" => Phase::Picking,
+        "play" => Phase::Play,
+        _ => Phase::Finished,
+    };
+    final_state.winner = winner;
+
+    // Apply final territory data if available.
+    if let Some(terrs) = game_data
+        .get("territories_final")
+        .and_then(|v| v.as_array())
+    {
+        for t in terrs {
+            let id = t.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            if id < final_state.territory_owners.len() {
+                final_state.territory_owners[id] = t
+                    .get("owner")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(255)
+                    as u8;
+                final_state.territory_armies[id] =
+                    t.get("armies").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            }
+        }
+    }
+
+    // Apply to local state.
+    let mut app = state.local.lock().unwrap();
+    let map_name = map.name.clone();
+    app.map = map;
+    app.game = final_state;
+    app.rng = StdRng::from_entropy();
+    app.pick_options = Vec::new();
+    app.turn_history = turn_history;
+    app.state_history = state_history;
+    app.win_prob_history = win_prob_history;
+    app.starting_territories.clear();
+    app.max_simultaneous_bonuses = 0;
+
+    Ok(Json(ActionResult {
+        success: true,
+        message: format!("Imported game on {}", map_name),
+        events: Vec::new(),
+        new_achievements: Vec::new(),
+    }))
+}
+
 async fn get_post_analysis(State(state): State<AppState>) -> Json<serde_json::Value> {
     let app = state.local.lock().unwrap();
 
@@ -1218,6 +1459,8 @@ async fn main() {
         .route("/api/game/replay/{turn}", get(get_replay_turn))
         .route("/api/game/analysis", get(get_analysis))
         .route("/api/game/post-analysis", get(get_post_analysis))
+        .route("/api/game/export", get(export_game))
+        .route("/api/game/import", post(import_game))
         .route("/api/difficulty", post(set_difficulty))
         .route("/api/stats", get(get_local_stats))
         .route("/api/achievements", get(get_achievements))
