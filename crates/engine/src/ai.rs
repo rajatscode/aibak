@@ -1,6 +1,7 @@
 //! AI order generation with multiple strength levels (easy, medium, hard).
 //! Includes greedy heuristic planning and MCTS-based search.
 
+use std::collections::VecDeque;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -132,7 +133,7 @@ pub fn generate_orders_with_profile(
     let mut orders = Vec::new();
     let opp = 1 - player;
 
-    // ========== ENDGAME DETECTION ==========
+    // ========== SITUATION ASSESSMENT ==========
     let my_territory_count = state.territory_count_for(player);
     let opp_territory_count = state.territory_count_for(opp);
     let total_territories = map.territory_count();
@@ -151,14 +152,57 @@ pub fn generate_orders_with_profile(
     };
     let endgame = my_share > 0.60;
     let dominant = territory_ratio >= 2.0 || income_ratio >= 3.0;
+    let behind = territory_ratio < 0.7 || income_ratio < 0.6;
+    let is_opening = state.turn <= 3;
 
-    // ========== ANALYZE BONUSES ==========
+    // ========== ANALYZE BONUSES (own + opponent) ==========
     // Score each bonus by completion proximity and strategic value
     let mut bonus_priorities: Vec<BonusTarget> = Vec::new();
+    // Track opponent near-complete bonuses for counter-expansion
+    let mut counter_targets: Vec<(usize, f64)> = Vec::new(); // (territory_id, priority)
+
     for bonus in &map.bonuses {
         if bonus.value == 0 {
             continue;
         }
+
+        // --- Counter-expansion: detect opponent near-complete bonuses ---
+        let opp_owned_in_bonus: Vec<usize> = bonus
+            .territory_ids
+            .iter()
+            .copied()
+            .filter(|&tid| state.territory_owners[tid] == opp)
+            .collect();
+        let opp_missing: Vec<usize> = bonus
+            .territory_ids
+            .iter()
+            .copied()
+            .filter(|&tid| state.territory_owners[tid] != opp)
+            .collect();
+        // If opponent owns all-but-one (or all-but-two) in a bonus, those missing
+        // territories become high-priority attack targets to deny the bonus.
+        if !opp_owned_in_bonus.is_empty()
+            && opp_missing.len() <= 2
+            && opp_missing.len() < bonus.territory_ids.len()
+        {
+            for &tid in &opp_missing {
+                // Only relevant if we can reach it (adjacent to something we own)
+                let reachable = map.territories[tid]
+                    .adjacent
+                    .iter()
+                    .any(|&adj| state.territory_owners[adj] == player);
+                // Also relevant if we already own it (defend it)
+                let we_own = state.territory_owners[tid] == player;
+                if reachable || we_own {
+                    // Higher priority for more valuable bonuses and closer-to-complete
+                    let urgency = if opp_missing.len() == 1 { 2.0 } else { 1.0 };
+                    let priority = bonus.value as f64 * urgency;
+                    counter_targets.push((tid, priority));
+                }
+            }
+        }
+
+        // --- Own bonus completion analysis ---
         let owned: Vec<usize> = bonus
             .territory_ids
             .iter()
@@ -207,14 +251,19 @@ pub fn generate_orders_with_profile(
         };
 
         // Penalize bonuses the opponent is also contesting
-        let opp_owned = bonus
-            .territory_ids
-            .iter()
-            .filter(|&&tid| state.territory_owners[tid] == opp)
-            .count();
+        let opp_owned = opp_owned_in_bonus.len();
         let contest_penalty = if opp_owned > 0 { 0.5 } else { 1.0 };
 
-        let score = (completion * 4.0 + efficiency * 2.0 + affordable.min(3.0)) * contest_penalty;
+        let mut score =
+            (completion * 4.0 + efficiency * 2.0 + affordable.min(3.0)) * contest_penalty;
+
+        // Opening strategy (improvement #4): in first 3 turns, heavily boost
+        // the bonus requiring fewest captures so we focus on completing it.
+        if is_opening {
+            let captures_needed = missing.len();
+            // Fewer captures needed = much higher score
+            score += 10.0 / (captures_needed as f64 + 0.5);
+        }
 
         bonus_priorities.push(BonusTarget {
             bonus_id: bonus.id,
@@ -224,6 +273,7 @@ pub fn generate_orders_with_profile(
         });
     }
     bonus_priorities.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+    counter_targets.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
     // ========== PLAN ATTACKS ==========
     // Build attack chain: try to capture multiple territories in sequence
@@ -271,60 +321,143 @@ pub fn generate_orders_with_profile(
         }
     }
 
-    // Second pass: look for any other easy captures (2-army neutrals)
-    for tid in 0..map.territory_count() {
-        if sim_owners[tid] == player {
-            continue;
+    // Counter-expansion pass: attack territories that would deny opponent bonuses.
+    for &(target, priority) in &counter_targets {
+        if sim_owners[target] == player {
+            continue; // We already own it — good, it's denied
         }
-        if sim_armies[tid] > 3 || sim_armies[tid] == 0 {
-            continue; // Not easy or empty
-        }
-        let source = map.territories[tid]
+        let source = map.territories[target]
             .adjacent
             .iter()
             .copied()
-            .filter(|&adj| sim_owners[adj] == player && sim_armies[adj] > 1)
+            .filter(|&adj| sim_owners[adj] == player)
             .max_by_key(|&adj| sim_armies[adj]);
 
         if let Some(src) = source {
+            if sim_armies[src] <= 1 {
+                continue;
+            }
             let attackers = sim_armies[src] - 1;
-            let defenders = sim_armies[tid];
+            let defenders = sim_armies[target];
             if defenders == 0 || attackers == 0 {
                 continue;
             }
             let result = resolve_attack(attackers, defenders, &map.settings);
 
-            if result.captured && !attack_plan.iter().any(|a| a.from == src) {
+            if result.captured && !attack_plan.iter().any(|a| a.to == target) {
                 attack_plan.push(PlannedAttack {
                     from: src,
-                    to: tid,
+                    to: target,
                     armies: attackers,
-                    priority: 1.0,
+                    priority: priority + 5.0, // High priority for counter-expansion
                 });
                 sim_armies[src] = 1;
-                sim_armies[tid] = result.surviving_attackers;
-                sim_owners[tid] = player;
+                sim_armies[target] = result.surviving_attackers;
+                sim_owners[target] = player;
             }
         }
     }
 
-    // ========== DECIDE DEPLOYMENT ==========
-    // In endgame mode, spread deployment across border territories.
-    // Otherwise deploy to the best attack source or most threatened border.
+    // Second pass: look for any other easy captures (skip in opening — stay focused)
+    if !is_opening {
+        for tid in 0..map.territory_count() {
+            if sim_owners[tid] == player {
+                continue;
+            }
+            if sim_armies[tid] > 3 || sim_armies[tid] == 0 {
+                continue; // Not easy or empty
+            }
+            let source = map.territories[tid]
+                .adjacent
+                .iter()
+                .copied()
+                .filter(|&adj| sim_owners[adj] == player && sim_armies[adj] > 1)
+                .max_by_key(|&adj| sim_armies[adj]);
+
+            if let Some(src) = source {
+                let attackers = sim_armies[src] - 1;
+                let defenders = sim_armies[tid];
+                if defenders == 0 || attackers == 0 {
+                    continue;
+                }
+                let result = resolve_attack(attackers, defenders, &map.settings);
+
+                if result.captured && !attack_plan.iter().any(|a| a.from == src) {
+                    attack_plan.push(PlannedAttack {
+                        from: src,
+                        to: tid,
+                        armies: attackers,
+                        priority: 1.0,
+                    });
+                    sim_armies[src] = 1;
+                    sim_armies[tid] = result.surviving_attackers;
+                    sim_owners[tid] = player;
+                }
+            }
+        }
+    }
+
+    // ========== DECIDE DEPLOYMENT (Stack vs Spread — improvement #2) ==========
+    // Decision factors:
+    // - Behind: stack on one front for a breakthrough
+    // - Ahead/dominant: spread to defend completed bonuses
+    // - Even: stack toward the most valuable incomplete bonus
+    // - Opening: always stack toward nearest bonus completion
+    // - Counter-expansion: if there's a high-priority counter target, consider deploying there
+
     let deploy_target = if endgame {
         // Deploy to the border territory that can reach the most enemy territories.
         find_best_endgame_deploy(state, player, map)
             .unwrap_or_else(|| find_most_threatened_border(state, player, map).unwrap_or(0))
-    } else if let Some(best) = attack_plan.first() {
-        best.from
+    } else if is_opening || behind {
+        // Stack: concentrate all income on the single best attack source.
+        // In opening, this means the territory closest to completing our best bonus.
+        // When behind, this means a breakthrough point.
+        if let Some(best) = attack_plan.first() {
+            best.from
+        } else if let Some(&(counter_tid, _)) = counter_targets.first() {
+            // Deploy near a counter-expansion target
+            map.territories[counter_tid]
+                .adjacent
+                .iter()
+                .copied()
+                .find(|&adj| state.territory_owners[adj] == player)
+                .unwrap_or_else(|| find_most_threatened_border(state, player, map).unwrap_or(0))
+        } else {
+            find_most_threatened_border(state, player, map).unwrap_or(0)
+        }
+    } else if dominant {
+        // Spread: deploy to the most threatened border to defend bonuses.
+        // But if there's a counter-expansion opportunity, prioritize that.
+        if let Some(&(counter_tid, prio)) = counter_targets.first() {
+            if prio >= 4.0 {
+                // High-value counter target — deploy adjacent to it
+                map.territories[counter_tid]
+                    .adjacent
+                    .iter()
+                    .copied()
+                    .find(|&adj| state.territory_owners[adj] == player)
+                    .unwrap_or_else(|| {
+                        find_most_threatened_border(state, player, map).unwrap_or(0)
+                    })
+            } else {
+                find_most_threatened_border(state, player, map).unwrap_or(0)
+            }
+        } else {
+            find_most_threatened_border(state, player, map).unwrap_or(0)
+        }
     } else {
-        // No attacks — deploy defensively on most threatened border
-        find_most_threatened_border(state, player, map).unwrap_or_else(|| {
-            // Fallback: first owned territory
-            (0..map.territory_count())
-                .find(|&tid| state.territory_owners[tid] == player)
-                .unwrap_or(0)
-        })
+        // Even: stack toward the best attack if we have one, else toward
+        // the most valuable incomplete bonus
+        if let Some(best) = attack_plan.first() {
+            best.from
+        } else {
+            find_most_threatened_border(state, player, map).unwrap_or_else(|| {
+                (0..map.territory_count())
+                    .find(|&tid| state.territory_owners[tid] == player)
+                    .unwrap_or(0)
+            })
+        }
     };
 
     orders.push(Order::Deploy {
@@ -346,7 +479,7 @@ pub fn generate_orders_with_profile(
     // Re-evaluate attacks with new army counts
     attack_plan.clear();
 
-    // Rebuild attack list with deployed armies
+    // Rebuild attack list with deployed armies — bonus completion first
     for bt in &bonus_priorities {
         if attack_count >= max_attacks {
             break;
@@ -392,29 +525,27 @@ pub fn generate_orders_with_profile(
         }
     }
 
-    // Opportunistic attacks on weak neighbors (raise threshold when dominant)
-    let weak_threshold = if dominant || endgame { u32::MAX } else { 3 };
-    for tid in 0..map.territory_count() {
+    // Counter-expansion attacks: deny opponent bonuses
+    for &(target, _priority) in &counter_targets {
         if attack_count >= max_attacks {
             break;
         }
-        if sim_owners[tid] == player || sim_armies[tid] == 0 {
-            continue;
+        if sim_owners[target] == player {
+            continue; // Already own it
         }
-        // In endgame/dominant mode, attack any enemy territory; otherwise only weak ones.
-        if !dominant && !endgame && sim_armies[tid] > weak_threshold {
-            continue;
-        }
-        let source = map.territories[tid]
+        let source = map.territories[target]
             .adjacent
             .iter()
             .copied()
-            .filter(|&adj| sim_owners[adj] == player && !used_sources[adj] && sim_armies[adj] > 1)
+            .filter(|&adj| sim_owners[adj] == player && !used_sources[adj])
             .max_by_key(|&adj| sim_armies[adj]);
 
         if let Some(src) = source {
+            if sim_armies[src] <= 1 {
+                continue;
+            }
             let attackers = sim_armies[src] - 1;
-            let defenders = sim_armies[tid];
+            let defenders = sim_armies[target];
             if defenders == 0 || attackers == 0 {
                 continue;
             }
@@ -423,21 +554,84 @@ pub fn generate_orders_with_profile(
             if result.captured {
                 orders.push(Order::Attack {
                     from: src,
-                    to: tid,
+                    to: target,
                     armies: attackers,
                 });
                 sim_armies[src] = 1;
-                sim_armies[tid] = result.surviving_attackers;
-                sim_owners[tid] = player;
+                sim_armies[target] = result.surviving_attackers;
+                sim_owners[target] = player;
+                used_sources[src] = true;
+                attack_count += 1;
+            } else if is_bonus_denial_worthwhile(target, opp, map, state) {
+                // Improvement #5: attack even if non-capturable when it weakens
+                // a key enemy bonus position
+                orders.push(Order::Attack {
+                    from: src,
+                    to: target,
+                    armies: attackers,
+                });
+                sim_armies[src] = 1;
+                // Don't update sim_owners since we didn't capture
+                let killed = (attackers as f64 * map.settings.offense_kill_rate).round() as u32;
+                sim_armies[target] = sim_armies[target].saturating_sub(killed);
                 used_sources[src] = true;
                 attack_count += 1;
             }
         }
     }
 
+    // Opportunistic attacks on weak neighbors (raise threshold when dominant)
+    // Improvement #5: only attack if capture is possible (or denial is worthwhile)
+    let weak_threshold = if dominant || endgame { u32::MAX } else { 3 };
+    if !is_opening {
+        // Skip opportunistic attacks during opening — stay focused on bonus
+        for tid in 0..map.territory_count() {
+            if attack_count >= max_attacks {
+                break;
+            }
+            if sim_owners[tid] == player || sim_armies[tid] == 0 {
+                continue;
+            }
+            // In endgame/dominant mode, attack any enemy territory; otherwise only weak ones.
+            if !dominant && !endgame && sim_armies[tid] > weak_threshold {
+                continue;
+            }
+            let source = map.territories[tid]
+                .adjacent
+                .iter()
+                .copied()
+                .filter(|&adj| {
+                    sim_owners[adj] == player && !used_sources[adj] && sim_armies[adj] > 1
+                })
+                .max_by_key(|&adj| sim_armies[adj]);
+
+            if let Some(src) = source {
+                let attackers = sim_armies[src] - 1;
+                let defenders = sim_armies[tid];
+                if defenders == 0 || attackers == 0 {
+                    continue;
+                }
+                let result = resolve_attack(attackers, defenders, &map.settings);
+
+                if result.captured {
+                    orders.push(Order::Attack {
+                        from: src,
+                        to: tid,
+                        armies: attackers,
+                    });
+                    sim_armies[src] = 1;
+                    sim_armies[tid] = result.surviving_attackers;
+                    sim_owners[tid] = player;
+                    used_sources[src] = true;
+                    attack_count += 1;
+                }
+                // Improvement #5: don't waste armies on futile attacks
+                // (non-capturable targets that aren't strategically important)
+            }
+        }
+    }
+
     // ========== ENDGAME: ATTACK FROM EVERY BORDER ==========
-    // When in endgame mode (>70% territories), attack from all border territories
-    // that haven't been used yet, even if the attack isn't guaranteed to capture.
     if endgame {
         for tid in 0..map.territory_count() {
             if attack_count >= max_attacks {
@@ -477,36 +671,76 @@ pub fn generate_orders_with_profile(
         }
     }
 
-    // ========== TRANSFERS ==========
-    // Move interior armies toward the front
+    // ========== TRANSFERS (improvement #3: BFS to most threatened border) ==========
+    // Also improvement #6: if no attacks were made, transfer idle armies to
+    // stack on the best border for a future attack.
+    let had_attacks = orders.iter().any(|o| matches!(o, Order::Attack { .. }));
+
     for tid in 0..map.territory_count() {
-        if sim_owners[tid] != player || used_sources[tid] || sim_armies[tid] <= 1 {
+        if sim_owners[tid] != player || sim_armies[tid] <= 1 {
+            continue;
+        }
+        // Skip territories that were used as attack sources
+        if used_sources[tid] {
             continue;
         }
         let is_interior = map.territories[tid]
             .adjacent
             .iter()
             .all(|&adj| sim_owners[adj] == player);
-        if !is_interior {
-            continue;
-        }
-        // Transfer toward the neighbor that borders the most enemies
-        if let Some(&toward) = map.territories[tid].adjacent.iter().max_by_key(|&&adj| {
-            map.territories[adj]
-                .adjacent
-                .iter()
-                .filter(|&&a2| sim_owners[a2] != player)
-                .count()
-        }) {
-            let amount = sim_armies[tid] - 1;
-            if amount > 0 {
-                orders.push(Order::Transfer {
-                    from: tid,
-                    to: toward,
-                    armies: amount,
-                });
-                sim_armies[tid] = 1;
-                sim_armies[toward] += amount;
+
+        if is_interior {
+            // Interior territory: BFS toward the most threatened border
+            if let Some(toward) =
+                bfs_toward_threatened_border(tid, player, map, &sim_owners, &sim_armies)
+            {
+                let amount = sim_armies[tid] - 1;
+                if amount > 0 {
+                    orders.push(Order::Transfer {
+                        from: tid,
+                        to: toward,
+                        armies: amount,
+                    });
+                    sim_armies[tid] = 1;
+                    sim_armies[toward] += amount;
+                }
+            }
+        } else if !had_attacks {
+            // Improvement #6: border territory with no attacks this turn.
+            // Transfer toward the best stacking position (border territory
+            // with highest enemy threat nearby).
+            let best_border = find_best_stack_border(player, map, &sim_owners, &sim_armies);
+            if let Some(dest) = best_border {
+                if dest != tid {
+                    // Only transfer if the destination is adjacent
+                    if map.territories[tid].adjacent.contains(&dest) {
+                        let amount = sim_armies[tid] - 1;
+                        if amount > 0 {
+                            orders.push(Order::Transfer {
+                                from: tid,
+                                to: dest,
+                                armies: amount,
+                            });
+                            sim_armies[tid] = 1;
+                            sim_armies[dest] += amount;
+                        }
+                    } else {
+                        // Not adjacent — BFS one step toward the best border
+                        if let Some(toward) = bfs_toward_target(tid, dest, map, player, &sim_owners)
+                        {
+                            let amount = sim_armies[tid] - 1;
+                            if amount > 0 {
+                                orders.push(Order::Transfer {
+                                    from: tid,
+                                    to: toward,
+                                    armies: amount,
+                                });
+                                sim_armies[tid] = 1;
+                                sim_armies[toward] += amount;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -718,6 +952,162 @@ fn find_most_threatened_border(state: &GameState, player: PlayerId, map: &Map) -
                 best_neutrals = neutrals;
                 best = Some(tid);
             }
+        }
+    }
+    best
+}
+
+/// Check if attacking a territory is worthwhile for bonus denial, even if
+/// capture isn't possible. Returns true if the target is in a bonus the
+/// opponent is close to completing.
+fn is_bonus_denial_worthwhile(
+    target: usize,
+    opp: PlayerId,
+    map: &Map,
+    state: &GameState,
+) -> bool {
+    let bonus = &map.bonuses[map.territories[target].bonus_id];
+    let opp_owned = bonus
+        .territory_ids
+        .iter()
+        .filter(|&&tid| state.territory_owners[tid] == opp)
+        .count();
+    // Worthwhile if opponent owns most of this bonus
+    opp_owned as f64 / bonus.territory_ids.len() as f64 >= 0.5
+}
+
+/// BFS from `start` toward the most threatened border territory, returning
+/// the first step (neighbor of `start`) along the shortest path.
+/// "Most threatened" = border territory facing the highest enemy army total.
+fn bfs_toward_threatened_border(
+    start: usize,
+    player: PlayerId,
+    map: &Map,
+    sim_owners: &[PlayerId],
+    sim_armies: &[u32],
+) -> Option<usize> {
+    // Find the most threatened border territory as the BFS target
+    let mut best_border = None;
+    let mut best_threat = 0u32;
+    for tid in 0..map.territory_count() {
+        if sim_owners[tid] != player {
+            continue;
+        }
+        let is_border = map.territories[tid]
+            .adjacent
+            .iter()
+            .any(|&adj| sim_owners[adj] != player);
+        if !is_border {
+            continue;
+        }
+        let threat: u32 = map.territories[tid]
+            .adjacent
+            .iter()
+            .filter(|&&adj| sim_owners[adj] != player)
+            .map(|&adj| sim_armies[adj])
+            .sum();
+        if threat > best_threat {
+            best_threat = threat;
+            best_border = Some(tid);
+        }
+    }
+
+    let target = best_border?;
+    if target == start {
+        return None;
+    }
+
+    bfs_toward_target(start, target, map, player, sim_owners)
+}
+
+/// BFS from `start` to `target` through friendly territory, returning the
+/// first step (neighbor of `start`) along the shortest path.
+fn bfs_toward_target(
+    start: usize,
+    target: usize,
+    map: &Map,
+    player: PlayerId,
+    sim_owners: &[PlayerId],
+) -> Option<usize> {
+    // BFS from target backward to start (so we can extract the first step)
+    let n = map.territory_count();
+    let mut visited = vec![false; n];
+    let mut parent = vec![usize::MAX; n];
+    let mut queue = VecDeque::new();
+
+    visited[target] = true;
+    queue.push_back(target);
+
+    while let Some(cur) = queue.pop_front() {
+        if cur == start {
+            // parent[start] is the node from which start was discovered in
+            // the BFS from target — that node IS one step closer to target.
+            return Some(parent[start]);
+        }
+        for &adj in &map.territories[cur].adjacent {
+            if visited[adj] {
+                continue;
+            }
+            // Allow traversal through friendly territory (and the start itself)
+            if sim_owners[adj] != player && adj != start {
+                continue;
+            }
+            visited[adj] = true;
+            parent[adj] = cur;
+            queue.push_back(adj);
+        }
+    }
+
+    // Fallback: no path found via friendly territory, just pick neighbor
+    // closest to any border
+    map.territories[start]
+        .adjacent
+        .iter()
+        .copied()
+        .filter(|&adj| sim_owners[adj] == player)
+        .max_by_key(|&adj| {
+            map.territories[adj]
+                .adjacent
+                .iter()
+                .filter(|&&a2| sim_owners[a2] != player)
+                .count()
+        })
+}
+
+/// Find the best border territory to stack armies on: the one facing the
+/// highest total enemy armies (best place to build up for a future attack).
+fn find_best_stack_border(
+    player: PlayerId,
+    map: &Map,
+    sim_owners: &[PlayerId],
+    sim_armies: &[u32],
+) -> Option<usize> {
+    let mut best = None;
+    let mut best_score = 0i64;
+    for tid in 0..map.territory_count() {
+        if sim_owners[tid] != player {
+            continue;
+        }
+        let enemy_neighbors: Vec<usize> = map.territories[tid]
+            .adjacent
+            .iter()
+            .copied()
+            .filter(|&adj| sim_owners[adj] != player)
+            .collect();
+        if enemy_neighbors.is_empty() {
+            continue; // Interior, not a border
+        }
+        // Score: prefer territories adjacent to weak enemies (capturable targets)
+        // and with more enemy neighbors (attack surface)
+        let weakest_enemy: u32 = enemy_neighbors
+            .iter()
+            .map(|&adj| sim_armies[adj])
+            .min()
+            .unwrap_or(u32::MAX);
+        let score = (enemy_neighbors.len() as i64) * 100 - weakest_enemy as i64;
+        if score > best_score || best.is_none() {
+            best_score = score;
+            best = Some(tid);
         }
     }
     best

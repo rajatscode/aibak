@@ -23,6 +23,11 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #topbar .stats .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 #topbar button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px;transition:background .15s}
 #topbar button:hover{background:var(--border)}
+#topbar .btn-quickplay{background:var(--green);color:#000;border-color:var(--green);font-weight:700;padding:4px 14px}
+#topbar .btn-quickplay:hover{background:#4ade80}
+#topbar .session-info{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text3)}
+#topbar .session-info .game-counter{color:var(--text2);font-weight:600}
+#topbar .session-info .session-timer{color:var(--text3)}
 #topbar .controls{display:flex;align-items:center;gap:8px}
 #topbar select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
 
@@ -194,6 +199,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #game-over .stat-item .stat-label{font-size:10px;color:var(--text3);text-transform:uppercase}
 #game-over .stat-item .stat-value{font-size:18px;font-weight:700}
 #game-over .sparkline-container{margin-bottom:20px}
+#game-over .btn-rematch{background:var(--green);color:#000;border:none;border-radius:8px;padding:14px 40px;font-size:17px;font-weight:800;cursor:pointer;transition:background .15s,transform .15s;letter-spacing:.5px}
+#game-over .btn-rematch:hover{background:#4ade80;transform:translateY(-2px)}
+#game-over .go-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 #game-over .sparkline-container h4{font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px}
 #game-over .analysis-section{margin-top:20px;text-align:left}
 #game-over .analysis-section h3{font-size:14px;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
@@ -320,7 +328,12 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <span><span class="dot" style="background:var(--blue)"></span> <strong id="my-terr">0</strong></span>
       <span><span class="dot" style="background:var(--red)"></span> <strong id="enemy-terr">0</strong></span>
     </div>
+    <div class="session-info">
+      <span class="game-counter" id="game-counter"></span>
+      <span class="session-timer" id="session-timer"></span>
+    </div>
     <div class="controls">
+      <button class="btn-quickplay" id="quickplay-btn" onclick="quickPlay()" title="Quick Play (instant new game)">Quick Play</button>
       <select id="difficulty-select" onchange="setDifficulty(this.value)" title="AI Difficulty">
         <option value="easy">Easy</option>
         <option value="medium">Medium</option>
@@ -393,8 +406,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <p id="go-msg"></p>
     <div id="go-stats"></div>
     <div id="go-analysis"></div>
-    <div style="display:flex;gap:12px;justify-content:center">
-      <button class="btn btn-gold" style="width:auto;padding:12px 32px" onclick="newGame()">Play Again</button>
+    <div class="go-actions">
+      <button class="btn-rematch" id="go-rematch-btn" onclick="rematch()">Rematch</button>
+      <button class="btn btn-gold" style="width:auto;padding:12px 32px" onclick="newGame()">New Map</button>
       <button class="btn btn-primary" style="width:auto;padding:12px 32px" id="go-review-btn" onclick="enterReplayMode()">Review Game</button>
     </div>
   </div>
@@ -542,6 +556,12 @@ let gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
 let selectedTemplate = null;
 let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
+
+// ========== SESSION & REMATCH STATE ==========
+let sessionGames = 0;
+let sessionStart = Date.now();
+let lastGameSettings = null; // {template, settings} from last started game
+let sessionTimerInterval = null;
 
 // ========== KEYBOARD FOCUS ==========
 function getOwnedTerritoryIds() {
@@ -861,7 +881,7 @@ async function startGameWithSettings() {
   const aiDiff = document.getElementById('set-ai').value;
   hideTemplateModal();
   playSound('tick');
-  const res = await api('POST', '/api/new', {
+  lastGameSettings = {
     template: selectedTemplate,
     settings: {
       fog_of_war: fog,
@@ -870,7 +890,10 @@ async function startGameWithSettings() {
       num_picks: numPicks,
       ai_difficulty: aiDiff
     }
-  });
+  };
+  sessionGames++;
+  updateSessionDisplay();
+  const res = await api('POST', '/api/new', lastGameSettings);
   if (res) await fetchState();
 }
 
@@ -2395,6 +2418,116 @@ async function newGame() {
   showTemplateModal();
 }
 
+// ========== REMATCH & QUICK PLAY ==========
+async function rematch() {
+  if (!lastGameSettings) {
+    toast('No previous game settings — starting new game', 'error');
+    newGame();
+    return;
+  }
+  // Clean up any active state
+  if (replayMode) {
+    replayMode = false;
+    replayStopAutoPlay();
+    replayCache = {};
+    document.getElementById('replay-stepper').style.display = 'none';
+    document.getElementById('replay-sparkline').style.display = 'none';
+    document.getElementById('replay-log').style.display = 'none';
+    document.getElementById('phase-panel').style.display = '';
+    document.getElementById('control-panel').style.display = '';
+    document.getElementById('turn-log').style.display = '';
+    document.getElementById('history-panel').style.display = '';
+  }
+  document.getElementById('game-over').classList.remove('show');
+  document.getElementById('turn-log').innerHTML = '';
+  phase = 'loading';
+  picks = [];
+  deploys = {};
+  orders = [];
+  deployLeft = 0;
+  selectedSource = null;
+  pendingTarget = null;
+  editingOrderIdx = null;
+  resolving = false;
+  winProbHistory = [];
+  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+  clearChat();
+  playSound('tick');
+  sessionGames++;
+  updateSessionDisplay();
+  const res = await api('POST', '/api/new', lastGameSettings);
+  if (res) await fetchState();
+}
+
+async function quickPlay() {
+  // If a game is in progress, confirm abandonment
+  if (G && phase !== 'finished' && phase !== 'loading') {
+    if (!confirm('Abandon current game and start a new one?')) return;
+  }
+  if (lastGameSettings) {
+    // Reuse last settings for instant start
+    if (replayMode) {
+      replayMode = false;
+      replayStopAutoPlay();
+      replayCache = {};
+      document.getElementById('replay-stepper').style.display = 'none';
+      document.getElementById('replay-sparkline').style.display = 'none';
+      document.getElementById('replay-log').style.display = 'none';
+      document.getElementById('phase-panel').style.display = '';
+      document.getElementById('control-panel').style.display = '';
+      document.getElementById('turn-log').style.display = '';
+      document.getElementById('history-panel').style.display = '';
+    }
+    document.getElementById('game-over').classList.remove('show');
+    document.getElementById('turn-log').innerHTML = '';
+    phase = 'loading';
+    picks = [];
+    deploys = {};
+    orders = [];
+    deployLeft = 0;
+    selectedSource = null;
+    pendingTarget = null;
+    editingOrderIdx = null;
+    resolving = false;
+    winProbHistory = [];
+    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+    clearChat();
+    playSound('tick');
+    sessionGames++;
+    updateSessionDisplay();
+    const res = await api('POST', '/api/new', lastGameSettings);
+    if (res) await fetchState();
+  } else {
+    // No previous game — show template picker
+    newGame();
+  }
+}
+
+// ========== SESSION TIMER & COUNTER ==========
+function updateSessionDisplay() {
+  var counterEl = document.getElementById('game-counter');
+  var timerEl = document.getElementById('session-timer');
+  if (counterEl) {
+    counterEl.textContent = sessionGames > 0 ? 'Game #' + sessionGames : '';
+  }
+  if (timerEl) {
+    var elapsed = Math.floor((Date.now() - sessionStart) / 1000);
+    var mins = Math.floor(elapsed / 60);
+    var secs = elapsed % 60;
+    if (mins >= 1) {
+      timerEl.textContent = 'Session: ' + mins + 'm';
+    } else {
+      timerEl.textContent = '';
+    }
+  }
+}
+
+function startSessionTimer() {
+  if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+  sessionTimerInterval = setInterval(updateSessionDisplay, 15000); // update every 15s
+  updateSessionDisplay();
+}
+
 // ========== CLICK DISPATCHER ==========
 function onTerritoryClick(id, e) {
   if (replayMode) return;
@@ -2662,16 +2795,30 @@ function exitReplayMode() {
   document.getElementById('turn-log').style.display = '';
   document.getElementById('history-panel').style.display = '';
 
-  // Show game over again
-  if (G && G.phase === 'finished' && G.winner !== null && G.winner !== undefined) {
-    showGameOver(G.winner);
-  }
-
   // Restore the live game state map
   buildMap();
   updateMap();
   renderSidebar();
   renderHistory();
+
+  // Show "Play Again?" overlay instead of full game over stats
+  if (G && G.phase === 'finished' && G.winner !== null && G.winner !== undefined) {
+    showPlayAgainPrompt(G.winner);
+  }
+}
+
+function showPlayAgainPrompt(winner) {
+  var el = document.getElementById('game-over');
+  var title = document.getElementById('go-title');
+  var msg = document.getElementById('go-msg');
+  var statsDiv = document.getElementById('go-stats');
+  var analysisDiv = document.getElementById('go-analysis');
+  title.textContent = winner === 0 ? 'Victory!' : 'Defeat';
+  title.style.color = winner === 0 ? 'var(--green)' : 'var(--red)';
+  msg.textContent = 'Ready for another round?';
+  statsDiv.innerHTML = '';
+  analysisDiv.innerHTML = '';
+  el.classList.add('show');
 }
 
 async function fetchReplayState(turn) {
@@ -3048,6 +3195,7 @@ function clearChat() {
 document.getElementById('set-fog').addEventListener('change', function() {
   document.getElementById('fog-label').textContent = this.checked ? 'On' : 'Off';
 });
+startSessionTimer();
 buildMap();
 fetchState();
 </script>
