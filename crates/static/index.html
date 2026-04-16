@@ -74,6 +74,30 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
 .army-text.large-army{font-size:15px}
 .deploy-badge{pointer-events:none;font-size:10px;font-weight:700;fill:var(--green);text-anchor:middle;dominant-baseline:central}
+.annotation-note{pointer-events:none;font-size:8px;font-style:italic;fill:#e3b341;text-anchor:middle;dominant-baseline:central;opacity:0.9}
+.annotation-marker{pointer-events:none;font-size:11px;text-anchor:middle;dominant-baseline:central}
+
+/* ANNOTATION CONTEXT MENU */
+#annotation-ctx-menu{display:none;position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px 0;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#annotation-ctx-menu .ctx-item{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:12px;color:var(--text);cursor:pointer;transition:background .1s}
+#annotation-ctx-menu .ctx-item:hover{background:var(--bg3)}
+#annotation-ctx-menu .ctx-item .ctx-icon{width:18px;text-align:center}
+#annotation-ctx-menu .ctx-sep{height:1px;background:var(--border);margin:4px 0}
+
+/* ANNOTATION NOTE INPUT */
+#annotation-note-input{display:none;position:fixed;z-index:10000;background:var(--bg2);border:1px solid var(--gold);border-radius:8px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#annotation-note-input input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;width:180px;outline:none}
+#annotation-note-input input:focus{border-color:var(--gold)}
+#annotation-note-input .note-hint{font-size:10px;color:var(--text3);margin-top:4px}
+
+/* MARKER TOOLBAR */
+#marker-toolbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:5px 10px;z-index:80;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+#marker-toolbar .marker-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid transparent;background:transparent;cursor:pointer;font-size:16px;transition:background .15s,border-color .15s}
+#marker-toolbar .marker-btn:hover{background:var(--bg3)}
+#marker-toolbar .marker-btn.active{border-color:var(--gold);background:var(--bg3)}
+#marker-toolbar .marker-btn .btn-label{font-size:9px;color:var(--text3);position:absolute;bottom:-1px}
+#marker-toolbar .marker-sep{width:1px;background:var(--border);margin:2px 4px}
+#marker-toolbar .marker-btn.clear-markers{font-size:12px;color:var(--text2);padding:0 8px;width:auto}
 .name-text{pointer-events:none;font-size:9px;fill:var(--text2);text-anchor:middle;opacity:0;transition:opacity .15s}
 .territory-group:hover .name-text{opacity:1}
 .bonus-tint{pointer-events:none;opacity:0.08;transition:opacity .3s ease}
@@ -626,7 +650,18 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <button id="replay-exit-btn" onclick="exitReplayMode()">Exit Review</button>
         </div>
       </div>
+      <div id="marker-toolbar">
+        <button class="marker-btn" data-marker="attack" onclick="toggleMarkerMode('attack')" title="Mark: Plan to attack">&#x2694;&#xFE0F;</button>
+        <button class="marker-btn" data-marker="defend" onclick="toggleMarkerMode('defend')" title="Mark: Defend this">&#x1F6E1;</button>
+        <button class="marker-btn" data-marker="danger" onclick="toggleMarkerMode('danger')" title="Mark: Danger zone">&#x26A0;&#xFE0F;</button>
+        <button class="marker-btn" data-marker="priority" onclick="toggleMarkerMode('priority')" title="Mark: Priority target">&#x2B50;</button>
+        <div class="marker-sep"></div>
+        <button class="marker-btn clear-markers" onclick="clearAllAnnotations()" title="Clear all annotations">Clear</button>
+      </div>
     </div>
+    <!-- Annotation overlays (positioned fixed, outside map container) -->
+    <div id="annotation-ctx-menu"></div>
+    <div id="annotation-note-input"></div>
     <div id="sidebar">
       <div class="sb-section" id="phase-panel"></div>
       <div id="income-breakdown"></div>
@@ -855,6 +890,8 @@ let threatsEnabled = false;
 let muted = false;
 let winProbHistory = []; // track win% over turns for sparkline
 let gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+let annotations = {}; // territory_id -> {note, marker}
+let markerMode = null; // null or one of: 'attack','defend','danger','priority'
 let selectedTemplate = null;
 let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
@@ -1640,6 +1677,10 @@ function buildMap() {
       g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
       // Deploy badge
       g.appendChild(svgEl('text', {x:x+14, y:y-14, class:'deploy-badge', id:'deploy-badge-'+t.id}, ''));
+      // Annotation note text (below army count)
+      g.appendChild(svgEl('text', {x:x, y:y+18, class:'annotation-note', id:'annot-note-'+t.id}, ''));
+      // Annotation marker icon (top-right of territory)
+      g.appendChild(svgEl('text', {x:x+16, y:y+16, class:'annotation-marker', id:'annot-marker-'+t.id}, ''));
 
       g.addEventListener('click', e => onTerritoryClick(t.id, e));
       g.addEventListener('contextmenu', e => { e.preventDefault(); onTerritoryRightClick(t.id); });
@@ -1843,6 +1884,15 @@ function updateMap() {
         badgeEl.textContent = '';
       }
     }
+  });
+
+  // Update annotation overlays
+  G.territories.forEach(t => {
+    const noteEl = document.getElementById('annot-note-' + t.id);
+    const markerEl = document.getElementById('annot-marker-' + t.id);
+    const ann = annotations[t.id];
+    if (noteEl) noteEl.textContent = (ann && ann.note) ? ann.note : '';
+    if (markerEl) markerEl.textContent = (ann && ann.marker) ? annotationMarkerEmoji(ann.marker) : '';
   });
 
   // Update bonus labels
@@ -3448,6 +3498,7 @@ async function newGame() {
   editingOrderIdx = null;
   resolving = false;
   winProbHistory = [];
+  annotations = {}; markerMode = null;
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
   clearUndoRedo();
   clearChat();
@@ -3487,6 +3538,7 @@ async function rematch() {
   editingOrderIdx = null;
   resolving = false;
   winProbHistory = [];
+  annotations = {}; markerMode = null;
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
   clearUndoRedo();
   clearChat();
@@ -3529,6 +3581,7 @@ async function quickPlay() {
     editingOrderIdx = null;
     resolving = false;
     winProbHistory = [];
+    annotations = {}; markerMode = null;
     gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
     clearUndoRedo();
     clearChat();
@@ -3618,6 +3671,18 @@ if (sessionStats.games > 0) {
 function onTerritoryClick(id, e) {
   if (replayMode) return;
   if (resolving) return;
+  // Handle marker mode — toggle marker on territory
+  if (markerMode) {
+    const ann = annotations[id] || {};
+    if (ann.marker === markerMode) {
+      if (annotations[id]) { delete annotations[id].marker; if (!annotations[id].note) delete annotations[id]; }
+    } else {
+      if (!annotations[id]) annotations[id] = {};
+      annotations[id].marker = markerMode;
+    }
+    updateMap();
+    return;
+  }
   if (phase === 'picking') {
     onPickClick(id);
   } else if (phase === 'orders') {
@@ -3631,6 +3696,194 @@ function onTerritoryRightClick(id) {
   if (phase === 'orders') {
     onDeployRightClick(id);
   }
+  showAnnotationContextMenu(id);
+}
+
+// ========== ANNOTATIONS ==========
+const MARKER_TYPES = {
+  attack: '\u2694\uFE0F',
+  defend: '\uD83D\uDEE1',
+  danger: '\u26A0\uFE0F',
+  priority: '\u2B50'
+};
+
+function annotationMarkerEmoji(type) {
+  return MARKER_TYPES[type] || '';
+}
+
+function showAnnotationContextMenu(id) {
+  hideAnnotationContextMenu();
+  hideAnnotationNoteInput();
+  const menu = document.getElementById('annotation-ctx-menu');
+  if (!menu) return;
+  const ann = annotations[id] || {};
+  const hasNote = !!ann.note;
+  const hasMarker = !!ann.marker;
+  menu.innerHTML = '';
+
+  // Add/Edit Note
+  const noteItem = document.createElement('div');
+  noteItem.className = 'ctx-item';
+  noteItem.innerHTML = '<span class="ctx-icon">\uD83D\uDCDD</span>' + (hasNote ? 'Edit Note' : 'Add Note');
+  noteItem.addEventListener('click', function() { hideAnnotationContextMenu(); showAnnotationNoteInput(id); });
+  menu.appendChild(noteItem);
+
+  // Remove Note (if exists)
+  if (hasNote) {
+    const rmNote = document.createElement('div');
+    rmNote.className = 'ctx-item';
+    rmNote.innerHTML = '<span class="ctx-icon">\u2715</span>Remove Note';
+    rmNote.addEventListener('click', function() {
+      hideAnnotationContextMenu();
+      if (annotations[id]) { delete annotations[id].note; if (!annotations[id].marker) delete annotations[id]; }
+      updateMap();
+    });
+    menu.appendChild(rmNote);
+  }
+
+  // Separator
+  const sep = document.createElement('div');
+  sep.className = 'ctx-sep';
+  menu.appendChild(sep);
+
+  // Marker options
+  Object.keys(MARKER_TYPES).forEach(function(type) {
+    const item = document.createElement('div');
+    item.className = 'ctx-item';
+    const isActive = ann.marker === type;
+    item.innerHTML = '<span class="ctx-icon">' + MARKER_TYPES[type] + '</span>' +
+      (isActive ? 'Remove marker' : 'Mark: ' + type.charAt(0).toUpperCase() + type.slice(1));
+    item.addEventListener('click', function() {
+      hideAnnotationContextMenu();
+      if (isActive) {
+        if (annotations[id]) { delete annotations[id].marker; if (!annotations[id].note) delete annotations[id]; }
+      } else {
+        if (!annotations[id]) annotations[id] = {};
+        annotations[id].marker = type;
+      }
+      updateMap();
+    });
+    menu.appendChild(item);
+  });
+
+  // Clear all on this territory
+  if (hasNote || hasMarker) {
+    const sep2 = document.createElement('div');
+    sep2.className = 'ctx-sep';
+    menu.appendChild(sep2);
+    const clearItem = document.createElement('div');
+    clearItem.className = 'ctx-item';
+    clearItem.innerHTML = '<span class="ctx-icon">\uD83D\uDDD1</span>Clear Annotations';
+    clearItem.addEventListener('click', function() {
+      hideAnnotationContextMenu();
+      delete annotations[id];
+      updateMap();
+    });
+    menu.appendChild(clearItem);
+  }
+
+  // Position the menu near the territory
+  const pos = POS[id];
+  const svgEl2 = document.getElementById('map-svg');
+  if (pos && svgEl2) {
+    const pt = svgEl2.createSVGPoint();
+    pt.x = pos[0]; pt.y = pos[1];
+    const ctm = svgEl2.getScreenCTM();
+    if (ctm) {
+      const screenPt = pt.matrixTransform(ctm);
+      menu.style.left = screenPt.x + 'px';
+      menu.style.top = screenPt.y + 'px';
+    }
+  }
+  menu.style.display = 'block';
+
+  // Close on outside click (delayed to avoid instant close)
+  setTimeout(function() {
+    document.addEventListener('click', closeAnnotationCtxOnClick);
+    document.addEventListener('contextmenu', closeAnnotationCtxOnContext);
+  }, 0);
+}
+
+function closeAnnotationCtxOnClick() { hideAnnotationContextMenu(); }
+function closeAnnotationCtxOnContext() { hideAnnotationContextMenu(); }
+
+function hideAnnotationContextMenu() {
+  const menu = document.getElementById('annotation-ctx-menu');
+  if (menu) menu.style.display = 'none';
+  document.removeEventListener('click', closeAnnotationCtxOnClick);
+  document.removeEventListener('contextmenu', closeAnnotationCtxOnContext);
+}
+
+function showAnnotationNoteInput(id) {
+  const box = document.getElementById('annotation-note-input');
+  if (!box) return;
+  const existing = (annotations[id] && annotations[id].note) || '';
+  box.innerHTML = '<input type="text" maxlength="20" placeholder="e.g. attack next turn" value="' +
+    existing.replace(/"/g, '&quot;') + '"><div class="note-hint">Max 20 chars \u2022 Enter to save \u2022 Esc to cancel</div>';
+  const inp = box.querySelector('input');
+
+  // Position near territory
+  const pos = POS[id];
+  const svgEl2 = document.getElementById('map-svg');
+  if (pos && svgEl2) {
+    const pt = svgEl2.createSVGPoint();
+    pt.x = pos[0]; pt.y = pos[1];
+    const ctm = svgEl2.getScreenCTM();
+    if (ctm) {
+      const screenPt = pt.matrixTransform(ctm);
+      box.style.left = screenPt.x + 'px';
+      box.style.top = (screenPt.y + 20) + 'px';
+    }
+  }
+  box.style.display = 'block';
+  inp.focus();
+  inp.select();
+
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = inp.value.trim().slice(0, 20);
+      if (val) {
+        if (!annotations[id]) annotations[id] = {};
+        annotations[id].note = val;
+      } else {
+        if (annotations[id]) { delete annotations[id].note; if (!annotations[id].marker) delete annotations[id]; }
+      }
+      hideAnnotationNoteInput();
+      updateMap();
+    } else if (e.key === 'Escape') {
+      hideAnnotationNoteInput();
+    }
+    e.stopPropagation();
+  });
+  inp.addEventListener('click', function(e) { e.stopPropagation(); });
+}
+
+function hideAnnotationNoteInput() {
+  const box = document.getElementById('annotation-note-input');
+  if (box) box.style.display = 'none';
+}
+
+function toggleMarkerMode(type) {
+  if (markerMode === type) {
+    markerMode = null;
+  } else {
+    markerMode = type;
+  }
+  updateMarkerToolbar();
+}
+
+function clearAllAnnotations() {
+  annotations = {};
+  markerMode = null;
+  updateMarkerToolbar();
+  updateMap();
+}
+
+function updateMarkerToolbar() {
+  document.querySelectorAll('#marker-toolbar .marker-btn[data-marker]').forEach(function(btn) {
+    btn.classList.toggle('active', markerMode === btn.getAttribute('data-marker'));
+  });
 }
 
 // ========== KEYBOARD ==========
@@ -3664,6 +3917,17 @@ document.addEventListener('keydown', e => {
   if (resolving) return;
   const key = e.key;
   const keyLower = key.toLowerCase();
+
+  // Escape exits marker mode and hides annotation UI
+  if (key === 'Escape' && markerMode) {
+    markerMode = null;
+    updateMarkerToolbar();
+    return;
+  }
+  if (key === 'Escape') {
+    hideAnnotationContextMenu();
+    hideAnnotationNoteInput();
+  }
 
   // --- Undo/Redo shortcuts ---
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && keyLower === 'z') {
@@ -4754,6 +5018,7 @@ async function importGameData(data) {
     editingOrderIdx = null;
     resolving = false;
     winProbHistory = [];
+    annotations = {}; markerMode = null;
     gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
     clearUndoRedo();
     document.getElementById('game-over').classList.remove('show');
