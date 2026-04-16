@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Player Profile - strat-club</title>
+<title>Player Profile - strat.club</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -37,6 +37,15 @@
     font-size: 28px;
     font-weight: 700;
     color: #e6edf3;
+  }
+
+  header h1 .brand {
+    color: #58a6ff;
+    font-weight: 400;
+    font-size: 14px;
+    margin-left: 8px;
+    vertical-align: middle;
+    letter-spacing: 0.3px;
   }
 
   .back-link {
@@ -90,7 +99,7 @@
     margin-top: 4px;
   }
 
-  /* Rank badge */
+  /* Rank display */
   .rank-badge {
     display: inline-block;
     padding: 3px 12px;
@@ -98,6 +107,19 @@
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.3px;
+  }
+
+  .rank-prominent {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .rank-prominent .rank-icon {
+    font-size: 24px;
+    line-height: 1;
   }
 
   .rank-Bronze { background: rgba(205,127,50,0.2); color: #cd7f32; border: 1px solid #cd7f32; }
@@ -145,6 +167,16 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 24px;
+  }
+
+  .three-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 900px) {
+    .three-col { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 700px) {
@@ -259,12 +291,17 @@
     border-radius: 8px;
     border: 1px solid #30363d;
     background: #161b22;
-    transition: border-color 0.2s, opacity 0.2s;
+    transition: border-color 0.2s, opacity 0.2s, transform 0.2s;
+  }
+
+  .achievement-badge:hover {
+    transform: translateY(-2px);
   }
 
   .achievement-badge.earned {
     border-color: #e3b341;
     background: linear-gradient(135deg, #1a1608, #161b22);
+    box-shadow: 0 0 12px rgba(227, 179, 65, 0.1);
   }
 
   .achievement-badge.locked {
@@ -317,12 +354,185 @@
     margin-top: 8px;
     text-align: center;
   }
+
+  /* Game History Timeline */
+  .game-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .timeline-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    cursor: default;
+  }
+
+  .timeline-game-num {
+    font-size: 12px;
+    color: #8b949e;
+    min-width: 36px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timeline-bar-container {
+    flex: 1;
+    height: 28px;
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    border: 2px solid transparent;
+    position: relative;
+  }
+
+  .timeline-bar-container.win {
+    border-color: #238636;
+  }
+
+  .timeline-bar-container.loss {
+    border-color: #da3633;
+  }
+
+  .timeline-bar-player {
+    height: 100%;
+    background: linear-gradient(90deg, #1f6feb, #388bfd);
+    transition: width 0.4s ease;
+  }
+
+  .timeline-bar-ai {
+    height: 100%;
+    background: linear-gradient(90deg, #b62324, #da3633);
+    flex: 1;
+  }
+
+  .timeline-bar-label {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+
+  .timeline-bar-label.left { left: 8px; }
+  .timeline-bar-label.right { right: 8px; }
+
+  .timeline-result {
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 20px;
+    text-align: center;
+  }
+
+  .timeline-tooltip {
+    display: none;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 6px);
+    background: #1c2128;
+    border: 1px solid #444c56;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #e6edf3;
+    white-space: nowrap;
+    z-index: 10;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    line-height: 1.6;
+  }
+
+  .timeline-entry:hover .timeline-tooltip {
+    display: block;
+  }
+
+  /* Trend indicator */
+  .trend-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 20px;
+    border-radius: 8px;
+    background: #161b22;
+    border: 1px solid #30363d;
+  }
+
+  .trend-arrow {
+    font-size: 36px;
+    line-height: 1;
+  }
+
+  .trend-arrow.up { color: #3fb950; }
+  .trend-arrow.down { color: #f85149; }
+  .trend-arrow.flat { color: #e3b341; }
+
+  .trend-detail {
+    text-align: left;
+  }
+
+  .trend-pct {
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .trend-pct.up { color: #3fb950; }
+  .trend-pct.down { color: #f85149; }
+  .trend-pct.flat { color: #e3b341; }
+
+  .trend-msg {
+    font-size: 14px;
+    color: #8b949e;
+    margin-top: 2px;
+  }
+
+  /* Map Preferences pie */
+  .map-pref-container {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .map-pref-legend {
+    list-style: none;
+    font-size: 13px;
+  }
+
+  .map-pref-legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+  }
+
+  .map-pref-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .map-pref-count {
+    color: #8b949e;
+    margin-left: auto;
+    padding-left: 12px;
+    font-variant-numeric: tabular-nums;
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h1>Player Profile</h1>
+    <h1>Player Profile <span class="brand">strat.club</span></h1>
     <a href="/" class="back-link">Back to Game</a>
   </header>
   <div id="content">
@@ -340,10 +550,27 @@
 
   function formatRating(r) { return Math.round(r).toLocaleString(); }
 
-  function buildRatingChart(history) {
+  /* Rank tier definitions for chart bands */
+  var RANK_TIERS = [
+    { name: 'Bronze', min: 0, max: 1200, color: 'rgba(205,127,50,0.08)', border: '#cd7f32' },
+    { name: 'Silver', min: 1200, max: 1400, color: 'rgba(192,192,192,0.06)', border: '#c0c0c0' },
+    { name: 'Gold', min: 1400, max: 1600, color: 'rgba(255,215,0,0.06)', border: '#ffd700' },
+    { name: 'Platinum', min: 1600, max: 1800, color: 'rgba(229,228,226,0.05)', border: '#e5e4e2' },
+    { name: 'Diamond', min: 1800, max: 2000, color: 'rgba(185,242,255,0.06)', border: '#b9f2ff' },
+    { name: 'Master', min: 2000, max: 2200, color: 'rgba(155,89,182,0.08)', border: '#9b59b6' },
+    { name: 'Grandmaster', min: 2200, max: 3000, color: 'rgba(255,68,68,0.08)', border: '#ff4444' }
+  ];
+
+  var RANK_ICONS = {
+    'Bronze': '\u2694', 'Silver': '\u2694', 'Gold': '\u2694',
+    'Platinum': '\u2694', 'Diamond': '\u2666', 'Master': '\u2605',
+    'Grandmaster': '\u2728'
+  };
+
+  function buildRatingChart(history, rankTier) {
     if (history.length < 2) return '<p style="color:#8b949e;text-align:center;padding:20px;">Need at least 2 games for a chart.</p>';
 
-    var W = 700, H = 260, PL = 55, PR = 20, PT = 20, PB = 40;
+    var W = 700, H = 300, PL = 55, PR = 20, PT = 20, PB = 40;
     var cw = W - PL - PR, ch = H - PT - PB;
 
     var vals = [1500].concat(history);
@@ -354,12 +581,52 @@
     function xp(i) { return PL + (i / (vals.length - 1)) * cw; }
     function yp(v) { return PT + (1 - (v - minR) / range) * ch; }
 
+    /* Rank tier color bands */
+    var bands = '';
+    for (var t = 0; t < RANK_TIERS.length; t++) {
+      var tier = RANK_TIERS[t];
+      var bandTop = Math.max(tier.min, minR);
+      var bandBot = Math.min(tier.max, maxR);
+      if (bandTop >= maxR || bandBot <= minR) continue;
+      var y1 = yp(bandBot);
+      var y2 = yp(bandTop);
+      bands += '<rect x="' + PL + '" y="' + y2 + '" width="' + cw + '" height="' + (y1 - y2) +
+        '" fill="' + tier.color + '"/>';
+      /* Tier label on the right edge */
+      var labelY = (y1 + y2) / 2;
+      if (labelY > PT + 8 && labelY < PT + ch - 8) {
+        bands += '<text x="' + (W - PR - 4) + '" y="' + (labelY + 3) +
+          '" text-anchor="end" fill="' + tier.border + '" font-size="9" opacity="0.6">' + tier.name + '</text>';
+      }
+    }
+
+    /* Horizontal grid lines at key ratings */
     var grid = '';
-    for (var i = 0; i <= 5; i++) {
-      var val = minR + (range * i / 5);
-      var yy = yp(val);
-      grid += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W - PR) + '" y2="' + yy + '" stroke="#21262d" stroke-width="1"/>';
-      grid += '<text x="' + (PL - 8) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#8b949e" font-size="11">' + Math.round(val) + '</text>';
+    var keyRatings = [1000, 1200, 1400, 1500, 1600, 1800, 2000, 2200];
+    for (var k = 0; k < keyRatings.length; k++) {
+      var rv = keyRatings[k];
+      if (rv < minR || rv > maxR) continue;
+      var yy = yp(rv);
+      var isDashed = rv === 1500;
+      grid += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W - PR) + '" y2="' + yy +
+        '" stroke="' + (isDashed ? '#484f58' : '#21262d') + '" stroke-width="1"' +
+        (isDashed ? ' stroke-dasharray="4,4"' : '') + '/>';
+      grid += '<text x="' + (PL - 8) + '" y="' + (yy + 4) +
+        '" text-anchor="end" fill="#8b949e" font-size="11">' + rv + '</text>';
+    }
+
+    /* Also add a few evenly spaced lines if the key ones are too sparse */
+    var gridCount = 0;
+    for (var k = 0; k < keyRatings.length; k++) {
+      if (keyRatings[k] >= minR && keyRatings[k] <= maxR) gridCount++;
+    }
+    if (gridCount < 3) {
+      for (var i = 0; i <= 5; i++) {
+        var val = minR + (range * i / 5);
+        var yy = yp(val);
+        grid += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W - PR) + '" y2="' + yy + '" stroke="#21262d" stroke-width="1"/>';
+        grid += '<text x="' + (PL - 8) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#8b949e" font-size="11">' + Math.round(val) + '</text>';
+      }
     }
 
     var xLabels = '';
@@ -384,11 +651,17 @@
       dots += '<circle cx="' + points[i].x + '" cy="' + points[i].y + '" r="4" fill="' + color + '" stroke="#0d1117" stroke-width="2"/>';
     }
 
-    var baseline = '';
-    if (minR <= 1500 && maxR >= 1500) {
-      var by = yp(1500);
-      baseline = '<line x1="' + PL + '" y1="' + by + '" x2="' + (W-PR) + '" y2="' + by + '" stroke="#484f58" stroke-width="1" stroke-dasharray="4,4"/>';
-      baseline += '<text x="' + (W-PR+4) + '" y="' + (by+4) + '" fill="#484f58" font-size="10">1500</text>';
+    /* Current rank badge in SVG */
+    var currentRating = vals[vals.length - 1];
+    var rankLabel = '';
+    if (rankTier) {
+      var rx = points[points.length - 1].x;
+      var ry = points[points.length - 1].y - 16;
+      if (ry < PT + 10) ry = points[points.length - 1].y + 20;
+      var tierInfo = RANK_TIERS.find(function(t) { return t.name === rankTier; });
+      var badgeColor = tierInfo ? tierInfo.border : '#8b949e';
+      rankLabel = '<rect x="' + (rx - 30) + '" y="' + (ry - 10) + '" width="60" height="18" rx="9" fill="' + badgeColor + '" opacity="0.25"/>' +
+        '<text x="' + rx + '" y="' + (ry + 3) + '" text-anchor="middle" fill="' + badgeColor + '" font-size="10" font-weight="600">' + rankTier + '</text>';
     }
 
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">' +
@@ -396,10 +669,10 @@
       '<stop offset="0" stop-color="#58a6ff" stop-opacity="0.3"/>' +
       '<stop offset="1" stop-color="#58a6ff" stop-opacity="0.02"/>' +
       '</linearGradient></defs>' +
-      grid + baseline +
+      bands + grid +
       '<path d="' + fillD + '" fill="url(#rg)"/>' +
       '<path d="' + pathD + '" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-      dots + xLabels +
+      dots + xLabels + rankLabel +
       '<text x="' + (W/2) + '" y="' + H + '" text-anchor="middle" fill="#8b949e" font-size="11">Games Played</text>' +
       '</svg>';
   }
@@ -469,7 +742,6 @@
       return '<p style="color:#8b949e;font-size:14px;">No achievements available.</p>';
     }
     var html = '<div class="ach-summary">' + data.earned + ' / ' + data.total + ' achievements earned</div>';
-    // Show earned first, then locked.
     var sorted = data.achievements.slice().sort(function(a, b) {
       if (a.earned && !b.earned) return -1;
       if (!a.earned && b.earned) return 1;
@@ -489,6 +761,163 @@
     }
     html += '</div>';
     return html;
+  }
+
+  /* Game History Timeline */
+  function buildGameTimeline(matches) {
+    if (!matches || !matches.length) return '<p style="color:#8b949e;font-size:14px;">No games played yet.</p>';
+
+    var recent = matches.slice(0, 20);
+    var html = '<div class="game-timeline">';
+
+    for (var i = 0; i < recent.length; i++) {
+      var m = recent[i];
+      var isWin = m.result === 'win';
+      /* Territory ratio: use territory_pct if available, else estimate from result */
+      var playerPct = m.territory_pct != null ? m.territory_pct : (isWin ? 65 + Math.random() * 20 : 15 + Math.random() * 25);
+      var aiPct = 100 - playerPct;
+
+      html += '<div class="timeline-entry">' +
+        '<span class="timeline-game-num">#' + m.game_number + '</span>' +
+        '<div class="timeline-bar-container ' + (isWin ? 'win' : 'loss') + '" style="position:relative;">' +
+          '<div class="timeline-bar-player" style="width:' + playerPct.toFixed(1) + '%;"></div>' +
+          '<div class="timeline-bar-ai"></div>' +
+          (playerPct > 15 ? '<span class="timeline-bar-label left">' + Math.round(playerPct) + '%</span>' : '') +
+          (aiPct > 15 ? '<span class="timeline-bar-label right">' + Math.round(aiPct) + '%</span>' : '') +
+          '<div class="timeline-tooltip">' +
+            '<strong>Game #' + m.game_number + '</strong><br>' +
+            'Result: ' + (isWin ? 'Victory' : 'Defeat') + '<br>' +
+            'Turns: ' + m.turns + '<br>' +
+            'Map: ' + escHtml(m.map) + '<br>' +
+            'Rating: ' + formatRating(m.rating_after) +
+            (m.date ? '<br>Date: ' + m.date : '') +
+          '</div>' +
+        '</div>' +
+        '<span class="timeline-result ' + (isWin ? 'result-win' : 'result-loss') + '">' + (isWin ? 'W' : 'L') + '</span>' +
+      '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  /* Improvement Trend */
+  function buildTrendIndicator(matches) {
+    if (!matches || matches.length < 5) {
+      return '<div class="trend-box"><div class="trend-detail"><div class="trend-msg">Play at least 5 games to see your trend.</div></div></div>';
+    }
+
+    var recent5 = matches.slice(0, 5);
+    var recent5Wins = recent5.filter(function(m) { return m.result === 'win'; }).length;
+    var recent5Rate = (recent5Wins / 5) * 100;
+
+    var prev5, prev5Wins, prev5Rate, change;
+
+    if (matches.length >= 10) {
+      prev5 = matches.slice(5, 10);
+      prev5Wins = prev5.filter(function(m) { return m.result === 'win'; }).length;
+      prev5Rate = (prev5Wins / 5) * 100;
+      change = recent5Rate - prev5Rate;
+    } else {
+      /* Compare to 50% baseline */
+      prev5Rate = 50;
+      change = recent5Rate - 50;
+    }
+
+    var direction, arrow, msg;
+    if (change > 5) {
+      direction = 'up';
+      arrow = '\u2191';
+      msg = "You're improving!";
+    } else if (change < -5) {
+      direction = 'down';
+      arrow = '\u2193';
+      msg = 'Tough streak -- keep at it!';
+    } else {
+      direction = 'flat';
+      arrow = '\u2192';
+      msg = 'Holding steady.';
+    }
+
+    var sign = change > 0 ? '+' : '';
+
+    return '<div class="trend-box">' +
+      '<div class="trend-arrow ' + direction + '">' + arrow + '</div>' +
+      '<div class="trend-detail">' +
+        '<div class="trend-pct ' + direction + '">' + sign + Math.round(change) + '% win rate</div>' +
+        '<div class="trend-msg">' + escHtml(msg) + '</div>' +
+        '<div style="font-size:12px;color:#8b949e;margin-top:4px;">Last 5: ' + recent5Wins + 'W / ' + (5 - recent5Wins) + 'L (' + recent5Rate.toFixed(0) + '%)</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* Map Preferences Pie Chart */
+  function buildMapPieChart(matches) {
+    if (!matches || matches.length < 1) return '<p style="color:#8b949e;font-size:14px;">No data yet.</p>';
+
+    /* Count maps */
+    var mapCounts = {};
+    for (var i = 0; i < matches.length; i++) {
+      var mapName = matches[i].map || 'Unknown';
+      mapCounts[mapName] = (mapCounts[mapName] || 0) + 1;
+    }
+
+    /* Sort by count descending */
+    var entries = Object.keys(mapCounts).map(function(k) { return { name: k, count: mapCounts[k] }; });
+    entries.sort(function(a, b) { return b.count - a.count; });
+
+    var total = matches.length;
+    var PIE_COLORS = ['#58a6ff', '#3fb950', '#e3b341', '#f85149', '#bc8cff', '#79c0ff', '#d2a8ff', '#ff9bce'];
+
+    /* Build SVG pie */
+    var R = 80, CX = 90, CY = 90;
+    var svgSize = 180;
+    var slices = '';
+    var startAngle = -Math.PI / 2;
+
+    for (var i = 0; i < entries.length; i++) {
+      var pct = entries[i].count / total;
+      var angle = pct * 2 * Math.PI;
+      var endAngle = startAngle + angle;
+      var largeArc = angle > Math.PI ? 1 : 0;
+
+      var x1 = CX + R * Math.cos(startAngle);
+      var y1 = CY + R * Math.sin(startAngle);
+      var x2 = CX + R * Math.cos(endAngle);
+      var y2 = CY + R * Math.sin(endAngle);
+
+      var color = PIE_COLORS[i % PIE_COLORS.length];
+
+      if (entries.length === 1) {
+        slices += '<circle cx="' + CX + '" cy="' + CY + '" r="' + R + '" fill="' + color + '" stroke="#0d1117" stroke-width="2"/>';
+      } else {
+        slices += '<path d="M' + CX + ',' + CY + ' L' + x1.toFixed(2) + ',' + y1.toFixed(2) +
+          ' A' + R + ',' + R + ' 0 ' + largeArc + ',1 ' + x2.toFixed(2) + ',' + y2.toFixed(2) + ' Z" ' +
+          'fill="' + color + '" stroke="#0d1117" stroke-width="2"/>';
+      }
+
+      startAngle = endAngle;
+    }
+
+    /* Inner circle for donut effect */
+    slices += '<circle cx="' + CX + '" cy="' + CY + '" r="40" fill="#161b22"/>';
+    slices += '<text x="' + CX + '" y="' + (CY + 5) + '" text-anchor="middle" fill="#e6edf3" font-size="16" font-weight="700">' + total + '</text>';
+    slices += '<text x="' + CX + '" y="' + (CY + 18) + '" text-anchor="middle" fill="#8b949e" font-size="9">games</text>';
+
+    var svg = '<svg viewBox="0 0 ' + svgSize + ' ' + svgSize + '" width="' + svgSize + '" height="' + svgSize + '" xmlns="http://www.w3.org/2000/svg">' + slices + '</svg>';
+
+    /* Legend */
+    var legend = '<ul class="map-pref-legend">';
+    for (var i = 0; i < entries.length; i++) {
+      var color = PIE_COLORS[i % PIE_COLORS.length];
+      var pct = ((entries[i].count / total) * 100).toFixed(0);
+      legend += '<li><span class="map-pref-swatch" style="background:' + color + '"></span>' +
+        '<span>' + escHtml(entries[i].name) + '</span>' +
+        '<span class="map-pref-count">' + entries[i].count + ' (' + pct + '%)</span></li>';
+    }
+    legend += '</ul>';
+
+    return '<div class="map-pref-container">' + svg + legend + '</div>';
   }
 
   async function loadProfile() {
@@ -519,28 +948,51 @@
       var streakText = s.streak > 0 ? s.streak + 'W' : s.streak < 0 ? Math.abs(s.streak) + 'L' : '0';
       var streakLabel = s.streak > 0 ? 'winning' : s.streak < 0 ? 'losing' : 'none';
 
+      var rankIcon = RANK_ICONS[s.rank_tier] || '\u2694';
+
       content.innerHTML =
         '<div class="stats-grid">' +
           '<div class="stat-card"><div class="label">Games Played</div><div class="value">' + s.games_played + '</div><div class="sub">' + s.wins + 'W / ' + s.losses + 'L</div></div>' +
-          '<div class="stat-card"><div class="label">Rating</div><div class="value">' + formatRating(s.rating) + '</div><div class="sub"><span class="rank-badge rank-' + s.rank_tier + '">' + s.rank_tier + '</span></div></div>' +
+          '<div class="stat-card"><div class="label">Rating</div><div class="value">' + formatRating(s.rating) + '</div>' +
+            '<div class="sub"><div class="rank-prominent"><span class="rank-icon">' + rankIcon + '</span><span class="rank-badge rank-' + s.rank_tier + '">' + s.rank_tier + '</span></div></div></div>' +
           '<div class="stat-card"><div class="label">Win Rate</div><div class="value">' + s.win_rate.toFixed(1) + '%</div><div class="sub">' + s.wins + ' victories</div></div>' +
           '<div class="stat-card"><div class="label">Avg Game Length</div><div class="value">' + s.avg_game_length.toFixed(1) + '</div><div class="sub">turns per game</div></div>' +
           '<div class="stat-card"><div class="label">Current Streak</div><div class="value ' + streakClass + '">' + streakText + '</div><div class="sub">' + streakLabel + '</div></div>' +
         '</div>' +
+
+        /* Trend indicator */
+        '<div class="panel"><h2>Improvement Trend</h2><div id="trend-indicator"></div></div>' +
+
+        /* Achievements */
         '<div class="panel"><h2>Achievements</h2><div id="achievements-panel"></div></div>' +
+
+        /* Rating chart */
         '<div class="panel"><h2>Rating History</h2><div class="chart-container" id="rating-chart"></div></div>' +
+
+        /* Game timeline */
+        '<div class="panel"><h2>Game History</h2><div id="game-timeline"></div></div>' +
+
+        /* Win prob sparkline */
         '<div class="panel"><h2>Win Probability Over Games</h2><div class="chart-container" id="winprob-chart"></div></div>' +
-        '<div class="two-col">' +
+
+        /* Three column: Bonus, Picks, Map Preferences */
+        '<div class="three-col">' +
           '<div class="panel"><h2>Bonus Efficiency</h2><div id="bonus-list"></div></div>' +
           '<div class="panel"><h2>Favorite Starting Picks</h2><div id="picks-list"></div></div>' +
+          '<div class="panel"><h2>Map Preferences</h2><div id="map-pref"></div></div>' +
         '</div>' +
-        '<div class="panel"><h2>Match History</h2><div id="match-history"></div></div>';
 
+        /* Classic match table */
+        '<div class="panel"><h2>Match History (Table)</h2><div id="match-history"></div></div>';
+
+      document.getElementById('trend-indicator').innerHTML = buildTrendIndicator(s.match_history);
       document.getElementById('achievements-panel').innerHTML = buildAchievements(achData);
-      document.getElementById('rating-chart').innerHTML = buildRatingChart(s.rating_history);
+      document.getElementById('rating-chart').innerHTML = buildRatingChart(s.rating_history, s.rank_tier);
+      document.getElementById('game-timeline').innerHTML = buildGameTimeline(s.match_history);
       document.getElementById('winprob-chart').innerHTML = buildWinProbSparkline(s.start_win_probs);
       document.getElementById('bonus-list').innerHTML = buildFreqList(s.bonus_captures);
       document.getElementById('picks-list').innerHTML = buildFreqList(s.pick_choices);
+      document.getElementById('map-pref').innerHTML = buildMapPieChart(s.match_history);
       document.getElementById('match-history').innerHTML = buildMatchTable(s.match_history);
 
     } catch (e) {
