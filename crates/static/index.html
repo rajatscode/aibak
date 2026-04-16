@@ -331,6 +331,7 @@ let pendingTarget = null;
 let pendingArmies = 0;
 let pendingMax = 0;
 let pendingType = ''; // 'attack' or 'transfer'
+let editingOrderIdx = null; // index of order being edited in sidebar
 let resolving = false;
 let threatsEnabled = false;
 let muted = false;
@@ -598,6 +599,46 @@ function buildMap() {
   // Order lines group (below territories so paths draw on top)
   svg.appendChild(svgEl('g', {id:'order-lines'}));
 
+  // Check if any territory lacks path data (circle-mode map)
+  const isCircleMap = G && G.territories && G.territories.some(t => !t.path);
+
+  // Connection lines between adjacent territories (for circle-mode maps)
+  if (isCircleMap && G && G.territories) {
+    const connGroup = svgEl('g', {id:'connection-lines'});
+    const drawn = new Set();
+    G.territories.forEach(t => {
+      const x1 = t.label_x || 0;
+      const y1 = t.label_y || 0;
+      if (t.adjacent) {
+        t.adjacent.forEach(adjId => {
+          const key = Math.min(t.id, adjId) + '-' + Math.max(t.id, adjId);
+          if (drawn.has(key)) return;
+          drawn.add(key);
+          const adj = G.territories.find(tt => tt.id === adjId);
+          if (!adj) return;
+          const x2 = adj.label_x || 0;
+          const y2 = adj.label_y || 0;
+          // Wrap-around connections that span most of the map get dashed style
+          const dx = Math.abs(x2 - x1);
+          if (dx > 500) {
+            connGroup.appendChild(svgEl('line', {
+              x1:x1, y1:y1, x2:x2, y2:y2,
+              class:'connection-line',
+              'stroke-dasharray': '4,4',
+              opacity: '0.2'
+            }));
+          } else {
+            connGroup.appendChild(svgEl('line', {
+              x1:x1, y1:y1, x2:x2, y2:y2,
+              class:'connection-line'
+            }));
+          }
+        });
+      }
+    });
+    svg.appendChild(connGroup);
+  }
+
   // Territory groups
   const terrGroup = svgEl('g', {id:'territories'});
   if (G && G.territories) {
@@ -625,6 +666,17 @@ function buildMap() {
       if (t.path) {
         g.appendChild(svgEl('path', {
           d: t.path,
+          class: 'territory-highlight',
+          id: 'highlight-' + t.id,
+          fill: 'none',
+          stroke: 'none',
+          'stroke-width': 3,
+          'pointer-events': 'none'
+        }));
+      } else {
+        // Highlight circle for non-path territories
+        g.appendChild(svgEl('circle', {
+          cx:x, cy:y, r:20,
           class: 'territory-highlight',
           id: 'highlight-' + t.id,
           fill: 'none',
@@ -681,8 +733,8 @@ function buildMap() {
   }
 
   // Bonus labels on map
-  // Bonus labels — tucked into corners of each continent, small and unobtrusive
-  const bonusPositions = {
+  // For maps with 6 bonuses, use hardcoded positions; otherwise compute from territory centroids
+  const defaultBonusPositions = {
     0: [60,  140],   // North America
     1: [195, 580],   // South America
     2: [350, 155],   // Europe
@@ -690,6 +742,25 @@ function buildMap() {
     4: [910, 125],   // Asia
     5: [860, 540],   // Oceania
   };
+  const bonusPositions = {};
+  if (G && G.bonuses) {
+    const hasManyBonuses = G.bonuses.length > 6;
+    G.bonuses.forEach(b => {
+      if (!hasManyBonuses && defaultBonusPositions[b.id]) {
+        bonusPositions[b.id] = defaultBonusPositions[b.id];
+      } else {
+        // Compute position from territory centroids — place label above-left of the bonus region
+        let minX = Infinity, minY = Infinity;
+        b.territory_ids.forEach(tid => {
+          const p = POS[tid];
+          if (p) { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); }
+        });
+        if (minX < Infinity) {
+          bonusPositions[b.id] = [minX - 10, minY - 18];
+        }
+      }
+    });
+  }
   const bonusGroup = svgEl('g', {id:'bonus-labels', opacity:'0.75'});
   if (G && G.bonuses) {
     G.bonuses.forEach(b => {
@@ -985,27 +1056,34 @@ function renderSidebar() {
 
 function renderPickingPanel(pp, cp) {
   const needed = G.picks_needed || 4;
+  const totalOptions = (G.pick_options || []).length;
   pp.innerHTML = '<div class="sb-phase">Picking Phase</div>' +
-    '<div class="sb-sub">Select ' + needed + ' territories to start</div>' +
-    '<div style="margin-top:8px;font-size:13px;color:var(--gold)">' + picks.length + ' / ' + needed + ' picked</div>' +
-    '<div class="pick-list" style="margin-top:8px">' +
-      picks.map(function(id) {
+    '<div class="sb-sub">Rank all territories by priority (you\'ll receive ' + needed + ')</div>' +
+    '<div style="margin-top:8px;font-size:13px;color:var(--gold)">' + picks.length + ' / ' + totalOptions + ' ranked</div>' +
+    '<div style="margin-top:8px">' +
+      picks.map(function(id, idx) {
         var t = terr(id);
-        return '<span class="pick-chip" onclick="unpick(' + id + ')">' + (t ? t.name : id) + ' x</span>';
+        return '<div class="order-item" style="cursor:grab">' +
+          '<span style="color:var(--gold);font-weight:700;margin-right:6px">#' + (idx+1) + '</span>' +
+          '<span style="flex:1">' + (t ? t.name : id) + '</span>' +
+          '<button class="remove-btn" onclick="movePickUp(' + idx + ')" title="Move up" style="color:var(--text2)"' + (idx===0?' disabled':'') + '>\u25B2</button>' +
+          '<button class="remove-btn" onclick="movePickDown(' + idx + ')" title="Move down" style="color:var(--text2)"' + (idx===picks.length-1?' disabled':'') + '>\u25BC</button>' +
+          '<button class="remove-btn" onclick="unpick(' + id + ')" title="Remove">\u2715</button>' +
+        '</div>';
       }).join('') +
     '</div>';
-  cp.innerHTML = '<button class="btn btn-gold" ' + (picks.length < needed ? 'disabled' : '') + ' onclick="confirmPicks()">Confirm Picks</button>';
+  cp.innerHTML = '<button class="btn btn-gold" ' + (picks.length < totalOptions ? 'disabled' : '') + ' onclick="confirmPicks()">Confirm Picks</button>';
 }
 
 function renderOrdersPanel(pp, cp) {
   // Phase header with deploy counter
   let subText = '';
-  if (selectedSource !== null && pendingTarget === null) {
-    subText = 'Select target for ' + ((terr(selectedSource)||{}).name||'');
-  } else if (deployLeft > 0 && selectedSource === null) {
-    subText = 'Click your territories to deploy, or select a source to move';
-  } else if (selectedSource === null) {
-    subText = 'Click a territory to select source for move';
+  if (selectedSource !== null) {
+    subText = 'Click adjacent territory to attack/transfer from ' + ((terr(selectedSource)||{}).name||'');
+  } else if (deployLeft > 0) {
+    subText = 'Click your territories to deploy, or select a source to attack';
+  } else {
+    subText = 'Click your territory, then click target to attack/transfer';
   }
 
   let headerHtml = '<div class="sb-phase">Orders</div>' +
@@ -1020,18 +1098,20 @@ function renderOrdersPanel(pp, cp) {
 
   let html = '';
 
-  // Pending army selector (when choosing armies for attack/transfer)
-  if (pendingTarget !== null) {
-    const srcT = terr(selectedSource);
-    const tgtT = terr(pendingTarget);
-    const label = pendingType === 'attack' ? 'Attack' : 'Move';
-    html += '<div style="font-size:12px;margin-bottom:4px;color:var(--text2)">' + label + ': ' + (srcT?srcT.name:'?') + ' \u2192 ' + (tgtT?tgtT.name:'?') + '</div>' +
+  // Editing army count for an existing order
+  if (typeof editingOrderIdx === 'number' && editingOrderIdx >= 0 && editingOrderIdx < orders.length) {
+    const eo = orders[editingOrderIdx];
+    const srcT = terr(eo.from);
+    const tgtT = terr(eo.to);
+    const label = eo.type === 'attack' ? 'Attack' : 'Move';
+    // Calculate max armies available for this order (give back its current armies first)
+    const editMax = availableArmies(eo.from) + eo.armies;
+    html += '<div style="font-size:12px;margin-bottom:4px;color:var(--text2)">Edit ' + label + ': ' + (srcT?srcT.name:'?') + ' \u2192 ' + (tgtT?tgtT.name:'?') + '</div>' +
       '<div class="army-selector">' +
-        '<button onclick="adjustPending(-1)">-</button>' +
-        '<span class="army-count">' + pendingArmies + '</span>' +
-        '<button onclick="adjustPending(1)">+</button>' +
-        '<button class="cancel-order" onclick="cancelPending()">Cancel</button>' +
-        '<button class="confirm-order" onclick="confirmPending()">' + label + '</button>' +
+        '<button onclick="adjustEditOrder(-1)">-</button>' +
+        '<span class="army-count">' + eo.armies + '</span>' +
+        '<button onclick="adjustEditOrder(1)">+</button>' +
+        '<button class="cancel-order" onclick="cancelEditOrder()">Done</button>' +
       '</div>';
   }
 
@@ -1055,7 +1135,7 @@ function renderOrdersPanel(pp, cp) {
       var icon = o.type === 'attack' ? '\u2694' : '\u2192';
       var fromT = terr(o.from);
       var toT = terr(o.to);
-      html += '<div class="order-item"><span>' + icon + ' ' + (fromT?fromT.name:o.from) + ' \u2192 ' + (toT?toT.name:o.to) + ' (' + o.armies + ')</span><button class="remove-btn" onclick="removeOrder(' + i + ')">\u2715</button></div>';
+      html += '<div class="order-item"><span>' + icon + ' ' + (fromT?fromT.name:o.from) + ' \u2192 ' + (toT?toT.name:o.to) + ' (' + o.armies + ')</span><button class="remove-btn" onclick="editOrder(' + i + ')" title="Edit armies" style="color:var(--text2)">\u270E</button><button class="remove-btn" onclick="removeOrder(' + i + ')">\u2715</button></div>';
     });
   }
 
@@ -1140,11 +1220,29 @@ function onPickClick(id) {
   if (picks.includes(id)) {
     picks = picks.filter(p => p !== id);
   } else {
-    if (picks.length >= (G.picks_needed || 4)) return;
     if (!G.pick_options || !G.pick_options.includes(id)) return;
+    if (picks.length >= G.pick_options.length) return;
     picks.push(id);
     playSound('tick');
   }
+  updateMap();
+  renderSidebar();
+}
+
+function movePickUp(idx) {
+  if (idx <= 0) return;
+  var tmp = picks[idx];
+  picks[idx] = picks[idx - 1];
+  picks[idx - 1] = tmp;
+  updateMap();
+  renderSidebar();
+}
+
+function movePickDown(idx) {
+  if (idx >= picks.length - 1) return;
+  var tmp = picks[idx];
+  picks[idx] = picks[idx + 1];
+  picks[idx + 1] = tmp;
   updateMap();
   renderSidebar();
 }
@@ -1224,18 +1322,23 @@ function onOrdersClick(id, e) {
         renderSidebar();
         return;
       }
-      // Adjacent target
+      // Adjacent target — immediately queue with max armies
       const tgt = terr(id);
       if (!tgt) return;
 
       const max = availableArmies(selectedSource);
       if (max <= 0) { toast('No armies available', 'error'); selectedSource = null; updateMap(); renderSidebar(); return; }
 
-      pendingTarget = id;
-      pendingType = (tgt.owner === 0) ? 'transfer' : 'attack';
-      pendingArmies = max;
-      pendingMax = max;
-      playSound('tick');
+      const orderType = (tgt.owner === 0) ? 'transfer' : 'attack';
+      orders.push({
+        type: orderType,
+        from: selectedSource,
+        to: id,
+        armies: max
+      });
+      if (orderType === 'attack') playSound('attack');
+      else playSound('tick');
+      selectedSource = null;
       updateMap();
       renderSidebar();
     }
@@ -1306,7 +1409,28 @@ function cancelPending() {
 
 function removeOrder(index) {
   orders.splice(index, 1);
+  if (editingOrderIdx === index) editingOrderIdx = null;
+  else if (typeof editingOrderIdx === 'number' && editingOrderIdx > index) editingOrderIdx--;
   updateMap();
+  renderSidebar();
+}
+
+function editOrder(index) {
+  editingOrderIdx = index;
+  renderSidebar();
+}
+
+function adjustEditOrder(delta) {
+  if (typeof editingOrderIdx !== 'number' || !orders[editingOrderIdx]) return;
+  const o = orders[editingOrderIdx];
+  const maxAvail = availableArmies(o.from) + o.armies; // give back current before recalculating
+  o.armies = Math.max(1, Math.min(maxAvail, o.armies + delta));
+  updateMap();
+  renderSidebar();
+}
+
+function cancelEditOrder() {
+  editingOrderIdx = null;
   renderSidebar();
 }
 
@@ -1374,6 +1498,7 @@ async function endTurn() {
   orders = [];
   selectedSource = null;
   pendingTarget = null;
+  editingOrderIdx = null;
   window._lastTurn = null; // Force orders re-init on next fetchState
   resolving = false;
 
@@ -1534,6 +1659,7 @@ async function newGame() {
   deployLeft = 0;
   selectedSource = null;
   pendingTarget = null;
+  editingOrderIdx = null;
   resolving = false;
   winProbHistory = [];
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };

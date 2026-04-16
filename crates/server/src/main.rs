@@ -322,10 +322,10 @@ async fn submit_local_picks(
     }
 
     let needed = app.map.picking.num_picks;
-    if body.picks.len() != needed {
+    if body.picks.len() < needed {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!("Need exactly {} picks", needed),
+            format!("Need at least {} picks", needed),
         ));
     }
 
