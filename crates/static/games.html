@@ -1,1 +1,676 @@
-<!DOCTYPE html><html><body><p>Coming soon</p></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Games - Aibak</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
+  --neutral:#4b5563;
+}
+html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-height:48px;gap:12px}
+#topbar h1{font-size:16px;font-weight:700;color:var(--gold);letter-spacing:1px}
+#topbar .nav{display:flex;gap:8px;align-items:center}
+#topbar a,#topbar button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px;text-decoration:none;transition:background .15s}
+#topbar a:hover,#topbar button:hover{background:var(--border)}
+
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--bg2);padding:0 16px}
+.tab{padding:10px 20px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+
+.content{max-width:960px;margin:0 auto;padding:24px 16px}
+.section{display:none}
+.section.active{display:block}
+
+.game-list{display:flex;flex-direction:column;gap:8px}
+.game-card{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;transition:border-color .15s}
+.game-card:hover{border-color:var(--text3)}
+.game-info{display:flex;flex-direction:column;gap:4px;flex:1}
+.game-players{font-size:14px;font-weight:600}
+.game-meta{font-size:12px;color:var(--text2);display:flex;gap:12px;flex-wrap:wrap}
+.game-meta span{display:flex;align-items:center;gap:4px}
+.game-actions{display:flex;gap:8px;align-items:center}
+.btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);transition:all .15s;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.btn-watch{background:var(--bg3);color:var(--text)}
+.btn-watch:hover{background:var(--border);color:#fff}
+.btn-play{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn-play:hover{background:#1d4ed8}
+.btn-replay{background:var(--bg3);color:var(--gold);border-color:var(--gold)}
+.btn-replay:hover{background:rgba(227,179,65,.15)}
+
+.status-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase}
+.status-active{background:rgba(37,99,235,.2);color:var(--blue)}
+.status-picking{background:rgba(227,179,65,.2);color:var(--gold)}
+.status-waiting{background:rgba(139,148,158,.2);color:var(--text2)}
+.status-finished{background:rgba(63,185,80,.15);color:var(--green)}
+
+.empty-state{text-align:center;padding:48px 16px;color:var(--text2)}
+.empty-state p{font-size:14px;margin-bottom:16px}
+
+#spectator-view{display:none}
+#spectator-view.active{display:block}
+#browser-view.hidden{display:none}
+
+.spec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.spec-header h2{font-size:18px;font-weight:700}
+.spec-back{cursor:pointer;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:12px;text-decoration:none}
+.spec-back:hover{background:var(--border)}
+
+.spec-stats{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:140px;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px}
+.stat-card .label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.stat-card .value{font-size:20px;font-weight:700}
+.stat-card .value.blue{color:var(--blue)}
+.stat-card .value.red{color:var(--red)}
+.stat-card .value.gold{color:var(--gold)}
+
+.win-prob-container{margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 16px}
+.win-prob-label{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:6px}
+.win-prob-bar{height:8px;border-radius:4px;background:var(--red);overflow:hidden;position:relative}
+.win-prob-bar .blue-fill{height:100%;background:var(--blue);transition:width .6s ease;border-radius:4px 0 0 4px}
+
+.spec-map-container{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;min-height:400px;margin-bottom:16px}
+#spec-map-svg{width:100%;height:100%;min-height:400px}
+.territory-path{cursor:default;transition:fill .2s ease}
+.territory-path:hover{filter:brightness(1.2)}
+.army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+
+.event-log{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;max-height:300px;overflow-y:auto}
+.event-log h3{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.event-entry{font-size:12px;color:var(--text2);padding:4px 0;border-bottom:1px solid var(--border)}
+.event-entry:last-child{border-bottom:none}
+.event-entry .turn-num{font-weight:600;color:var(--gold);margin-right:6px}
+
+.turn-stepper{display:flex;align-items:center;gap:12px;margin-bottom:16px;justify-content:center}
+.turn-stepper button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600}
+.turn-stepper button:hover:not(:disabled){background:var(--border)}
+.turn-stepper button:disabled{opacity:.4;cursor:not-allowed}
+.turn-stepper .turn-display{font-size:14px;font-weight:600;min-width:80px;text-align:center}
+
+.auto-refresh{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px}
+.auto-refresh .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse-dot 2s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--border)}
+
+.local-game-card{padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
+.local-game-card h3{font-size:14px;font-weight:600;margin-bottom:8px}
+.local-game-card .meta{font-size:12px;color:var(--text2);margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>AIBAK</h1>
+  <div class="nav">
+    <a href="/">Local Play</a>
+    <a href="/games" style="color:var(--gold)">Games</a>
+    <a href="/editor">Map Editor</a>
+  </div>
+</div>
+
+<div id="browser-view">
+  <div class="tabs">
+    <div class="tab active" data-tab="active">Active Games</div>
+    <div class="tab" data-tab="recent">Recent Games</div>
+    <div class="tab" data-tab="local">Local Game</div>
+  </div>
+
+  <div class="content">
+    <div id="tab-active" class="section active">
+      <div id="active-list" class="game-list">
+        <div class="empty-state" id="active-empty">
+          <p>No active multiplayer games.</p>
+          <p style="font-size:12px">Games will appear here when players start matches. A database connection is required for multiplayer.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-recent" class="section">
+      <div id="recent-list" class="game-list">
+        <div class="empty-state" id="recent-empty">
+          <p>No recently completed games.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-local" class="section">
+      <div id="local-game-info">
+        <div class="local-game-card">
+          <h3>Current Local Game (vs AI)</h3>
+          <div class="meta" id="local-meta">Loading...</div>
+          <div style="display:flex;gap:8px">
+            <a href="/" class="btn btn-play">Continue Playing</a>
+            <button class="btn btn-watch" onclick="spectateLocal()">Spectate (No Fog)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="spectator-view">
+  <div class="content">
+    <div class="spec-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <a class="spec-back" onclick="exitSpectator()">&larr; Back to Games</a>
+        <h2 id="spec-title">Spectating</h2>
+      </div>
+      <div class="auto-refresh" id="auto-refresh-indicator" style="display:none">
+        <span class="dot"></span> Live - auto-refreshing
+      </div>
+    </div>
+
+    <div class="spec-stats">
+      <div class="stat-card">
+        <div class="label">Player 1 (Blue)</div>
+        <div class="value blue" id="spec-p0-terr">-</div>
+        <div style="font-size:11px;color:var(--text2)">territories | income: <span id="spec-p0-income">-</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Turn</div>
+        <div class="value gold" id="spec-turn">-</div>
+        <div style="font-size:11px;color:var(--text2)" id="spec-phase">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Player 2 (Red)</div>
+        <div class="value red" id="spec-p1-terr">-</div>
+        <div style="font-size:11px;color:var(--text2)">territories | income: <span id="spec-p1-income">-</span></div>
+      </div>
+    </div>
+
+    <div class="win-prob-container">
+      <div class="win-prob-label">
+        <span id="wp-p0-label">Player 1: --%</span>
+        <span id="wp-p1-label">Player 2: --%</span>
+      </div>
+      <div class="win-prob-bar">
+        <div class="blue-fill" id="wp-blue-fill" style="width:50%"></div>
+      </div>
+    </div>
+
+    <div class="turn-stepper" id="turn-stepper" style="display:none">
+      <button id="step-first" onclick="stepTurn('first')">&laquo; First</button>
+      <button id="step-prev" onclick="stepTurn('prev')">&lsaquo; Prev</button>
+      <div class="turn-display" id="step-turn-display">Turn 1</div>
+      <button id="step-next" onclick="stepTurn('next')">Next &rsaquo;</button>
+      <button id="step-last" onclick="stepTurn('last')">Last &raquo;</button>
+    </div>
+
+    <div class="spec-map-container">
+      <svg id="spec-map-svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <div class="event-log" id="event-log">
+      <h3>Turn Events</h3>
+      <div id="event-entries">
+        <div class="event-entry" style="color:var(--text3)">No events yet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.section').forEach(function(s) { s.classList.remove('active'); });
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+var spectatorInterval = null;
+var currentSpectateId = null;
+var spectateMode = null;
+var localReplayData = null;
+var replayTurnIndex = 0;
+var replayMaxTurn = 0;
+
+var COLORS = { 0: '#2563eb', 1: '#dc2626', 255: '#4b5563' };
+function ownerColor(owner) { return COLORS[owner] || COLORS[255]; }
+
+function escHtml(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function loadActiveGames() {
+  try {
+    var res = await fetch('/api/games/active');
+    if (!res.ok) throw new Error('unavailable');
+    var games = await res.json();
+    renderGameList('active-list', 'active-empty', games, 'active');
+  } catch(e) {
+    document.getElementById('active-empty').style.display = '';
+  }
+}
+
+async function loadRecentGames() {
+  try {
+    var res = await fetch('/api/games/recent');
+    if (!res.ok) throw new Error('unavailable');
+    var games = await res.json();
+    renderGameList('recent-list', 'recent-empty', games, 'recent');
+  } catch(e) {
+    document.getElementById('recent-empty').style.display = '';
+  }
+}
+
+async function loadLocalGame() {
+  try {
+    var res = await fetch('/api/game');
+    var data = await res.json();
+    var meta = document.getElementById('local-meta');
+    var phaseText = data.phase === 'picking' ? 'Picking Phase' : data.phase === 'play' ? 'Turn ' + data.turn : 'Finished';
+    var winner = (data.winner !== undefined && data.winner !== null) ? (data.winner === 0 ? ' - You Won!' : ' - AI Won') : '';
+    meta.textContent = phaseText + ' | You: ' + data.my_territories + ' territories | AI: ' + data.enemy_territories + ' territories' + winner;
+  } catch(e) {
+    document.getElementById('local-meta').textContent = 'Could not load local game.';
+  }
+}
+
+function renderGameList(listId, emptyId, games, type) {
+  var list = document.getElementById(listId);
+  var empty = document.getElementById(emptyId);
+  if (!games || games.length === 0) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  list.querySelectorAll('.game-card').forEach(function(c) { c.remove(); });
+
+  games.forEach(function(g) {
+    var card = document.createElement('div');
+    card.className = 'game-card';
+    var p1 = g.player_a_name || 'Player 1';
+    var p2 = g.player_b_name || (g.status === 'waiting' ? 'Waiting...' : 'Player 2');
+    var statusClass = 'status-' + g.status;
+    var actionBtn = '';
+    if (type === 'active') {
+      actionBtn = '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + g.id + '\')">Watch</button>';
+    } else {
+      actionBtn = '<button class="btn btn-replay" onclick="spectateMultiplayer(\'' + g.id + '\')">Replay</button>';
+    }
+    var created = new Date(g.created_at);
+    var timeStr = created.toLocaleDateString() + ' ' + created.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    card.innerHTML =
+      '<div class="game-info">' +
+        '<div class="game-players">' + escHtml(p1) + ' vs ' + escHtml(p2) + '</div>' +
+        '<div class="game-meta">' +
+          '<span class="status-badge ' + statusClass + '">' + g.status + '</span>' +
+          '<span>Map: ' + escHtml(g.template) + '</span>' +
+          '<span>Turn ' + g.turn + '</span>' +
+          '<span>' + timeStr + '</span>' +
+          (g.winner_name ? '<span>Winner: ' + escHtml(g.winner_name) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="game-actions">' + actionBtn + '</div>';
+    list.appendChild(card);
+  });
+}
+
+async function spectateMultiplayer(gameId) {
+  spectateMode = 'multiplayer';
+  currentSpectateId = gameId;
+  document.getElementById('browser-view').classList.add('hidden');
+  document.getElementById('spectator-view').classList.add('active');
+  await refreshMultiplayerSpectate();
+  spectatorInterval = setInterval(refreshMultiplayerSpectate, 5000);
+}
+
+async function refreshMultiplayerSpectate() {
+  try {
+    var res = await fetch('/api/games/' + currentSpectateId + '/spectate');
+    if (!res.ok) return;
+    var data = await res.json();
+    var g = data.game;
+    var p1 = g.player_a_name || 'Player 1';
+    var p2 = g.player_b_name || 'Player 2';
+    document.getElementById('spec-title').textContent = p1 + ' vs ' + p2;
+
+    if (data.state) {
+      var state = data.state;
+      var owners = state.territory_owners || [];
+      var p0count = owners.filter(function(o) { return o === 0; }).length;
+      var p1count = owners.filter(function(o) { return o === 1; }).length;
+      document.getElementById('spec-p0-terr').textContent = p0count;
+      document.getElementById('spec-p1-terr').textContent = p1count;
+      document.getElementById('spec-turn').textContent = state.turn || g.turn;
+      document.getElementById('spec-phase').textContent =
+        state.phase === 'Finished' ? 'Finished' : state.phase === 'Picking' ? 'Picking' : 'In Progress';
+      document.getElementById('spec-p0-income').textContent = '~' + Math.max(5, Math.floor(p0count / 3));
+      document.getElementById('spec-p1-income').textContent = '~' + Math.max(5, Math.floor(p1count / 3));
+      renderSpectatorMap(data.state, data.map);
+    }
+
+    if (data.win_probability) {
+      var wp = data.win_probability;
+      var p0pct = Math.round(wp.player_0 * 100);
+      var p1pct = Math.round(wp.player_1 * 100);
+      document.getElementById('wp-p0-label').textContent = p1 + ': ' + p0pct + '%';
+      document.getElementById('wp-p1-label').textContent = p2 + ': ' + p1pct + '%';
+      document.getElementById('wp-blue-fill').style.width = p0pct + '%';
+    }
+
+    var isLive = g.status !== 'finished';
+    document.getElementById('auto-refresh-indicator').style.display = isLive ? '' : 'none';
+    if (!isLive && spectatorInterval) { clearInterval(spectatorInterval); spectatorInterval = null; }
+    document.getElementById('turn-stepper').style.display = 'none';
+  } catch(e) { console.error('Spectate refresh error:', e); }
+}
+
+async function spectateLocal() {
+  spectateMode = 'local';
+  document.getElementById('browser-view').classList.add('hidden');
+  document.getElementById('spectator-view').classList.add('active');
+  document.getElementById('spec-title').textContent = 'Local Game (Spectator View)';
+  await refreshLocalSpectate();
+  await loadLocalReplayData();
+  spectatorInterval = setInterval(refreshLocalSpectate, 5000);
+}
+
+async function refreshLocalSpectate() {
+  try {
+    var res = await fetch('/api/game');
+    var data = await res.json();
+    document.getElementById('spec-p0-terr').textContent = data.my_territories;
+    document.getElementById('spec-p1-terr').textContent = data.enemy_territories;
+    document.getElementById('spec-turn').textContent = data.turn;
+    document.getElementById('spec-phase').textContent =
+      data.phase === 'finished' ? 'Finished' : data.phase === 'picking' ? 'Picking' : 'In Progress';
+    document.getElementById('spec-p0-income').textContent = data.income;
+    document.getElementById('spec-p1-income').textContent = '?';
+
+    if (data.win_probability) {
+      var wp = data.win_probability;
+      var p0pct = Math.round(wp.player_0 * 100);
+      var p1pct = Math.round(wp.player_1 * 100);
+      document.getElementById('wp-p0-label').textContent = 'You: ' + p0pct + '%';
+      document.getElementById('wp-p1-label').textContent = 'AI: ' + p1pct + '%';
+      document.getElementById('wp-blue-fill').style.width = p0pct + '%';
+    }
+
+    renderLocalSpectatorMap(data);
+    renderEventLog(data.history || []);
+
+    if (data.phase === 'finished' && spectatorInterval) {
+      clearInterval(spectatorInterval); spectatorInterval = null;
+      document.getElementById('auto-refresh-indicator').style.display = 'none';
+    } else {
+      document.getElementById('auto-refresh-indicator').style.display = '';
+    }
+
+    if (data.history && data.history.length > 0) {
+      replayMaxTurn = data.history.length;
+      replayTurnIndex = replayMaxTurn;
+      document.getElementById('turn-stepper').style.display = '';
+      document.getElementById('step-turn-display').textContent = 'Turn ' + data.turn + ' (Live)';
+      updateStepperButtons();
+    }
+  } catch(e) { console.error('Local spectate error:', e); }
+}
+
+async function loadLocalReplayData() {
+  localReplayData = {};
+  for (var i = 0; i < 200; i++) {
+    try {
+      var res = await fetch('/api/game/replay/' + i);
+      if (!res.ok) break;
+      localReplayData[i] = await res.json();
+    } catch(e) { break; }
+  }
+}
+
+function stepTurn(dir) {
+  if (spectateMode !== 'local') return;
+  if (dir === 'first') replayTurnIndex = 0;
+  else if (dir === 'prev') replayTurnIndex = Math.max(0, replayTurnIndex - 1);
+  else if (dir === 'next') replayTurnIndex = Math.min(replayMaxTurn, replayTurnIndex + 1);
+  else if (dir === 'last') replayTurnIndex = replayMaxTurn;
+  updateStepperButtons();
+  if (replayTurnIndex === replayMaxTurn) {
+    document.getElementById('step-turn-display').textContent = 'Live';
+    refreshLocalSpectate();
+    return;
+  }
+  document.getElementById('step-turn-display').textContent = 'Turn ' + (replayTurnIndex + 1);
+  var rd = localReplayData[replayTurnIndex];
+  if (rd) renderReplayTurn(rd);
+}
+
+function updateStepperButtons() {
+  document.getElementById('step-first').disabled = replayTurnIndex === 0;
+  document.getElementById('step-prev').disabled = replayTurnIndex === 0;
+  document.getElementById('step-next').disabled = replayTurnIndex === replayMaxTurn;
+  document.getElementById('step-last').disabled = replayTurnIndex === replayMaxTurn;
+}
+
+function renderReplayTurn(rd) {
+  var svg = document.getElementById('spec-map-svg');
+  if (!rd.territories) return;
+  rd.territories.forEach(function(t) {
+    var pathEl = svg.querySelector('[data-tid="' + t.id + '"] .territory-path');
+    if (pathEl) pathEl.setAttribute('fill', ownerColor(t.owner));
+    var textEl = svg.querySelector('[data-tid="' + t.id + '"] .army-text');
+    if (textEl) textEl.textContent = t.visible ? t.armies : '';
+  });
+  var p0count = rd.territories.filter(function(t) { return t.owner === 0; }).length;
+  var p1count = rd.territories.filter(function(t) { return t.owner === 1; }).length;
+  document.getElementById('spec-p0-terr').textContent = p0count;
+  document.getElementById('spec-p1-terr').textContent = p1count;
+  if (rd.win_probability !== undefined && rd.win_probability !== null) {
+    var p0pct = Math.round(rd.win_probability * 100);
+    document.getElementById('wp-p0-label').textContent = 'You: ' + p0pct + '%';
+    document.getElementById('wp-p1-label').textContent = 'AI: ' + (100 - p0pct) + '%';
+    document.getElementById('wp-blue-fill').style.width = p0pct + '%';
+  }
+}
+
+function renderLocalSpectatorMap(data) {
+  var svg = document.getElementById('spec-map-svg');
+  var territories = data.territories || [];
+  if (territories.length === 0) return;
+
+  var existingGroups = svg.querySelectorAll('.territory-group');
+  if (existingGroups.length !== territories.length) {
+    svg.innerHTML = '';
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    territories.forEach(function(t) {
+      if (t.path) {
+        minX = Math.min(minX, t.label_x - 40);
+        minY = Math.min(minY, t.label_y - 40);
+        maxX = Math.max(maxX, t.label_x + 40);
+        maxY = Math.max(maxY, t.label_y + 40);
+      }
+    });
+    if (minX === Infinity) {
+      var cols = Math.ceil(Math.sqrt(territories.length));
+      territories.forEach(function(t, i) {
+        if (!t.label_x && !t.label_y) {
+          t.label_x = (i % cols) * 80 + 50;
+          t.label_y = Math.floor(i / cols) * 80 + 50;
+        }
+      });
+      minX = 0; minY = 0;
+      maxX = Math.ceil(Math.sqrt(territories.length)) * 80 + 100;
+      maxY = maxX;
+    }
+    var pad = 30;
+    svg.setAttribute('viewBox', (minX - pad) + ' ' + (minY - pad) + ' ' + (maxX - minX + pad * 2) + ' ' + (maxY - minY + pad * 2));
+
+    territories.forEach(function(t) {
+      var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.classList.add('territory-group');
+      g.setAttribute('data-tid', t.id);
+      if (t.path) {
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.classList.add('territory-path');
+        path.setAttribute('d', t.path);
+        path.setAttribute('fill', ownerColor(t.owner));
+        path.setAttribute('stroke', '#30363d');
+        path.setAttribute('stroke-width', '1');
+        g.appendChild(path);
+      } else {
+        var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.classList.add('territory-path');
+        circle.setAttribute('cx', t.label_x);
+        circle.setAttribute('cy', t.label_y);
+        circle.setAttribute('r', '20');
+        circle.setAttribute('fill', ownerColor(t.owner));
+        circle.setAttribute('stroke', '#30363d');
+        circle.setAttribute('stroke-width', '1');
+        g.appendChild(circle);
+      }
+      var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.classList.add('army-text');
+      text.setAttribute('x', t.label_x);
+      text.setAttribute('y', t.label_y);
+      text.textContent = t.armies || '';
+      g.appendChild(text);
+      svg.appendChild(g);
+    });
+  } else {
+    territories.forEach(function(t) {
+      var g = svg.querySelector('[data-tid="' + t.id + '"]');
+      if (!g) return;
+      var pathEl = g.querySelector('.territory-path');
+      if (pathEl) pathEl.setAttribute('fill', ownerColor(t.owner));
+      var textEl = g.querySelector('.army-text');
+      if (textEl) textEl.textContent = t.armies || '';
+    });
+  }
+}
+
+function renderSpectatorMap(state, mapData) {
+  var svg = document.getElementById('spec-map-svg');
+  if (!state || !mapData) return;
+  var territories = mapData.territories || [];
+  var owners = state.territory_owners || [];
+  var armies = state.territory_armies || [];
+  if (territories.length === 0) return;
+
+  var existingGroups = svg.querySelectorAll('.territory-group');
+  if (existingGroups.length !== territories.length) {
+    svg.innerHTML = '';
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    territories.forEach(function(t) {
+      var vis = t.visual;
+      if (vis) {
+        var lx = vis.label_pos ? vis.label_pos[0] : 0;
+        var ly = vis.label_pos ? vis.label_pos[1] : 0;
+        minX = Math.min(minX, lx - 40);
+        minY = Math.min(minY, ly - 40);
+        maxX = Math.max(maxX, lx + 40);
+        maxY = Math.max(maxY, ly + 40);
+      }
+    });
+    if (minX === Infinity) {
+      var cols = Math.ceil(Math.sqrt(territories.length));
+      minX = 0; minY = 0;
+      maxX = cols * 80 + 100; maxY = maxX;
+    }
+    var pad = 30;
+    svg.setAttribute('viewBox', (minX - pad) + ' ' + (minY - pad) + ' ' + (maxX - minX + pad * 2) + ' ' + (maxY - minY + pad * 2));
+
+    territories.forEach(function(t, i) {
+      var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.classList.add('territory-group');
+      g.setAttribute('data-tid', i);
+      var vis = t.visual;
+      var lx = vis && vis.label_pos ? vis.label_pos[0] : (i % 10) * 80 + 50;
+      var ly = vis && vis.label_pos ? vis.label_pos[1] : Math.floor(i / 10) * 80 + 50;
+      if (vis && vis.path) {
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.classList.add('territory-path');
+        path.setAttribute('d', vis.path);
+        path.setAttribute('fill', ownerColor(owners[i] !== undefined ? owners[i] : 255));
+        path.setAttribute('stroke', '#30363d');
+        path.setAttribute('stroke-width', '1');
+        g.appendChild(path);
+      } else {
+        var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.classList.add('territory-path');
+        circle.setAttribute('cx', lx);
+        circle.setAttribute('cy', ly);
+        circle.setAttribute('r', '20');
+        circle.setAttribute('fill', ownerColor(owners[i] !== undefined ? owners[i] : 255));
+        circle.setAttribute('stroke', '#30363d');
+        circle.setAttribute('stroke-width', '1');
+        g.appendChild(circle);
+      }
+      var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.classList.add('army-text');
+      text.setAttribute('x', lx);
+      text.setAttribute('y', ly);
+      text.textContent = armies[i] || '';
+      g.appendChild(text);
+      svg.appendChild(g);
+    });
+  } else {
+    territories.forEach(function(t, i) {
+      var g = svg.querySelector('[data-tid="' + i + '"]');
+      if (!g) return;
+      var pathEl = g.querySelector('.territory-path');
+      if (pathEl) pathEl.setAttribute('fill', ownerColor(owners[i] !== undefined ? owners[i] : 255));
+      var textEl = g.querySelector('.army-text');
+      if (textEl) textEl.textContent = armies[i] || '';
+    });
+  }
+}
+
+function renderEventLog(history) {
+  var container = document.getElementById('event-entries');
+  if (!history || history.length === 0) {
+    container.innerHTML = '<div class="event-entry" style="color:var(--text3)">No events yet.</div>';
+    return;
+  }
+  var html = '';
+  var recent = history.slice(-20).reverse();
+  recent.forEach(function(turnLog) {
+    if (turnLog.events && turnLog.events.length > 0) {
+      turnLog.events.forEach(function(ev) {
+        html += '<div class="event-entry"><span class="turn-num">T' + turnLog.turn + '</span>' + formatEvent(ev) + '</div>';
+      });
+    }
+  });
+  if (!html) html = '<div class="event-entry" style="color:var(--text3)">No visible events.</div>';
+  container.innerHTML = html;
+}
+
+function formatEvent(ev) {
+  if (ev.Deploy) return 'Deploy ' + ev.Deploy.armies + ' to territory ' + ev.Deploy.territory;
+  if (ev.Attack) return 'Attack ' + ev.Attack.from + ' &rarr; ' + ev.Attack.to + ': ' + ev.Attack.attackers_killed + ' lost, ' + ev.Attack.defenders_killed + ' killed';
+  if (ev.Transfer) return 'Transfer ' + ev.Transfer.armies + ' from ' + ev.Transfer.from + ' &rarr; ' + ev.Transfer.to;
+  if (ev.Capture) return 'Territory ' + ev.Capture.territory + ' captured by player ' + ev.Capture.new_owner;
+  if (ev.Blockade) return 'Blockade at territory ' + ev.Blockade.territory;
+  if (ev.Eliminated) return 'Player ' + ev.Eliminated.player + ' eliminated!';
+  if (ev.Victory) return 'Player ' + ev.Victory.player + ' wins!';
+  return JSON.stringify(ev);
+}
+
+function exitSpectator() {
+  if (spectatorInterval) { clearInterval(spectatorInterval); spectatorInterval = null; }
+  currentSpectateId = null;
+  spectateMode = null;
+  localReplayData = null;
+  document.getElementById('spectator-view').classList.remove('active');
+  document.getElementById('browser-view').classList.remove('hidden');
+  document.getElementById('spec-map-svg').innerHTML = '';
+}
+
+loadActiveGames();
+loadRecentGames();
+loadLocalGame();
+</script>
+</body>
+</html>

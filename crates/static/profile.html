@@ -1,1 +1,453 @@
-<!DOCTYPE html><html><body><p>Coming soon</p></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player Profile - strat-club</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  a { color: #58a6ff; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 20px;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #e6edf3;
+  }
+
+  .back-link {
+    font-size: 14px;
+    color: #8b949e;
+    padding: 6px 14px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    transition: border-color 0.15s;
+  }
+
+  .back-link:hover {
+    border-color: #58a6ff;
+    color: #58a6ff;
+    text-decoration: none;
+  }
+
+  /* Stats cards */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .stat-card .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b949e;
+    margin-bottom: 6px;
+  }
+
+  .stat-card .value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #e6edf3;
+  }
+
+  .stat-card .sub {
+    font-size: 13px;
+    color: #8b949e;
+    margin-top: 4px;
+  }
+
+  /* Rank badge */
+  .rank-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  .rank-Bronze { background: rgba(205,127,50,0.2); color: #cd7f32; border: 1px solid #cd7f32; }
+  .rank-Silver { background: rgba(192,192,192,0.15); color: #c0c0c0; border: 1px solid #c0c0c0; }
+  .rank-Gold { background: rgba(255,215,0,0.15); color: #ffd700; border: 1px solid #ffd700; }
+  .rank-Platinum { background: rgba(229,228,226,0.12); color: #e5e4e2; border: 1px solid #e5e4e2; }
+  .rank-Diamond { background: rgba(185,242,255,0.12); color: #b9f2ff; border: 1px solid #b9f2ff; }
+  .rank-Master { background: rgba(155,89,182,0.2); color: #9b59b6; border: 1px solid #9b59b6; }
+  .rank-Grandmaster { background: rgba(255,68,68,0.2); color: #ff4444; border: 1px solid #ff4444; }
+
+  /* Streak */
+  .streak-positive { color: #3fb950; }
+  .streak-negative { color: #f85149; }
+  .streak-neutral { color: #8b949e; }
+
+  /* Panels */
+  .panel {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  .panel h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e6edf3;
+    margin-bottom: 16px;
+  }
+
+  /* Chart */
+  .chart-container {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .chart-container svg {
+    width: 100%;
+    height: auto;
+  }
+
+  /* Two column layout */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 700px) {
+    .two-col { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Match history table */
+  .match-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .match-table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid #30363d;
+    color: #8b949e;
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .match-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #21262d;
+    color: #e6edf3;
+  }
+
+  .match-table tr:last-child td { border-bottom: none; }
+
+  .result-win { color: #3fb950; font-weight: 600; }
+  .result-loss { color: #f85149; font-weight: 600; }
+
+  /* Bonus / picks list */
+  .freq-list { list-style: none; }
+
+  .freq-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #21262d;
+    font-size: 14px;
+  }
+
+  .freq-list li:last-child { border-bottom: none; }
+
+  .freq-bar-bg {
+    flex: 1;
+    max-width: 120px;
+    height: 6px;
+    background: #21262d;
+    border-radius: 3px;
+    margin-left: 12px;
+    overflow: hidden;
+  }
+
+  .freq-bar {
+    height: 100%;
+    background: #58a6ff;
+    border-radius: 3px;
+  }
+
+  .freq-count {
+    color: #8b949e;
+    font-size: 12px;
+    min-width: 30px;
+    text-align: right;
+    margin-left: 8px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: #8b949e;
+  }
+
+  .empty-state .big { font-size: 48px; margin-bottom: 12px; opacity: 0.4; }
+
+  .empty-state p { font-size: 15px; margin-bottom: 16px; }
+
+  .empty-state a {
+    display: inline-block;
+    padding: 8px 20px;
+    background: #238636;
+    color: #fff;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .empty-state a:hover { background: #2ea043; text-decoration: none; }
+
+  .loading { text-align: center; padding: 40px; color: #8b949e; }
+
+  .sparkline-label {
+    font-size: 13px;
+    color: #8b949e;
+    margin-top: 8px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Player Profile</h1>
+    <a href="/" class="back-link">Back to Game</a>
+  </header>
+  <div id="content">
+    <div class="loading">Loading stats...</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  function escHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function formatRating(r) { return Math.round(r).toLocaleString(); }
+
+  function buildRatingChart(history) {
+    if (history.length < 2) return '<p style="color:#8b949e;text-align:center;padding:20px;">Need at least 2 games for a chart.</p>';
+
+    var W = 700, H = 260, PL = 55, PR = 20, PT = 20, PB = 40;
+    var cw = W - PL - PR, ch = H - PT - PB;
+
+    var vals = [1500].concat(history);
+    var minR = Math.floor(Math.min.apply(null, vals) / 50) * 50 - 50;
+    var maxR = Math.ceil(Math.max.apply(null, vals) / 50) * 50 + 50;
+    var range = maxR - minR || 100;
+
+    function xp(i) { return PL + (i / (vals.length - 1)) * cw; }
+    function yp(v) { return PT + (1 - (v - minR) / range) * ch; }
+
+    var grid = '';
+    for (var i = 0; i <= 5; i++) {
+      var val = minR + (range * i / 5);
+      var yy = yp(val);
+      grid += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W - PR) + '" y2="' + yy + '" stroke="#21262d" stroke-width="1"/>';
+      grid += '<text x="' + (PL - 8) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#8b949e" font-size="11">' + Math.round(val) + '</text>';
+    }
+
+    var xLabels = '';
+    var lc = Math.min(vals.length, 10);
+    for (var i = 0; i < lc; i++) {
+      var idx = Math.round(i * (vals.length - 1) / (lc - 1));
+      xLabels += '<text x="' + xp(idx) + '" y="' + (H - 8) + '" text-anchor="middle" fill="#8b949e" font-size="11">' + idx + '</text>';
+    }
+
+    var points = vals.map(function(v, i) { return { x: xp(i), y: yp(v) }; });
+    var pathD = 'M' + points[0].x + ',' + points[0].y;
+    for (var i = 1; i < points.length; i++) {
+      var px = points[i-1], cx = points[i], cpx = (px.x + cx.x) / 2;
+      pathD += ' C' + cpx + ',' + px.y + ' ' + cpx + ',' + cx.y + ' ' + cx.x + ',' + cx.y;
+    }
+
+    var fillD = pathD + ' L' + points[points.length-1].x + ',' + (PT + ch) + ' L' + points[0].x + ',' + (PT + ch) + ' Z';
+
+    var dots = '';
+    for (var i = 0; i < points.length; i++) {
+      var color = i === 0 ? '#8b949e' : (vals[i] >= vals[i-1] ? '#3fb950' : '#f85149');
+      dots += '<circle cx="' + points[i].x + '" cy="' + points[i].y + '" r="4" fill="' + color + '" stroke="#0d1117" stroke-width="2"/>';
+    }
+
+    var baseline = '';
+    if (minR <= 1500 && maxR >= 1500) {
+      var by = yp(1500);
+      baseline = '<line x1="' + PL + '" y1="' + by + '" x2="' + (W-PR) + '" y2="' + by + '" stroke="#484f58" stroke-width="1" stroke-dasharray="4,4"/>';
+      baseline += '<text x="' + (W-PR+4) + '" y="' + (by+4) + '" fill="#484f58" font-size="10">1500</text>';
+    }
+
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">' +
+      '<defs><linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#58a6ff" stop-opacity="0.3"/>' +
+      '<stop offset="1" stop-color="#58a6ff" stop-opacity="0.02"/>' +
+      '</linearGradient></defs>' +
+      grid + baseline +
+      '<path d="' + fillD + '" fill="url(#rg)"/>' +
+      '<path d="' + pathD + '" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+      dots + xLabels +
+      '<text x="' + (W/2) + '" y="' + H + '" text-anchor="middle" fill="#8b949e" font-size="11">Games Played</text>' +
+      '</svg>';
+  }
+
+  function buildWinProbSparkline(probs) {
+    if (probs.length < 2) return '<p style="color:#8b949e;text-align:center;padding:20px;">Need at least 2 games.</p>';
+
+    var W = 700, H = 100, PL = 40, PR = 20, PT = 10, PB = 25;
+    var cw = W - PL - PR, ch = H - PT - PB;
+
+    function xp(i) { return PL + (i / (probs.length - 1)) * cw; }
+    function yp(v) { return PT + (1 - v) * ch; }
+
+    var points = probs.map(function(v, i) { return { x: xp(i), y: yp(v) }; });
+    var pathD = 'M' + points[0].x + ',' + points[0].y;
+    for (var i = 1; i < points.length; i++) {
+      var px = points[i-1], cx = points[i], cpx = (px.x + cx.x) / 2;
+      pathD += ' C' + cpx + ',' + px.y + ' ' + cpx + ',' + cx.y + ' ' + cx.x + ',' + cx.y;
+    }
+
+    var midY = yp(0.5);
+    var recent = probs.slice(-5);
+    var avgRecent = recent.reduce(function(a, b) { return a + b; }, 0) / recent.length;
+    var trendColor = avgRecent > 0.52 ? '#3fb950' : avgRecent < 0.48 ? '#f85149' : '#e3b341';
+    var trendMsg = avgRecent > 0.52 ? 'You are improving!' : avgRecent < 0.48 ? 'Facing tougher matchups.' : 'Stable performance.';
+
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">' +
+      '<line x1="' + PL + '" y1="' + midY + '" x2="' + (W-PR) + '" y2="' + midY + '" stroke="#30363d" stroke-width="1" stroke-dasharray="3,3"/>' +
+      '<text x="' + (PL-6) + '" y="' + (yp(1)+4) + '" text-anchor="end" fill="#8b949e" font-size="10">100%</text>' +
+      '<text x="' + (PL-6) + '" y="' + (midY+4) + '" text-anchor="end" fill="#8b949e" font-size="10">50%</text>' +
+      '<text x="' + (PL-6) + '" y="' + (yp(0)+4) + '" text-anchor="end" fill="#8b949e" font-size="10">0%</text>' +
+      '<path d="' + pathD + '" fill="none" stroke="' + trendColor + '" stroke-width="2" stroke-linecap="round"/>' +
+      '</svg>' +
+      '<div class="sparkline-label">Starting win probability trend over recent games. ' + trendMsg + '</div>';
+  }
+
+  function buildFreqList(items) {
+    if (!items || !items.length) return '<p style="color:#8b949e;font-size:14px;">No data yet.</p>';
+    var top = items.slice(0, 8);
+    var mc = Math.max.apply(null, top.map(function(x) { return x[1]; }));
+    return '<ul class="freq-list">' + top.map(function(item) {
+      return '<li><span>' + escHtml(item[0]) + '</span>' +
+        '<div class="freq-bar-bg"><div class="freq-bar" style="width:' + (item[1] / mc * 100).toFixed(1) + '%"></div></div>' +
+        '<span class="freq-count">' + item[1] + '</span></li>';
+    }).join('') + '</ul>';
+  }
+
+  function buildMatchTable(matches) {
+    if (!matches || !matches.length) return '<p style="color:#8b949e;font-size:14px;">No games played yet.</p>';
+    var rows = matches.map(function(m) {
+      return '<tr>' +
+        '<td>#' + m.game_number + '</td>' +
+        '<td class="' + (m.result === 'win' ? 'result-win' : 'result-loss') + '">' + (m.result === 'win' ? 'W' : 'L') + '</td>' +
+        '<td>' + m.turns + ' turns</td>' +
+        '<td>' + escHtml(m.map) + '</td>' +
+        '<td>' + formatRating(m.rating_after) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return '<table class="match-table">' +
+      '<thead><tr><th>Game</th><th>Result</th><th>Length</th><th>Map</th><th>Rating</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table>';
+  }
+
+  async function loadProfile() {
+    var content = document.getElementById('content');
+    try {
+      var resp = await fetch('/api/stats');
+      if (!resp.ok) throw new Error('Failed to load stats');
+      var s = await resp.json();
+
+      if (s.games_played === 0) {
+        content.innerHTML =
+          '<div class="empty-state">' +
+          '<div class="big">&#9876;</div>' +
+          '<p>No games played yet. Complete a game to see your stats!</p>' +
+          '<a href="/">Play a Game</a></div>';
+        return;
+      }
+
+      var streakClass = s.streak > 0 ? 'streak-positive' : s.streak < 0 ? 'streak-negative' : 'streak-neutral';
+      var streakText = s.streak > 0 ? s.streak + 'W' : s.streak < 0 ? Math.abs(s.streak) + 'L' : '0';
+      var streakLabel = s.streak > 0 ? 'winning' : s.streak < 0 ? 'losing' : 'none';
+
+      content.innerHTML =
+        '<div class="stats-grid">' +
+          '<div class="stat-card"><div class="label">Games Played</div><div class="value">' + s.games_played + '</div><div class="sub">' + s.wins + 'W / ' + s.losses + 'L</div></div>' +
+          '<div class="stat-card"><div class="label">Rating</div><div class="value">' + formatRating(s.rating) + '</div><div class="sub"><span class="rank-badge rank-' + s.rank_tier + '">' + s.rank_tier + '</span></div></div>' +
+          '<div class="stat-card"><div class="label">Win Rate</div><div class="value">' + s.win_rate.toFixed(1) + '%</div><div class="sub">' + s.wins + ' victories</div></div>' +
+          '<div class="stat-card"><div class="label">Avg Game Length</div><div class="value">' + s.avg_game_length.toFixed(1) + '</div><div class="sub">turns per game</div></div>' +
+          '<div class="stat-card"><div class="label">Current Streak</div><div class="value ' + streakClass + '">' + streakText + '</div><div class="sub">' + streakLabel + '</div></div>' +
+        '</div>' +
+        '<div class="panel"><h2>Rating History</h2><div class="chart-container" id="rating-chart"></div></div>' +
+        '<div class="panel"><h2>Win Probability Over Games</h2><div class="chart-container" id="winprob-chart"></div></div>' +
+        '<div class="two-col">' +
+          '<div class="panel"><h2>Bonus Efficiency</h2><div id="bonus-list"></div></div>' +
+          '<div class="panel"><h2>Favorite Starting Picks</h2><div id="picks-list"></div></div>' +
+        '</div>' +
+        '<div class="panel"><h2>Match History</h2><div id="match-history"></div></div>';
+
+      document.getElementById('rating-chart').innerHTML = buildRatingChart(s.rating_history);
+      document.getElementById('winprob-chart').innerHTML = buildWinProbSparkline(s.start_win_probs);
+      document.getElementById('bonus-list').innerHTML = buildFreqList(s.bonus_captures);
+      document.getElementById('picks-list').innerHTML = buildFreqList(s.pick_choices);
+      document.getElementById('match-history').innerHTML = buildMatchTable(s.match_history);
+
+    } catch (e) {
+      content.innerHTML = '<div class="empty-state">' +
+        '<p>Error loading stats: ' + escHtml(e.message) + '</p>' +
+        '<a href="/">Back to Game</a></div>';
+    }
+  }
+
+  loadProfile();
+})();
+</script>
+</body>
+</html>
