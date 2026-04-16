@@ -423,6 +423,40 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #kb-help-overlay .kb-card{padding:20px;max-width:95vw}
   #kb-help-overlay .kb-grid{grid-template-columns:80px 1fr;font-size:12px}
 }
+
+/* MINIMAP */
+#minimap{position:absolute;bottom:12px;left:12px;width:150px;height:100px;background:rgba(13,17,23,.88);border:1px solid var(--border);border-radius:8px;z-index:80;cursor:pointer;overflow:hidden;backdrop-filter:blur(4px)}
+#minimap svg{width:100%;height:100%;display:block}
+#minimap .mm-viewport{fill:none;stroke:var(--gold);stroke-width:1.5;opacity:.7;pointer-events:none}
+#minimap:hover{border-color:var(--text3)}
+@media (max-width:768px){#minimap{width:110px;height:72px;bottom:46px;left:8px}}
+@media (max-width:480px){#minimap{width:90px;height:60px;bottom:46px;left:6px}}
+
+/* TERRITORY OVERVIEW PANEL */
+#overview-panel{display:none;flex-direction:column;overflow:hidden;border-bottom:1px solid var(--border)}
+#overview-panel.open{display:flex}
+#overview-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none}
+#overview-header h3{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:0}
+#overview-header .ov-total{font-size:13px;font-weight:700;color:var(--blue)}
+#overview-header .ov-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px}
+#overview-sort{display:flex;gap:4px;padding:0 12px 6px;font-size:10px}
+#overview-sort button{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text2);padding:2px 8px;cursor:pointer;font-size:10px}
+#overview-sort button.active{border-color:var(--blue);color:var(--blue)}
+#overview-list{overflow-y:auto;max-height:200px;padding:0 12px 8px}
+.ov-row{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:11px;transition:background .1s}
+.ov-row:hover{background:var(--bg3)}
+.ov-row .ov-threat{width:4px;height:16px;border-radius:2px;flex-shrink:0}
+.ov-row .ov-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.ov-row .ov-armies{font-weight:700;color:var(--blue);min-width:20px;text-align:right}
+.ov-row .ov-bonus-tag{font-size:9px;color:var(--text3);padding:1px 4px;border-radius:3px;background:var(--bg);white-space:nowrap}
+
+/* INCOME BREAKDOWN */
+#income-breakdown{padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;display:none}
+#income-breakdown.open{display:block}
+#income-breakdown .ib-total{font-size:16px;font-weight:700;color:var(--green);margin-bottom:4px}
+#income-breakdown .ib-line{display:flex;justify-content:space-between;color:var(--text2);padding:1px 0;font-size:11px}
+#income-breakdown .ib-line .ib-label{color:var(--text3)}
+#income-breakdown .ib-line .ib-val{font-weight:600;color:var(--text)}
 </style>
 </head>
 <body>
@@ -480,6 +514,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       </div>
       <div class="phase-flash" id="phase-flash"><span id="flash-text"></span></div>
       <div class="tooltip" id="tooltip"></div>
+      <div id="minimap"><svg id="minimap-svg"></svg></div>
       <div id="replay-stepper">
         <div class="stepper-row">
           <button id="rs-prev" onclick="replayStep(-1)" title="Previous turn (Left arrow)">&#9664;</button>
@@ -495,6 +530,19 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     </div>
     <div id="sidebar">
       <div class="sb-section" id="phase-panel"></div>
+      <div id="income-breakdown"></div>
+      <div id="overview-panel">
+        <div id="overview-header" onclick="toggleOverviewPanel()">
+          <h3>Overview <span style="font-size:10px;color:var(--text3);text-transform:none;letter-spacing:0">(O)</span></h3>
+          <span class="ov-total" id="ov-total-armies"></span>
+        </div>
+        <div id="overview-sort">
+          <button class="active" onclick="setOverviewSort('armies')">Armies</button>
+          <button onclick="setOverviewSort('bonus')">Bonus</button>
+          <button onclick="setOverviewSort('name')">Name</button>
+        </div>
+        <div id="overview-list"></div>
+      </div>
       <div class="sb-section" id="control-panel" style="flex-shrink:0"></div>
       <div id="turn-log" style="flex:1;overflow-y:auto"></div>
       <div id="replay-sparkline"><h3>Win Probability</h3><div id="replay-sparkline-svg"></div></div>
@@ -650,6 +698,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         <span class="kb-key">N</span><span class="kb-desc">New Game</span>
         <span class="kb-key">M</span><span class="kb-desc">Toggle mute</span>
         <span class="kb-key">T</span><span class="kb-desc">Toggle threats overlay</span>
+        <span class="kb-key">O</span><span class="kb-desc">Toggle territory overview panel</span>
         <span class="kb-key">R</span><span class="kb-desc">Enter replay mode (after game ends)</span>
         <span class="kb-key">?</span><span class="kb-desc">Show / hide this help overlay</span>
       </div>
@@ -1534,6 +1583,9 @@ function updateMap() {
   updateKbFocusRing();
 
   drawOrderLines();
+
+  // Keep minimap in sync
+  updateMinimap();
 }
 
 function drawOrderLines() {
@@ -1686,9 +1738,12 @@ function onStateUpdate() {
   updateWinProbBar();
 
   buildMap();
+  buildMinimap();
   updateMap();
+  updateMinimap();
   renderSidebar();
   renderHistory();
+  if (overviewVisible) { renderOverview(); renderIncomeBreakdown(); }
 
   // Game over
   if (G.phase === 'finished' && G.winner !== null && G.winner !== undefined) {
@@ -1709,6 +1764,9 @@ function renderSidebar() {
     pp.innerHTML = '<div class="sb-phase">Waiting...</div>';
     cp.innerHTML = '';
   }
+
+  // Update overview and income if visible
+  if (overviewVisible) { renderOverview(); renderIncomeBreakdown(); }
 
   // Update mobile sidebar tab text
   const tab = document.getElementById('mobile-sidebar-tab');
@@ -2883,6 +2941,7 @@ document.addEventListener('keydown', e => {
   if (keyLower === 'n') { newGame(); return; }
   if (keyLower === 'm') { toggleMute(); return; }
   if (keyLower === 't') { toggleThreats(); return; }
+  if (keyLower === 'o') { toggleOverview(); return; }
   if (keyLower === 'r' && phase === 'finished') { enterReplayMode(); return; }
 });
 
@@ -2949,7 +3008,9 @@ function exitReplayMode() {
 
   // Restore the live game state map
   buildMap();
+  buildMinimap();
   updateMap();
+  updateMinimap();
   renderSidebar();
   renderHistory();
 
@@ -3846,6 +3907,277 @@ async function importGameData(data) {
     }
   });
 })();
+
+// ========== MINIMAP ==========
+function buildMinimap() {
+  const mmSvg = document.getElementById('minimap-svg');
+  if (!mmSvg || !G || !G.territories) return;
+  mmSvg.innerHTML = '';
+  // Use same viewBox as main map
+  mmSvg.setAttribute('viewBox', '0 0 1000 680');
+  mmSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  // Ocean background
+  mmSvg.appendChild(svgEl('rect', {x:'0',y:'0',width:'1000',height:'680',fill:'#060d15'}));
+
+  // Territory shapes (simplified — same paths, just tiny)
+  G.territories.forEach(function(t) {
+    let fill = '#1f2937'; // fog default
+    if (t.visible !== false) {
+      if (t.owner === 0) fill = '#2563eb';
+      else if (t.owner === 1) fill = '#dc2626';
+      else fill = '#4b5563';
+    }
+    if (t.path) {
+      mmSvg.appendChild(svgEl('path', {
+        d: t.path, fill: fill, stroke: '#080c12', 'stroke-width': '2',
+        'data-mmid': t.id
+      }));
+    } else {
+      const x = t.label_x || 0, y = t.label_y || 0;
+      mmSvg.appendChild(svgEl('circle', {
+        cx: x, cy: y, r: 12, fill: fill, stroke: '#080c12', 'stroke-width': '2',
+        'data-mmid': t.id
+      }));
+    }
+  });
+
+  // Viewport rectangle (shows visible area when zoomed)
+  mmSvg.appendChild(svgEl('rect', {
+    id: 'mm-viewport', class: 'mm-viewport',
+    x: '0', y: '0', width: '1000', height: '680',
+    rx: '4', ry: '4'
+  }));
+}
+
+function updateMinimap() {
+  const mmSvg = document.getElementById('minimap-svg');
+  if (!mmSvg || !G || !G.territories) return;
+
+  G.territories.forEach(function(t) {
+    let fill = '#1f2937';
+    if (t.visible !== false) {
+      if (t.owner === 0) fill = '#2563eb';
+      else if (t.owner === 1) fill = '#dc2626';
+      else fill = '#4b5563';
+    }
+    const el = mmSvg.querySelector('[data-mmid="' + t.id + '"]');
+    if (el) el.setAttribute('fill', fill);
+  });
+
+  updateMinimapViewport();
+}
+
+function updateMinimapViewport() {
+  const mainSvg = document.getElementById('map-svg');
+  const container = document.getElementById('map-container');
+  const vpRect = document.getElementById('mm-viewport');
+  if (!mainSvg || !container || !vpRect) return;
+
+  // Get the current visible area in SVG coordinates
+  const ctm = mainSvg.getScreenCTM();
+  if (!ctm) return;
+  const inv = ctm.inverse();
+  const cRect = container.getBoundingClientRect();
+
+  const topLeft = mainSvg.createSVGPoint();
+  topLeft.x = cRect.left; topLeft.y = cRect.top;
+  const tl = topLeft.matrixTransform(inv);
+
+  const botRight = mainSvg.createSVGPoint();
+  botRight.x = cRect.right; botRight.y = cRect.bottom;
+  const br = botRight.matrixTransform(inv);
+
+  // Clamp to viewBox
+  const vx = Math.max(0, tl.x);
+  const vy = Math.max(0, tl.y);
+  const vw = Math.min(1000, br.x) - vx;
+  const vh = Math.min(680, br.y) - vy;
+
+  // If viewport covers almost the whole map, hide the rect
+  if (vw >= 980 && vh >= 660) {
+    vpRect.setAttribute('opacity', '0');
+  } else {
+    vpRect.setAttribute('opacity', '1');
+    vpRect.setAttribute('x', vx);
+    vpRect.setAttribute('y', vy);
+    vpRect.setAttribute('width', Math.max(20, vw));
+    vpRect.setAttribute('height', Math.max(14, vh));
+  }
+}
+
+// Click on minimap to pan
+document.getElementById('minimap').addEventListener('click', function(e) {
+  const mmSvg = document.getElementById('minimap-svg');
+  const mainSvg = document.getElementById('map-svg');
+  if (!mmSvg || !mainSvg) return;
+
+  // Convert click position to SVG coordinates of the minimap
+  const mmRect = mmSvg.getBoundingClientRect();
+  const rx = (e.clientX - mmRect.left) / mmRect.width;
+  const ry = (e.clientY - mmRect.top) / mmRect.height;
+
+  // Target point in main SVG coords
+  const tx = rx * 1000;
+  const ty = ry * 680;
+
+  // Pan main SVG so this point is centered
+  const container = document.getElementById('map-container');
+  const cRect = container.getBoundingClientRect();
+  const ctm = mainSvg.getScreenCTM();
+  if (!ctm) return;
+
+  // Current scale
+  const scale = ctm.a;
+  const newVBx = tx - (cRect.width / 2) / scale;
+  const newVBy = ty - (cRect.height / 2) / scale;
+
+  // Get current viewBox
+  const vb = mainSvg.getAttribute('viewBox').split(' ').map(Number);
+  mainSvg.setAttribute('viewBox', newVBx + ' ' + newVBy + ' ' + vb[2] + ' ' + vb[3]);
+
+  updateMinimapViewport();
+});
+
+// ========== TERRITORY OVERVIEW ==========
+let overviewVisible = false;
+let overviewSort = 'armies'; // 'armies' | 'bonus' | 'name'
+
+function toggleOverview() {
+  overviewVisible = !overviewVisible;
+  const panel = document.getElementById('overview-panel');
+  const ibPanel = document.getElementById('income-breakdown');
+  if (overviewVisible) {
+    panel.classList.add('open');
+    ibPanel.classList.add('open');
+    renderOverview();
+    renderIncomeBreakdown();
+  } else {
+    panel.classList.remove('open');
+    ibPanel.classList.remove('open');
+  }
+}
+
+function toggleOverviewPanel() {
+  toggleOverview();
+}
+
+function setOverviewSort(mode) {
+  overviewSort = mode;
+  // Update button active states
+  document.querySelectorAll('#overview-sort button').forEach(function(btn) {
+    btn.classList.toggle('active', btn.textContent.toLowerCase() === mode);
+  });
+  renderOverview();
+}
+
+function renderOverview() {
+  if (!G || !G.territories) return;
+  const list = document.getElementById('overview-list');
+  const totalEl = document.getElementById('ov-total-armies');
+  if (!list || !totalEl) return;
+
+  // Get player territories
+  let myTerrs = G.territories.filter(function(t) { return t.owner === 0; });
+  let totalArmies = 0;
+  myTerrs.forEach(function(t) { totalArmies += (t.armies || 0) + (deploys[t.id] || 0); });
+  totalEl.textContent = totalArmies + ' armies';
+
+  // Sort
+  if (overviewSort === 'armies') {
+    myTerrs.sort(function(a, b) { return ((b.armies || 0) + (deploys[b.id] || 0)) - ((a.armies || 0) + (deploys[a.id] || 0)); });
+  } else if (overviewSort === 'name') {
+    myTerrs.sort(function(a, b) { return a.name.localeCompare(b.name); });
+  } else if (overviewSort === 'bonus') {
+    myTerrs.sort(function(a, b) {
+      var ba = findBonusForTerritory(a.id);
+      var bb = findBonusForTerritory(b.id);
+      var aName = ba ? ba.name : 'zzz';
+      var bName = bb ? bb.name : 'zzz';
+      if (aName !== bName) return aName.localeCompare(bName);
+      return ((b.armies || 0)) - ((a.armies || 0));
+    });
+  }
+
+  var html = '';
+  myTerrs.forEach(function(t) {
+    var hasEnemyAdj = false;
+    if (t.adjacent) {
+      t.adjacent.forEach(function(adjId) {
+        var adj = terr(adjId);
+        if (adj && adj.owner === 1) hasEnemyAdj = true;
+      });
+    }
+    var threatColor = hasEnemyAdj ? 'var(--red)' : 'transparent';
+    var armies = (t.armies || 0) + (deploys[t.id] || 0);
+    var b = findBonusForTerritory(t.id);
+    var bonusTag = '';
+    if (b) {
+      var bColor = BONUS_COLORS[b.id % BONUS_COLORS.length];
+      bonusTag = '<span class="ov-bonus-tag" style="border-left:2px solid ' + bColor + '">' + b.name + '</span>';
+    }
+    html += '<div class="ov-row" onclick="centerOnTerritory(' + t.id + ')" title="' + t.name + '">' +
+      '<span class="ov-threat" style="background:' + threatColor + '"></span>' +
+      '<span class="ov-name">' + t.name + '</span>' +
+      bonusTag +
+      '<span class="ov-armies">' + armies + '</span>' +
+    '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function findBonusForTerritory(tid) {
+  if (!G || !G.bonuses) return null;
+  return G.bonuses.find(function(b) {
+    return (b.territory_ids || b.territories || []).indexOf(tid) !== -1;
+  }) || null;
+}
+
+function centerOnTerritory(tid) {
+  var pos = POS[tid];
+  if (!pos) return;
+  var mainSvg = document.getElementById('map-svg');
+  var container = document.getElementById('map-container');
+  if (!mainSvg || !container) return;
+
+  var cRect = container.getBoundingClientRect();
+  var vb = mainSvg.getAttribute('viewBox').split(' ').map(Number);
+  var newX = pos[0] - vb[2] / 2;
+  var newY = pos[1] - vb[3] / 2;
+  mainSvg.setAttribute('viewBox', newX + ' ' + newY + ' ' + vb[2] + ' ' + vb[3]);
+
+  updateMinimapViewport();
+
+  // Brief highlight
+  var pathEl = document.getElementById('terr-' + tid);
+  if (pathEl) {
+    pathEl.classList.add('flash-deploy');
+    setTimeout(function() { pathEl.classList.remove('flash-deploy'); }, 500);
+  }
+}
+
+// ========== INCOME BREAKDOWN ==========
+function renderIncomeBreakdown() {
+  var panel = document.getElementById('income-breakdown');
+  if (!panel || !G) return;
+
+  var totalIncome = G.income || 0;
+  var baseIncome = G.base_income || 5;
+
+  var html = '<div class="ib-total">Income: ' + totalIncome + '</div>';
+  html += '<div class="ib-line"><span class="ib-label">Base</span><span class="ib-val">' + baseIncome + '</span></div>';
+
+  if (G.bonuses) {
+    G.bonuses.forEach(function(b) {
+      var complete = b.player_count === b.total;
+      if (complete) {
+        var bColor = BONUS_COLORS[b.id % BONUS_COLORS.length];
+        html += '<div class="ib-line"><span class="ib-label" style="color:' + bColor + '">' + b.name + '</span><span class="ib-val" style="color:var(--green)">+' + b.value + '</span></div>';
+      }
+    });
+  }
+  panel.innerHTML = html;
+}
 
 // ========== INIT ==========
 document.getElementById('set-fog').addEventListener('change', function() {
