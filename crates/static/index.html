@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>strat.club</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -275,6 +275,20 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #kb-help-overlay .kb-close{position:absolute;top:16px;right:20px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
 #kb-help-overlay .kb-close:hover{color:var(--text)}
 
+/* SIDEBAR TOGGLE */
+#sidebar-toggle{position:absolute;top:50%;transform:translateY(-50%);right:340px;z-index:60;background:var(--bg2);border:1px solid var(--border);border-right:none;border-radius:6px 0 0 6px;width:24px;height:48px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:14px;transition:right .3s ease,background .15s}
+#sidebar-toggle:hover{background:var(--bg3);color:var(--text)}
+#sidebar-toggle .toggle-icon{transition:transform .3s ease}
+#main.sidebar-collapsed #sidebar-toggle{right:0}
+#main.sidebar-collapsed #sidebar-toggle .toggle-icon{transform:rotate(180deg)}
+#main.sidebar-collapsed #sidebar{width:0;min-width:0;overflow:hidden;border-left:none}
+
+/* MOBILE SIDEBAR TOGGLE */
+#mobile-sidebar-tab{display:none;position:absolute;bottom:0;left:0;right:0;z-index:60;background:var(--bg2);border-top:1px solid var(--border);padding:8px 16px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--gold);user-select:none}
+#mobile-sidebar-tab:hover{background:var(--bg3)}
+#mobile-sidebar-tab .tab-arrow{display:inline-block;transition:transform .3s ease;margin-left:6px}
+#main.mobile-sidebar-open #mobile-sidebar-tab .tab-arrow{transform:rotate(180deg)}
+
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -316,9 +330,90 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #chat-input:focus{border-color:var(--blue)}
 #chat-send-btn{background:var(--blue);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:600;transition:background .15s}
 #chat-send-btn:hover{background:#3b82f6}
+
+/* ========== RESPONSIVE: TABLET (768px) ========== */
+@media (max-width: 768px) {
+  nav{padding:3px 10px !important;gap:10px !important;font-size:11px !important;flex-wrap:wrap}
+  #main{flex-direction:column;position:relative}
+  #sidebar{width:100%;min-width:unset;max-height:40vh;border-left:none;border-top:1px solid var(--border);overflow-y:auto}
+  #map-container{flex:1;min-height:50vh}
+  #sidebar-toggle{display:none}
+  #mobile-sidebar-tab{display:block}
+  /* Collapsed state on mobile: sidebar hidden */
+  #main:not(.mobile-sidebar-open) #sidebar{max-height:0;border-top:none;overflow:hidden}
+  #main.mobile-sidebar-open #sidebar{max-height:40vh}
+  /* Topbar adjustments */
+  #topbar{padding:6px 10px;gap:8px;flex-wrap:wrap}
+  #topbar h1{font-size:14px}
+  #topbar .stats{font-size:11px;gap:8px}
+  #topbar .controls{gap:4px;flex-wrap:wrap}
+  #topbar .session-info{font-size:10px}
+  #topbar button{padding:3px 8px;font-size:11px}
+  #topbar .btn-quickplay{padding:3px 10px}
+  #topbar select{padding:3px 6px;font-size:11px}
+  /* Replay stepper adjustments */
+  #replay-stepper{padding:6px 10px}
+  #replay-stepper button{width:28px;height:28px;font-size:14px}
+  #replay-stepper .turn-display{font-size:11px;min-width:70px}
+  /* Game over overlay */
+  #game-over .card{padding:24px 20px;max-width:90vw}
+  #game-over .card h2{font-size:24px}
+  #game-over .stats-grid{grid-template-columns:1fr 1fr}
+  /* Template modal */
+  #template-modal .template-cards{flex-direction:column;align-items:center;gap:12px}
+  .template-card{width:100%;max-width:280px;padding:20px 16px}
+  .settings-grid{grid-template-columns:1fr}
+  /* Tooltip: position at top of map to avoid finger occlusion */
+  .tooltip{font-size:10px;max-width:200px}
+  /* Map army popup */
+  #map-army-popup{transform:scale(1.1);transform-origin:top left}
+}
+
+/* ========== RESPONSIVE: PHONE (480px) ========== */
+@media (max-width: 480px) {
+  #topbar{padding:4px 8px;gap:6px}
+  #topbar h1{font-size:13px;letter-spacing:0.5px}
+  #topbar .stats{font-size:10px;gap:6px}
+  #topbar .stats .dot{width:6px;height:6px}
+  #topbar .controls{gap:3px}
+  #topbar .session-info{display:none}
+  #topbar button{padding:2px 6px;font-size:10px}
+  #topbar .btn-quickplay{padding:2px 8px;font-size:10px}
+  #topbar select{font-size:10px}
+  #map-container{min-height:55vh}
+  #sidebar{max-height:35vh}
+  #main.mobile-sidebar-open #sidebar{max-height:35vh}
+  .sb-section{padding:8px}
+  .sb-phase{font-size:15px}
+  .sb-sub{font-size:11px}
+  .deploy-counter{font-size:22px;padding:4px 0}
+  .deploy-hint{font-size:10px}
+  .order-item{padding:4px 6px;font-size:11px}
+  .btn{padding:8px;font-size:13px}
+  #game-over .card{padding:20px 16px}
+  #game-over .card h2{font-size:20px}
+  #game-over .card p{font-size:13px}
+  #game-over .stats-grid{grid-template-columns:1fr}
+  #game-over .stat-item{padding:6px 8px}
+  #game-over .go-actions{flex-direction:column;align-items:stretch}
+  #game-over .go-actions button{width:100%}
+  #game-over .btn-rematch{padding:10px 20px;font-size:15px}
+  /* KB help overlay */
+  #kb-help-overlay .kb-card{padding:20px;max-width:95vw}
+  #kb-help-overlay .kb-grid{grid-template-columns:80px 1fr;font-size:12px}
+}
 </style>
 </head>
 <body>
+<nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
+  <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
+  <a href="/" style="color:#fff;text-decoration:none;">Play</a>
+  <a href="/puzzle" style="color:#8b949e;text-decoration:none;">Puzzle</a>
+  <a href="/editor" style="color:#8b949e;text-decoration:none;">Editor</a>
+  <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
+  <a href="/profile" style="color:#8b949e;text-decoration:none;">Profile</a>
+  <a href="/tutorial" style="color:#8b949e;text-decoration:none;">Tutorial</a>
+</nav>
 <div id="app">
   <div id="topbar">
     <h1>strat.club</h1>
@@ -350,6 +445,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <span class="prob-text right" id="win-prob-text-right"></span>
   </div>
   <div id="main">
+    <button id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar"><span class="toggle-icon">&#9654;</span></button>
     <div id="map-container">
       <svg id="map-svg" viewBox="0 0 900 470"></svg>
       <div id="map-army-popup">
@@ -398,6 +494,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         </div>
       </div>
     </div>
+    <div id="mobile-sidebar-tab" onclick="toggleMobileSidebar()">Show Orders <span class="tab-arrow">&#9650;</span></div>
   </div>
 </div>
 <div id="game-over">
@@ -1484,7 +1581,8 @@ function showTooltip(id, e) {
 
   // Deploy hint
   if (phase === 'orders' && t.owner === 0 && deployLeft > 0) {
-    html += '<div class="tip-hint">Click to deploy (+1, Shift+5)</div>';
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    html += '<div class="tip-hint">' + (isMobile ? 'Tap +1, double-tap +5, long-press remove' : 'Click to deploy (+1, Shift+5)') + '</div>';
   }
 
   tip.innerHTML = html;
@@ -1575,6 +1673,20 @@ function renderSidebar() {
     pp.innerHTML = '<div class="sb-phase">Waiting...</div>';
     cp.innerHTML = '';
   }
+
+  // Update mobile sidebar tab text
+  const tab = document.getElementById('mobile-sidebar-tab');
+  if (tab) {
+    const main = document.getElementById('main');
+    const isOpen = main.classList.contains('mobile-sidebar-open');
+    let label = 'Show Orders';
+    if (phase === 'picking') label = isOpen ? 'Hide Picks' : 'Show Picks';
+    else if (phase === 'orders') {
+      const orderCount = Object.keys(deploys).filter(k => deploys[k] > 0).length + orders.length;
+      label = isOpen ? 'Hide Orders' : ('Show Orders' + (orderCount > 0 ? ' (' + orderCount + ')' : ''));
+    }
+    tab.innerHTML = label + ' <span class="tab-arrow">' + (isOpen ? '&#9660;' : '&#9650;') + '</span>';
+  }
 }
 
 function renderPickingPanel(pp, cp) {
@@ -1613,8 +1725,12 @@ function renderOrdersPanel(pp, cp) {
     '<div class="sb-sub">' + subText + '</div>';
 
   if (deployLeft > 0) {
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const deployHintText = isMobile
+      ? deployLeft + ' armies to deploy &mdash; Tap +1 | Double-tap +5 | Long-press -1'
+      : deployLeft + ' armies to deploy &mdash; Click +1 | Shift +5 | Right-click -1';
     headerHtml += '<div class="deploy-counter">' + deployLeft + '</div>' +
-      '<div class="deploy-hint">' + deployLeft + ' armies to deploy &mdash; Click +1 | Shift +5 | Right-click -1</div>';
+      '<div class="deploy-hint">' + deployHintText + '</div>';
   }
 
   pp.innerHTML = headerHtml;
@@ -3190,6 +3306,227 @@ function clearChat() {
   renderChatMessages();
   window._lastChatContext = null;
 }
+
+// ========== SIDEBAR TOGGLE ==========
+function toggleSidebar() {
+  const main = document.getElementById('main');
+  main.classList.toggle('sidebar-collapsed');
+}
+
+function toggleMobileSidebar() {
+  const main = document.getElementById('main');
+  const tab = document.getElementById('mobile-sidebar-tab');
+  const isOpen = main.classList.toggle('mobile-sidebar-open');
+  tab.innerHTML = (isOpen ? 'Hide Orders' : 'Show Orders') + ' <span class="tab-arrow">' + (isOpen ? '&#9660;' : '&#9650;') + '</span>';
+}
+
+// ========== TOUCH CONTROLS ==========
+(function() {
+  let lastTapTime = 0;
+  let lastTapId = null;
+  let longPressTimer = null;
+  let longPressFired = false;
+  let touchStartId = null;
+
+  function getTerritoryIdFromTouch(touch) {
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!el) return null;
+    // Walk up to find territory group
+    let node = el;
+    while (node && node !== document) {
+      if (node.classList && node.classList.contains('territory-group')) {
+        return parseInt(node.getAttribute('data-id'));
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  const mapContainer = document.getElementById('map-container');
+
+  mapContainer.addEventListener('touchstart', function(e) {
+    if (e.touches.length !== 1) return; // Multi-touch handled by zoom/pan
+    const touch = e.touches[0];
+    const terrId = getTerritoryIdFromTouch(touch);
+    if (terrId === null) return;
+
+    touchStartId = terrId;
+    longPressFired = false;
+
+    // Long-press: remove deploy after 500ms
+    longPressTimer = setTimeout(function() {
+      longPressFired = true;
+      if (phase === 'orders' && isOwned(terrId)) {
+        onDeployRightClick(terrId);
+      }
+    }, 500);
+  }, { passive: true });
+
+  mapContainer.addEventListener('touchmove', function(e) {
+    // Cancel long press if finger moves
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }, { passive: true });
+
+  mapContainer.addEventListener('touchend', function(e) {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    if (longPressFired) {
+      longPressFired = false;
+      touchStartId = null;
+      return;
+    }
+
+    // Only handle single-finger taps
+    if (e.changedTouches.length !== 1) return;
+    const touch = e.changedTouches[0];
+    const terrId = getTerritoryIdFromTouch(touch);
+    if (terrId === null || terrId !== touchStartId) {
+      touchStartId = null;
+      return;
+    }
+
+    const now = Date.now();
+    const isDoubleTap = (terrId === lastTapId && now - lastTapTime < 350);
+
+    if (isDoubleTap) {
+      // Double-tap: deploy +5
+      if (phase === 'orders' && isOwned(terrId) && deployLeft > 0) {
+        const amount = Math.min(5, deployLeft);
+        if (!deploys[terrId]) deploys[terrId] = 0;
+        deploys[terrId] += amount;
+        deployLeft -= amount;
+        floatText(terrId, '+' + amount);
+        playSound('deploy');
+        updateMap();
+        renderSidebar();
+      }
+      lastTapTime = 0;
+      lastTapId = null;
+    } else {
+      // Single tap: standard click behavior
+      lastTapTime = now;
+      lastTapId = terrId;
+
+      // Create a synthetic event with no shiftKey for mobile deploy (+1)
+      const syntheticEvent = { shiftKey: false, altKey: false, clientX: touch.clientX, clientY: touch.clientY };
+      onTerritoryClick(terrId, syntheticEvent);
+    }
+
+    touchStartId = null;
+  }, { passive: true });
+})();
+
+// ========== MAP ZOOM/PAN (Touch Gestures) ==========
+(function() {
+  const mapContainer = document.getElementById('map-container');
+  const mapSvg = document.getElementById('map-svg');
+  if (!mapContainer || !mapSvg) return;
+
+  let currentScale = 1;
+  let currentTranslateX = 0;
+  let currentTranslateY = 0;
+
+  // Pinch zoom state
+  let initialPinchDist = null;
+  let initialScale = 1;
+  // Pan state
+  let initialPanX = null;
+  let initialPanY = null;
+  let initialTranslateX = 0;
+  let initialTranslateY = 0;
+
+  function applyTransform() {
+    mapSvg.style.transform = 'translate(' + currentTranslateX + 'px, ' + currentTranslateY + 'px) scale(' + currentScale + ')';
+    mapSvg.style.transformOrigin = '50% 50%';
+  }
+
+  function getTouchDist(t1, t2) {
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function getTouchMidpoint(t1, t2) {
+    return {
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2
+    };
+  }
+
+  mapContainer.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      initialPinchDist = getTouchDist(e.touches[0], e.touches[1]);
+      initialScale = currentScale;
+      initialPanX = getTouchMidpoint(e.touches[0], e.touches[1]).x;
+      initialPanY = getTouchMidpoint(e.touches[0], e.touches[1]).y;
+      initialTranslateX = currentTranslateX;
+      initialTranslateY = currentTranslateY;
+    }
+  }, { passive: false });
+
+  mapContainer.addEventListener('touchmove', function(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      // Pinch zoom
+      const dist = getTouchDist(e.touches[0], e.touches[1]);
+      if (initialPinchDist) {
+        const scaleRatio = dist / initialPinchDist;
+        currentScale = Math.max(0.5, Math.min(4, initialScale * scaleRatio));
+      }
+      // Two-finger pan
+      const mid = getTouchMidpoint(e.touches[0], e.touches[1]);
+      if (initialPanX !== null) {
+        currentTranslateX = initialTranslateX + (mid.x - initialPanX);
+        currentTranslateY = initialTranslateY + (mid.y - initialPanY);
+      }
+      applyTransform();
+    }
+  }, { passive: false });
+
+  mapContainer.addEventListener('touchend', function(e) {
+    if (e.touches.length < 2) {
+      initialPinchDist = null;
+      initialPanX = null;
+      initialPanY = null;
+    }
+  }, { passive: true });
+
+  // Double-tap on empty area to reset zoom
+  let lastMapTap = 0;
+  mapContainer.addEventListener('dblclick', function(e) {
+    // Only reset if zoomed in and not clicking a territory
+    if (currentScale !== 1 || currentTranslateX !== 0 || currentTranslateY !== 0) {
+      let node = e.target;
+      let isTerr = false;
+      while (node && node !== mapContainer) {
+        if (node.classList && node.classList.contains('territory-group')) { isTerr = true; break; }
+        node = node.parentElement;
+      }
+      if (!isTerr) {
+        currentScale = 1;
+        currentTranslateX = 0;
+        currentTranslateY = 0;
+        mapSvg.style.transition = 'transform 0.3s ease';
+        applyTransform();
+        setTimeout(function() { mapSvg.style.transition = ''; }, 300);
+      }
+    }
+  });
+
+  // Mouse wheel zoom for desktop too
+  mapContainer.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    currentScale = Math.max(0.5, Math.min(4, currentScale * delta));
+    applyTransform();
+  }, { passive: false });
+})();
 
 // ========== INIT ==========
 document.getElementById('set-fog').addEventListener('change', function() {
