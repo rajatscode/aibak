@@ -25,6 +25,7 @@ use strat_engine::fog;
 use strat_engine::map::Map;
 use strat_engine::orders::Order;
 use strat_engine::picking;
+use strat_engine::puzzle;
 use strat_engine::state::{GameState, Phase, PlayerId, NEUTRAL};
 use strat_engine::turn::{resolve_turn, TurnEvent};
 
@@ -889,6 +890,81 @@ async fn app_placeholder() -> Html<&'static str> {
     Html("<html><body><h1>strat-club multiplayer</h1><p>Frontend coming soon.</p></body></html>")
 }
 
+// ── Puzzle routes ──
+
+async fn puzzle_page() -> Html<&'static str> {
+    Html(include_str!("../../static/puzzle.html"))
+}
+
+/// Get today's puzzle. Uses days since epoch as the seed.
+async fn get_today_puzzle() -> Json<serde_json::Value> {
+    let day_seed = (chrono::Utc::now().timestamp() / 86400) as u32;
+    let p = puzzle::daily_puzzle(day_seed);
+    // Return puzzle state without the optimal orders (don't spoil it).
+    let territories: Vec<serde_json::Value> = p
+        .map
+        .territories
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            serde_json::json!({
+                "id": i,
+                "name": t.name,
+                "bonus_id": t.bonus_id,
+                "adjacent": t.adjacent,
+                "owner": p.state.territory_owners[i],
+                "armies": p.state.territory_armies[i],
+            })
+        })
+        .collect();
+
+    let bonuses: Vec<serde_json::Value> = p
+        .map
+        .bonuses
+        .iter()
+        .map(|b| {
+            serde_json::json!({
+                "id": b.id,
+                "name": b.name,
+                "value": b.value,
+                "territory_ids": b.territory_ids,
+            })
+        })
+        .collect();
+
+    Json(serde_json::json!({
+        "id": p.id,
+        "day_seed": day_seed,
+        "description": p.description,
+        "hint": p.hint,
+        "difficulty": p.difficulty,
+        "puzzle_type": p.puzzle_type,
+        "income": p.income,
+        "player": p.player,
+        "territories": territories,
+        "bonuses": bonuses,
+    }))
+}
+
+#[derive(Deserialize)]
+struct PuzzleSubmission {
+    orders: Vec<Order>,
+    day_seed: u32,
+}
+
+async fn submit_puzzle(
+    Json(body): Json<PuzzleSubmission>,
+) -> Json<serde_json::Value> {
+    let p = puzzle::daily_puzzle(body.day_seed);
+    let result = puzzle::check_solution(&p, &body.orders);
+    Json(serde_json::json!({
+        "correct": result.correct,
+        "message": result.message,
+        "objective_met": result.objective_met,
+        "optimal_orders": result.optimal_orders,
+    }))
+}
+
 // ── Entrypoint ──
 
 #[tokio::main]
@@ -1022,6 +1098,10 @@ async fn main() {
         .route("/editor", get(editor))
         // Tutorial.
         .route("/tutorial", get(tutorial_page))
+        // Daily puzzle.
+        .route("/puzzle", get(puzzle_page))
+        .route("/api/puzzle/today", get(get_today_puzzle))
+        .route("/api/puzzle/submit", post(submit_puzzle))
         // Game browser & spectator.
         .route("/games", get(games_page))
         .route("/api/games/active", get(api::spectate::active_games))
@@ -1055,6 +1135,12 @@ async fn main() {
         .route("/api/queue/join", post(api::queue::join_queue))
         .route("/api/queue/leave", post(api::queue::leave_queue))
         .route("/api/queue/status", get(api::queue::queue_status))
+        // Arena tournaments.
+        .route("/api/arenas", post(api::tournament::create_arena))
+        .route("/api/arenas", get(api::tournament::list_arenas))
+        .route("/api/arenas/{id}", get(api::tournament::get_arena))
+        .route("/api/arenas/{id}/join", post(api::tournament::join_arena))
+        .route("/api/arenas/{id}/leaderboard", get(api::tournament::arena_leaderboard))
         // Map management.
         .route("/api/maps", get(api::maps::list_maps))
         .route("/api/maps", post(api::maps::save_map))

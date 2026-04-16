@@ -101,3 +101,28 @@ CREATE TABLE IF NOT EXISTS match_history (
 CREATE INDEX IF NOT EXISTS idx_match_history_player ON match_history(player_a);
 CREATE INDEX IF NOT EXISTS idx_match_history_player_b ON match_history(player_b);
 CREATE INDEX IF NOT EXISTS idx_match_history_season ON match_history(season_id);
+
+-- ── Arena tournament system ──
+
+CREATE TABLE IF NOT EXISTS arenas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    template TEXT NOT NULL,
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ NOT NULL,
+    time_control_secs INT NOT NULL DEFAULT 300,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS arena_participants (
+    arena_id UUID NOT NULL REFERENCES arenas(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    score INT NOT NULL DEFAULT 0,
+    games_played INT NOT NULL DEFAULT 0,
+    wins INT NOT NULL DEFAULT 0,
+    current_streak INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (arena_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_arenas_time ON arenas(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_arena_participants_arena ON arena_participants(arena_id);

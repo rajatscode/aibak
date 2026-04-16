@@ -6,3 +6,4 @@ pub mod maps;
 pub mod orders;
 pub mod queue;
 pub mod spectate;
+pub mod tournament;

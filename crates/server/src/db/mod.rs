@@ -647,6 +647,153 @@ pub async fn get_match_history(
 
 // ── Rating history queries ──
 
+// ── Arena queries ──
+
+/// An arena row from the database.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct ArenaRow {
+    pub id: Uuid,
+    pub name: String,
+    pub template: String,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub time_control_secs: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+/// An arena participant row joined with user info.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct ArenaParticipantRow {
+    pub arena_id: Uuid,
+    pub user_id: Uuid,
+    pub username: String,
+    pub avatar_url: Option<String>,
+    pub score: i32,
+    pub games_played: i32,
+    pub wins: i32,
+    pub current_streak: i32,
+}
+
+pub async fn create_arena(
+    pool: &PgPool,
+    name: &str,
+    template: &str,
+    start_time: DateTime<Utc>,
+    end_time: DateTime<Utc>,
+    time_control_secs: i32,
+) -> Result<ArenaRow, sqlx::Error> {
+    sqlx::query_as::<_, ArenaRow>(
+        r#"
+        INSERT INTO arenas (name, template, start_time, end_time, time_control_secs)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+        "#,
+    )
+    .bind(name)
+    .bind(template)
+    .bind(start_time)
+    .bind(end_time)
+    .bind(time_control_secs)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn get_arena(pool: &PgPool, arena_id: Uuid) -> Result<Option<ArenaRow>, sqlx::Error> {
+    sqlx::query_as::<_, ArenaRow>("SELECT * FROM arenas WHERE id = $1")
+        .bind(arena_id)
+        .fetch_optional(pool)
+        .await
+}
+
+/// List arenas that are active (currently running) or upcoming (not yet started).
+pub async fn list_active_arenas(pool: &PgPool) -> Result<Vec<ArenaRow>, sqlx::Error> {
+    sqlx::query_as::<_, ArenaRow>(
+        "SELECT * FROM arenas WHERE end_time > now() ORDER BY start_time ASC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// Get all participants for an arena, joined with user info.
+pub async fn get_arena_participants(
+    pool: &PgPool,
+    arena_id: Uuid,
+) -> Result<Vec<ArenaParticipantRow>, sqlx::Error> {
+    sqlx::query_as::<_, ArenaParticipantRow>(
+        r#"
+        SELECT ap.arena_id, ap.user_id, u.username, u.avatar_url,
+               ap.score, ap.games_played, ap.wins, ap.current_streak
+        FROM arena_participants ap
+        JOIN users u ON u.id = ap.user_id
+        WHERE ap.arena_id = $1
+        ORDER BY ap.score DESC, ap.wins DESC
+        "#,
+    )
+    .bind(arena_id)
+    .fetch_all(pool)
+    .await
+}
+
+/// Join an arena (idempotent — does nothing if already joined).
+pub async fn join_arena(
+    pool: &PgPool,
+    arena_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO arena_participants (arena_id, user_id)
+        VALUES ($1, $2)
+        ON CONFLICT (arena_id, user_id) DO NOTHING
+        "#,
+    )
+    .bind(arena_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Update a participant's stats after a game result.
+#[allow(dead_code)]
+pub async fn update_arena_participant(
+    pool: &PgPool,
+    arena_id: Uuid,
+    user_id: Uuid,
+    score_delta: i32,
+    won: bool,
+    new_streak: i32,
+) -> Result<(), sqlx::Error> {
+    if won {
+        sqlx::query(
+            r#"
+            UPDATE arena_participants
+            SET score = score + $3, games_played = games_played + 1,
+                wins = wins + 1, current_streak = $4
+            WHERE arena_id = $1 AND user_id = $2
+            "#,
+        )
+    } else {
+        sqlx::query(
+            r#"
+            UPDATE arena_participants
+            SET score = score + $3, games_played = games_played + 1,
+                current_streak = $4
+            WHERE arena_id = $1 AND user_id = $2
+            "#,
+        )
+    }
+    .bind(arena_id)
+    .bind(user_id)
+    .bind(score_delta)
+    .bind(new_streak)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+// ── Rating history queries ──
+
 pub async fn insert_rating_history(
     pool: &PgPool,
     user_id: Uuid,

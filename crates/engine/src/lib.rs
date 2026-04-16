@@ -7,5 +7,6 @@ pub mod map;
 pub mod mcts;
 pub mod orders;
 pub mod picking;
+pub mod puzzle;
 pub mod state;
 pub mod turn;
