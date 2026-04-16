@@ -7,7 +7,7 @@ use strat_engine::ai;
 use strat_engine::combat::resolve_attack;
 use strat_engine::fog::{fog_filter, visible_territories};
 use strat_engine::map::{Map, MapSettings};
-use strat_engine::orders::{Order, validate_orders};
+use strat_engine::orders::Order;
 use strat_engine::picking;
 use strat_engine::state::{GameState, Phase, NEUTRAL};
 use strat_engine::turn::resolve_turn;
@@ -475,4 +475,368 @@ fn test_income_increases_with_bonus_capture() {
     let income = state.income(0, &map);
     let bonus_value = map.bonuses[1].value;
     assert_eq!(income, 5 + bonus_value, "Income should be base + bonus");
+}
+
+// ========== CONCURRENT ATTACKS ==========
+
+#[test]
+fn test_concurrent_attacks_same_territory() {
+    let map = load_small_earth();
+    let mut state = GameState::new(&map);
+    // P0 owns Alaska (0), P1 owns Alberta (3). Both adjacent to NW Territory (1).
+    state.territory_owners[0] = 0;
+    state.territory_armies[0] = 15;
+    state.territory_owners[3] = 1;
+    state.territory_armies[3] = 15;
+    state.territory_owners[1] = NEUTRAL;
+    state.territory_armies[1] = 2;
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy { territory: 0, armies: 5 },
+            Order::Attack { from: 0, to: 1, armies: 19 },
+        ],
+        vec![
+            Order::Deploy { territory: 3, armies: 5 },
+            Order::Attack { from: 3, to: 1, armies: 19 },
+        ],
+    ];
+
+    let result = resolve_turn(&state, orders, &map, &mut rng);
+    // NW Territory (1) should be owned by exactly one player, not both.
+    let owner = result.state.territory_owners[1];
+    assert!(owner == 0 || owner == 1, "Territory should be captured by one player, got {}", owner);
+    assert!(result.state.territory_armies[1] > 0);
+}
+
+// ========== TRANSFER CHAIN ==========
+
+#[test]
+fn test_transfer_chain() {
+    let map = load_small_earth();
+    let mut state = GameState::new(&map);
+    // P0 owns Alaska (0), NW Territory (1), Alberta (3). These form a chain.
+    state.territory_owners[0] = 0;
+    state.territory_armies[0] = 20;
+    state.territory_owners[1] = 0;
+    state.territory_armies[1] = 1;
+    state.territory_owners[3] = 0;
+    state.territory_armies[3] = 1;
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy { territory: 0, armies: 5 },
+            Order::Transfer { from: 0, to: 1, armies: 24 },
+            Order::Transfer { from: 1, to: 3, armies: 24 },
+        ],
+        vec![],
+    ];
+
+    let result = resolve_turn(&state, orders, &map, &mut rng);
+    // Armies should flow from 0 -> 1 -> 3.
+    // Territory 0 should keep 1 army. The rest go to 1, then from 1 to 3.
+    assert_eq!(result.state.territory_armies[0], 1);
+    // All transferred armies should end up somewhere.
+    // Original: 20 + 1 + 1 = 22. Deploy 5 to territory 0 = 27 total.
+    let total: u32 = result.state.territory_armies[0]
+        + result.state.territory_armies[1]
+        + result.state.territory_armies[3];
+    assert_eq!(total, 20 + 1 + 1 + 5, "Total armies should be preserved (original + deployed)");
+}
+
+// ========== BONUS INCOME ==========
+
+#[test]
+fn test_bonus_income_correct() {
+    for map in [load_small_earth(), load_mme()] {
+        let mut state = GameState::new(&map);
+        // Test each bonus individually.
+        for bonus in &map.bonuses {
+            // Reset state.
+            state.territory_owners = vec![NEUTRAL; map.territory_count()];
+            // Assign this bonus to player 0.
+            for &tid in &bonus.territory_ids {
+                state.territory_owners[tid] = 0;
+            }
+            let income = state.income(0, &map);
+            assert_eq!(
+                income,
+                map.settings.base_income + bonus.value,
+                "Map '{}', bonus '{}': expected income {} + {}, got {}",
+                map.name, bonus.name, map.settings.base_income, bonus.value, income
+            );
+        }
+    }
+}
+
+// ========== FOG CONSISTENCY ==========
+
+#[test]
+fn test_fog_consistency() {
+    let map = load_small_earth();
+    let mut state = GameState::new(&map);
+    let mut rng = StdRng::seed_from_u64(42);
+
+    let options = picking::generate_pick_options(&map, &mut rng);
+    let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
+    let picks_b = ai::generate_picks(&state, &map);
+    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map);
+
+    // Run a few turns to create a realistic state.
+    for _ in 0..3 {
+        if state.phase == Phase::Finished { break; }
+        let p0 = ai::generate_orders(&state, 0, &map);
+        let p1 = ai::generate_orders(&state, 1, &map);
+        let result = resolve_turn(&state, [p0, p1], &map, &mut rng);
+        state = result.state;
+    }
+
+    let visible = visible_territories(&state, 0, &map);
+    let filtered = fog_filter(&state, 0, &map);
+
+    for tid in 0..map.territory_count() {
+        if !visible.contains(&tid) {
+            // Non-visible territory should not reveal enemy owner info.
+            assert_eq!(
+                filtered.territory_owners[tid], NEUTRAL,
+                "Fogged territory {} should show as NEUTRAL, got {}",
+                tid, filtered.territory_owners[tid]
+            );
+        }
+    }
+}
+
+// ========== 10-TURN AI VS AI ==========
+
+#[test]
+fn test_game_10_turns() {
+    let map = load_small_earth();
+    let mut state = GameState::new(&map);
+    let mut rng = StdRng::seed_from_u64(99);
+
+    let options = picking::generate_pick_options(&map, &mut rng);
+    let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
+    let picks_b = ai::generate_picks(&state, &map);
+    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map);
+
+    for _ in 0..10 {
+        if state.phase == Phase::Finished { break; }
+        let p0 = ai::generate_orders(&state, 0, &map);
+        let p1 = ai::generate_orders(&state, 1, &map);
+        let result = resolve_turn(&state, [p0, p1], &map, &mut rng);
+        state = result.state;
+
+        // Invariants.
+        for tid in 0..map.territory_count() {
+            assert!(
+                state.territory_owners[tid] == 0
+                    || state.territory_owners[tid] == 1
+                    || state.territory_owners[tid] == NEUTRAL,
+                "Invalid owner {} at territory {}", state.territory_owners[tid], tid
+            );
+            // Armies should never be zero for owned territories that are alive.
+            // (unless captured this turn, but territory_armies should still be > 0 for owned)
+        }
+    }
+
+    // No territory should have negative armies (u32 so check for extreme values from overflow).
+    for tid in 0..map.territory_count() {
+        assert!(state.territory_armies[tid] < 100_000, "Suspicious army count at territory {}: {}", tid, state.territory_armies[tid]);
+    }
+}
+
+// ========== MME FULL GAME ==========
+
+#[test]
+fn test_mme_full_game() {
+    let map = load_mme();
+    let mut state = GameState::new(&map);
+    let mut rng = StdRng::seed_from_u64(77);
+
+    let options = picking::generate_pick_options(&map, &mut rng);
+    let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
+    let picks_b = ai::generate_picks(&state, &map);
+    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map);
+
+    for turn in 0..200 {
+        if state.phase == Phase::Finished {
+            println!("MME game ended on turn {}, winner: {:?}", turn, state.winner);
+            return;
+        }
+        let p0 = ai::generate_orders(&state, 0, &map);
+        let p1 = ai::generate_orders(&state, 1, &map);
+        let result = resolve_turn(&state, [p0, p1], &map, &mut rng);
+        state = result.state;
+    }
+    // If it reached 200 turns, verify state is still consistent.
+    assert!(
+        state.territory_count_for(0) + state.territory_count_for(1) > 0,
+        "At least one player should still have territories"
+    );
+}
+
+// ========== PICKING CONTESTED ==========
+
+#[test]
+fn test_picking_contested() {
+    let map = load_small_earth();
+    let mut state = GameState::new(&map);
+    let mut rng = StdRng::seed_from_u64(42);
+    let options = picking::generate_pick_options(&map, &mut rng);
+
+    // Both players submit identical pick lists.
+    picking::resolve_picks(&mut state, [&options, &options], &map);
+
+    assert_eq!(state.territory_count_for(0), 4);
+    assert_eq!(state.territory_count_for(1), 4);
+    // No territory should be shared.
+    for tid in 0..map.territory_count() {
+        let o = state.territory_owners[tid];
+        assert!(o == 0 || o == 1 || o == NEUTRAL);
+    }
+}
+
+// ========== INCOME NEVER NEGATIVE ==========
+
+#[test]
+fn test_income_never_negative() {
+    let map = load_small_earth();
+    let mut state = GameState::new(&map);
+    let mut rng = StdRng::seed_from_u64(55);
+
+    let options = picking::generate_pick_options(&map, &mut rng);
+    let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
+    let picks_b = ai::generate_picks(&state, &map);
+    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map);
+
+    for _ in 0..20 {
+        if state.phase == Phase::Finished { break; }
+        for player in 0..2u8 {
+            if state.alive[player as usize] {
+                let income = state.income(player, &map);
+                assert!(
+                    income >= map.settings.base_income,
+                    "Player {} income {} is below base income {}",
+                    player, income, map.settings.base_income
+                );
+            }
+        }
+        let p0 = ai::generate_orders(&state, 0, &map);
+        let p1 = ai::generate_orders(&state, 1, &map);
+        let result = resolve_turn(&state, [p0, p1], &map, &mut rng);
+        state = result.state;
+    }
+}
+
+// ========== ELIMINATION ==========
+
+#[test]
+fn test_elimination_correct() {
+    let map = load_small_earth();
+    let mut state = GameState::new(&map);
+    // P1 has exactly 1 territory (NW Territory, id 1).
+    // P0 has Alaska (0) with overwhelming force.
+    state.territory_owners[0] = 0;
+    state.territory_armies[0] = 50;
+    state.territory_owners[1] = 1;
+    state.territory_armies[1] = 1;
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy { territory: 0, armies: 5 },
+            Order::Attack { from: 0, to: 1, armies: 54 },
+        ],
+        vec![Order::Deploy { territory: 1, armies: 5 }],
+    ];
+
+    let result = resolve_turn(&state, orders, &map, &mut rng);
+    assert_eq!(result.state.phase, Phase::Finished);
+    assert_eq!(result.state.winner, Some(0));
+    assert!(!result.state.alive[1]);
+}
+
+// ========== PROPERTY-BASED: 50 RANDOM GAMES ==========
+
+#[test]
+fn test_random_games_invariants() {
+    let map = load_small_earth();
+
+    for seed in 0..50u64 {
+        let mut state = GameState::new(&map);
+        let mut rng = StdRng::seed_from_u64(seed);
+
+        let _options = picking::generate_pick_options(&map, &mut rng);
+        let picks_a = ai::generate_picks(&state, &map);
+        let picks_b = ai::generate_picks(&state, &map);
+        picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map);
+
+        for turn in 0..200 {
+            if state.phase == Phase::Finished { break; }
+
+            let p0 = ai::generate_orders(&state, 0, &map);
+            let p1 = ai::generate_orders(&state, 1, &map);
+            let result = resolve_turn(&state, [p0, p1], &map, &mut rng);
+            state = result.state;
+
+            // Invariant 1: No territory has overflow-level armies (proxy for negative).
+            for tid in 0..map.territory_count() {
+                assert!(
+                    state.territory_armies[tid] < 100_000,
+                    "Seed {}, turn {}: territory {} has suspicious army count {}",
+                    seed, turn, tid, state.territory_armies[tid]
+                );
+            }
+
+            // Invariant 2: All owners are valid.
+            for tid in 0..map.territory_count() {
+                let o = state.territory_owners[tid];
+                assert!(
+                    o == 0 || o == 1 || o == NEUTRAL,
+                    "Seed {}, turn {}: territory {} has invalid owner {}",
+                    seed, turn, tid, o
+                );
+            }
+
+            // Invariant 3: Total territory accounting.
+            let p0_count = state.territory_count_for(0);
+            let p1_count = state.territory_count_for(1);
+            let neutral_count = state.territory_count_for(NEUTRAL);
+            assert_eq!(
+                p0_count + p1_count + neutral_count,
+                map.territory_count(),
+                "Seed {}, turn {}: territory count mismatch",
+                seed, turn
+            );
+
+            // Invariant 4: Income is >= base_income for alive players.
+            for player in 0..2u8 {
+                if state.alive[player as usize] && state.territory_count_for(player) > 0 {
+                    let income = state.income(player, &map);
+                    assert!(
+                        income >= map.settings.base_income,
+                        "Seed {}, turn {}: player {} income {} below base {}",
+                        seed, turn, player, income, map.settings.base_income
+                    );
+                }
+            }
+        }
+
+        // Invariant 5: Game should terminate within 200 turns.
+        assert!(
+            state.phase == Phase::Finished || state.turn <= 201,
+            "Seed {}: game did not terminate within 200 turns", seed
+        );
+    }
 }

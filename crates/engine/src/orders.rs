@@ -134,7 +134,7 @@ fn check_owned(territory: usize, player: PlayerId, state: &GameState) -> Result<
 mod tests {
     use super::*;
     use crate::map::{Bonus, Map, MapSettings, PickingConfig, PickingMethod, Territory};
-    use crate::state::{GameState, NEUTRAL};
+    use crate::state::GameState;
 
     fn test_map() -> Map {
         Map {
