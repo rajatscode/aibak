@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map Editor</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --bg4: #30363d;
+  --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff; --accent2: #388bfd;
+  --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #bc8cff;
+  --orange: #f0883e;
+}
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; display: flex; flex-direction: column; }
+button { background: var(--bg3); color: var(--text); border: 1px solid var(--bg4); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background 0.15s; }
+button:hover { background: var(--bg4); }
+button.active { background: var(--accent2); border-color: var(--accent); }
+button.primary { background: var(--accent2); border-color: var(--accent); }
+button.primary:hover { background: var(--accent); }
+button.danger { background: #da3633; border-color: #f85149; }
+button.danger:hover { background: #f85149; }
+input, select { background: var(--bg); color: var(--text); border: 1px solid var(--bg4); padding: 5px 8px; border-radius: 4px; font-size: 13px; outline: none; }
+input:focus { border-color: var(--accent); }
+label { color: var(--text2); font-size: 12px; display: block; margin-bottom: 2px; }
+
+/* Toolbar */
+#toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg2); border-bottom: 1px solid var(--bg4); flex-shrink: 0; }
+#toolbar .sep { width: 1px; height: 24px; background: var(--bg4); }
+#toolbar .title { font-weight: 600; font-size: 15px; margin-right: 8px; color: var(--accent); }
+
+/* Main layout */
+#main { display: flex; flex: 1; overflow: hidden; }
+#canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
+#canvas-wrap svg { width: 100%; height: 100%; }
+
+/* Sidebar */
+#sidebar { width: 340px; min-width: 340px; background: var(--bg2); border-left: 1px solid var(--bg4); display: flex; flex-direction: column; overflow: hidden; }
+.panel { border-bottom: 1px solid var(--bg4); }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: pointer; user-select: none; background: var(--bg3); font-weight: 600; font-size: 13px; }
+.panel-header:hover { background: var(--bg4); }
+.panel-body { padding: 10px 12px; max-height: 300px; overflow-y: auto; }
+.panel-body.collapsed { display: none; }
+.panel-body .row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.panel-body .row label { margin: 0; min-width: 70px; }
+.panel-body .row input { flex: 1; }
+.panel-body .row input[type="number"] { width: 60px; flex: none; }
+.panel-body .row input[type="checkbox"] { width: auto; flex: none; }
+
+/* Territory list */
+.terr-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.terr-item:hover { background: var(--bg3); }
+.terr-item.selected { background: var(--bg4); outline: 1px solid var(--accent); }
+.terr-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.terr-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terr-item .tid { color: var(--text2); font-size: 11px; }
+
+/* Bonus list */
+.bonus-item { padding: 6px 8px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; }
+.bonus-item:hover { border-color: var(--bg4); }
+.bonus-item.selected { border-color: var(--accent); background: var(--bg3); }
+.bonus-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.bonus-header .swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+.bonus-header .bname { flex: 1; font-weight: 600; font-size: 13px; }
+.bonus-header .bval { color: var(--green); font-weight: 700; font-size: 13px; }
+.bonus-terrs { display: flex; flex-wrap: wrap; gap: 3px; }
+.bonus-terrs .chip { background: var(--bg4); padding: 1px 6px; border-radius: 10px; font-size: 11px; color: var(--text2); cursor: pointer; }
+.bonus-terrs .chip:hover { background: var(--red); color: white; }
+
+/* Scrollable panels container */
+#panels-scroll { flex: 1; overflow-y: auto; }
+
+/* Tooltip */
+#tooltip { position: absolute; background: var(--bg3); border: 1px solid var(--bg4); padding: 6px 10px; border-radius: 6px; font-size: 12px; pointer-events: none; display: none; z-index: 100; white-space: nowrap; }
+
+/* Status bar */
+#statusbar { display: flex; align-items: center; gap: 12px; padding: 4px 12px; background: var(--bg2); border-top: 1px solid var(--bg4); font-size: 12px; color: var(--text2); flex-shrink: 0; }
+
+/* Modal overlay */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
+.modal { background: var(--bg2); border: 1px solid var(--bg4); border-radius: 10px; padding: 20px; min-width: 400px; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+.modal h3 { margin-bottom: 12px; }
+.modal textarea { width: 100%; height: 300px; background: var(--bg); color: var(--text); border: 1px solid var(--bg4); border-radius: 4px; font-family: monospace; font-size: 12px; padding: 8px; resize: vertical; }
+.modal .actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title">Map Editor</span>
+  <div class="sep"></div>
+  <button id="btn-select" class="active" onclick="setMode('select')" title="Select & move territories (S)">Select</button>
+  <button id="btn-territory" onclick="setMode('territory')" title="Place territory nodes (T)">+ Territory</button>
+  <button id="btn-connection" onclick="setMode('connection')" title="Draw connections between territories (C)">+ Connection</button>
+  <div class="sep"></div>
+  <button onclick="autoLayout()" title="Force-directed auto-layout (L)">Auto-Layout</button>
+  <button onclick="generateShapes()" title="Generate Voronoi territory shapes (G)">Gen Shapes</button>
+  <button onclick="autoClusters()" title="Auto-detect bonus regions (K)">Auto-Cluster</button>
+  <div class="sep"></div>
+  <button onclick="clearShapes()">Clear Shapes</button>
+  <button onclick="undo()" title="Undo last action (Ctrl+Z)">Undo</button>
+  <div class="sep"></div>
+  <button class="primary" onclick="showExport()">Export JSON</button>
+  <button onclick="showImport()">Import JSON</button>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text2)"/>
+        </marker>
+      </defs>
+      <g id="g-shapes"></g>
+      <g id="g-connections"></g>
+      <g id="g-nodes"></g>
+      <g id="g-labels"></g>
+      <line id="conn-preview" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="6,4" style="display:none" pointer-events="none"/>
+    </svg>
+    <div id="tooltip"></div>
+  </div>
+
+  <div id="sidebar">
+    <div id="panels-scroll">
+      <!-- Map Settings -->
+      <div class="panel" id="panel-settings">
+        <div class="panel-header" onclick="togglePanel('settings')">Map Settings <span id="arrow-settings">&#9660;</span></div>
+        <div class="panel-body" id="body-settings">
+          <div class="row"><label>Map ID</label><input id="set-id" value="custom_map" oninput="mapData.id=this.value"></div>
+          <div class="row"><label>Map Name</label><input id="set-name" value="Custom Map" oninput="mapData.name=this.value"></div>
+          <div class="row"><label>Picks</label><input id="set-picks" type="number" value="4" min="1" max="20" oninput="mapData.picking.num_picks=+this.value"></div>
+          <div class="row"><label>Base Income</label><input id="set-income" type="number" value="5" min="0" oninput="mapData.settings.base_income=+this.value"></div>
+          <div class="row"><label>Fog of War</label><input id="set-fog" type="checkbox" checked onchange="mapData.settings.fog_of_war=this.checked"></div>
+        </div>
+      </div>
+
+      <!-- Territory Editor -->
+      <div class="panel" id="panel-territory">
+        <div class="panel-header" onclick="togglePanel('territory')">Territory Editor <span id="arrow-territory">&#9660;</span></div>
+        <div class="panel-body" id="body-territory">
+          <div id="terr-editor-empty" style="color:var(--text2)">Click a territory to edit</div>
+          <div id="terr-editor" style="display:none">
+            <div class="row"><label>ID</label><span id="te-id"></span></div>
+            <div class="row"><label>Name</label><input id="te-name" oninput="updateTerrName(this.value)"></div>
+            <div class="row"><label>Armies</label><input id="te-armies" type="number" min="1" value="2" oninput="updateTerrArmies(+this.value)"></div>
+            <div class="row"><label>Wasteland</label><input id="te-waste" type="checkbox" onchange="updateTerrWasteland(this.checked)"></div>
+            <div class="row"><label>Bonus</label><select id="te-bonus" onchange="updateTerrBonus(+this.value)"></select></div>
+            <div class="row"><label>Connections</label><span id="te-conn" style="font-size:12px;color:var(--text2)"></span></div>
+            <div class="row" style="margin-top:6px"><button class="danger" onclick="deleteSelectedTerritory()">Delete Territory</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Territory List -->
+      <div class="panel" id="panel-terrlist">
+        <div class="panel-header" onclick="togglePanel('terrlist')">Territories (<span id="terr-count">0</span>) <span id="arrow-terrlist">&#9660;</span></div>
+        <div class="panel-body" id="body-terrlist">
+          <div id="terr-list"></div>
+        </div>
+      </div>
+
+      <!-- Bonus Editor -->
+      <div class="panel" id="panel-bonuses">
+        <div class="panel-header" onclick="togglePanel('bonuses')">Bonuses (<span id="bonus-count">0</span>) <span id="arrow-bonuses">&#9660;</span></div>
+        <div class="panel-body" id="body-bonuses">
+          <div id="bonus-list"></div>
+          <button style="margin-top:6px;width:100%" onclick="addBonus()">+ Add Bonus</button>
+        </div>
+      </div>
+
+      <!-- Bonus Detail Editor -->
+      <div class="panel" id="panel-bonusedit" style="display:none">
+        <div class="panel-header" onclick="togglePanel('bonusedit')">Bonus Detail <span id="arrow-bonusedit">&#9660;</span></div>
+        <div class="panel-body" id="body-bonusedit">
+          <div class="row"><label>Name</label><input id="be-name" oninput="updateBonusName(this.value)"></div>
+          <div class="row"><label>Value</label><input id="be-value" type="number" min="0" oninput="updateBonusValue(+this.value)"></div>
+          <div class="row"><label>Color</label><input id="be-color" type="color" onchange="updateBonusColor(this.value)"></div>
+          <div class="row"><label>Territories</label></div>
+          <div id="be-terrs" class="bonus-terrs"></div>
+          <div class="row" style="margin-top:6px">
+            <button onclick="startAddTerrToBonus()">+ Add Territory</button>
+            <button class="danger" onclick="deleteSelectedBonus()">Delete Bonus</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="statusbar">
+  <span id="status-mode">Mode: Select</span>
+  <span id="status-info">0 territories, 0 connections</span>
+  <span style="flex:1"></span>
+  <span id="status-pos">0, 0</span>
+</div>
+
+<script>
+// ============================================================
+//  DATA MODEL
+// ============================================================
+const BONUS_COLORS = [
+  '#58a6ff','#3fb950','#f0883e','#bc8cff','#d29922','#f85149',
+  '#79c0ff','#56d364','#ffa657','#d2a8ff','#e3b341','#ff7b72',
+  '#39d353','#a5d6ff','#ffc680','#c297ff','#e6b422','#ff9999',
+  '#66d9ef','#a6e3a1','#fab387','#cba6f7','#f9e2af','#f38ba8',
+];
+
+let territories = [];
+let connections = [];
+let bonuses = [];
+let nextTerrId = 0;
+let nextBonusId = 0;
+
+let mapData = {
+  id: 'custom_map',
+  name: 'Custom Map',
+  picking: { num_picks: 4, method: 'random_warlords' },
+  settings: {
+    luck_pct: 0, base_income: 5, wasteland_armies: 10,
+    unpicked_neutral_armies: 4, fog_of_war: true,
+    offense_kill_rate: 0.6, defense_kill_rate: 0.7
+  }
+};
+
+// ============================================================
+//  UNDO STACK
+// ============================================================
+let undoStack = [];
+function pushUndo(desc) {
+  undoStack.push({
+    desc,
+    territories: JSON.parse(JSON.stringify(territories)),
+    connections: JSON.parse(JSON.stringify(connections)),
+    bonuses: JSON.parse(JSON.stringify(bonuses)),
+    nextTerrId, nextBonusId
+  });
+  if (undoStack.length > 50) undoStack.shift();
+}
+function undo() {
+  if (!undoStack.length) return;
+  const s = undoStack.pop();
+  territories = s.territories;
+  connections = s.connections;
+  bonuses = s.bonuses;
+  nextTerrId = s.nextTerrId;
+  nextBonusId = s.nextBonusId;
+  selectedTerr = null; selectedBonus = null;
+  fullRender();
+}
+
+// ============================================================
+//  MODE & SELECTION STATE
+// ============================================================
+let mode = 'select'; // 'select','territory','connection'
+let selectedTerr = null;
+let selectedBonus = null;
+let connStart = null;
+let dragging = null;
+let dragOffset = {x:0,y:0};
+let addingTerrToBonus = false;
+
+// SVG pan & zoom
+let viewBox = {x:0, y:0, w:1200, h:800};
+let isPanning = false;
+let panStart = {x:0,y:0};
+
+function setMode(m) {
+  mode = m;
+  connStart = null;
+  addingTerrToBonus = false;
+  document.getElementById('conn-preview').style.display = 'none';
+  document.querySelectorAll('#toolbar button').forEach(b => {
+    if (b.id.startsWith('btn-')) b.classList.remove('active');
+  });
+  const btn = document.getElementById('btn-' + m);
+  if (btn) btn.classList.add('active');
+  document.getElementById('status-mode').textContent = 'Mode: ' + {select:'Select',territory:'+ Territory',connection:'+ Connection'}[m];
+  updateCursor();
+}
+
+function updateCursor() {
+  const wrap = document.getElementById('canvas-wrap');
+  wrap.style.cursor = {select:'default', territory:'crosshair', connection:'pointer'}[mode] || 'default';
+}
+
+// ============================================================
+//  SVG HELPERS
+// ============================================================
+const svg = document.getElementById('svg');
+
+function updateViewBox() {
+  svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`);
+}
+
+function svgPoint(e) {
+  const rect = svg.getBoundingClientRect();
+  const sx = (e.clientX - rect.left) / rect.width;
+  const sy = (e.clientY - rect.top) / rect.height;
+  return { x: viewBox.x + sx * viewBox.w, y: viewBox.y + sy * viewBox.h };
+}
+
+function initView() {
+  const rect = svg.getBoundingClientRect();
+  viewBox.w = 1200;
+  viewBox.h = 1200 * rect.height / rect.width;
+  viewBox.x = 0; viewBox.y = 0;
+  updateViewBox();
+}
+
+// ============================================================
+//  SVG EVENT HANDLERS
+// ============================================================
+svg.addEventListener('mousedown', e => {
+  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    isPanning = true;
+    panStart = {x: e.clientX, y: e.clientY};
+    e.preventDefault();
+    return;
+  }
+  const pt = svgPoint(e);
+  const hit = hitTestTerritory(pt);
+
+  if (mode === 'territory' && !hit) {
+    pushUndo('Add territory');
+    addTerritory(pt.x, pt.y);
+    fullRender();
+    return;
+  }
+
+  if (mode === 'connection') {
+    if (hit !== null) {
+      if (connStart === null) {
+        connStart = hit;
+      } else if (connStart !== hit) {
+        pushUndo('Add connection');
+        addConnection(connStart, hit);
+        connStart = null;
+        document.getElementById('conn-preview').style.display = 'none';
+        fullRender();
+      }
+    }
+    return;
+  }
+
+  if (mode === 'select') {
+    if (addingTerrToBonus && hit !== null && selectedBonus !== null) {
+      pushUndo('Add territory to bonus');
+      const b = bonuses.find(b => b.id === selectedBonus);
+      const t = territories.find(t => t.id === hit);
+      if (b && t && !b.territory_ids.includes(hit)) {
+        // Remove from old bonus
+        bonuses.forEach(ob => { ob.territory_ids = ob.territory_ids.filter(x => x !== hit); });
+        b.territory_ids.push(hit);
+        t.bonus_id = b.id;
+      }
+      addingTerrToBonus = false;
+      fullRender();
+      return;
+    }
+    if (hit !== null) {
+      selectTerritory(hit);
+      dragging = hit;
+      const t = territories.find(t => t.id === hit);
+      dragOffset = {x: pt.x - t.x, y: pt.y - t.y};
+    } else {
+      selectTerritory(null);
+    }
+  }
+});
+
+svg.addEventListener('mousemove', e => {
+  const pt = svgPoint(e);
+  document.getElementById('status-pos').textContent = `${Math.round(pt.x)}, ${Math.round(pt.y)}`;
+
+  if (isPanning) {
+    const rect = svg.getBoundingClientRect();
+    const dx = (e.clientX - panStart.x) / rect.width * viewBox.w;
+    const dy = (e.clientY - panStart.y) / rect.height * viewBox.h;
+    viewBox.x -= dx; viewBox.y -= dy;
+    panStart = {x: e.clientX, y: e.clientY};
+    updateViewBox();
+    return;
+  }
+
+  if (dragging !== null) {
+    const t = territories.find(t => t.id === dragging);
+    if (t) {
+      t.x = pt.x - dragOffset.x;
+      t.y = pt.y - dragOffset.y;
+      renderNodes();
+      renderConnections();
+      renderLabels();
+    }
+    return;
+  }
+
+  if (mode === 'connection' && connStart !== null) {
+    const t = territories.find(t => t.id === connStart);
+    const line = document.getElementById('conn-preview');
+    line.style.display = '';
+    line.setAttribute('x1', t.x);
+    line.setAttribute('y1', t.y);
+    line.setAttribute('x2', pt.x);
+    line.setAttribute('y2', pt.y);
+  }
+
+  // Hover tooltip
+  const hit = hitTestTerritory(pt);
+  const tooltip = document.getElementById('tooltip');
+  if (hit !== null) {
+    const t = territories.find(t => t.id === hit);
+    const b = bonuses.find(b => b.territory_ids.includes(hit));
+    tooltip.innerHTML = `<b>${t.name}</b> (ID: ${t.id})<br>Armies: ${t.default_armies}${t.is_wasteland?' [Wasteland]':''}${b?'<br>Bonus: '+b.name:''}`;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX - document.getElementById('canvas-wrap').getBoundingClientRect().left + 14) + 'px';
+    tooltip.style.top = (e.clientY - document.getElementById('canvas-wrap').getBoundingClientRect().top + 14) + 'px';
+  } else {
+    tooltip.style.display = 'none';
+  }
+});
+
+svg.addEventListener('mouseup', e => {
+  if (isPanning) { isPanning = false; return; }
+  if (dragging !== null) {
+    dragging = null;
+    renderShapes();
+  }
+});
+
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const pt = svgPoint(e);
+  const factor = e.deltaY > 0 ? 1.1 : 0.9;
+  const nw = viewBox.w * factor;
+  const nh = viewBox.h * factor;
+  viewBox.x = pt.x - (pt.x - viewBox.x) * factor;
+  viewBox.y = pt.y - (pt.y - viewBox.y) * factor;
+  viewBox.w = nw; viewBox.h = nh;
+  updateViewBox();
+}, {passive: false});
+
+// ============================================================
+//  HIT TESTING
+// ============================================================
+function hitTestTerritory(pt, radius=16) {
+  let best = null, bestD = radius*radius;
+  for (const t of territories) {
+    const dx = pt.x - t.x, dy = pt.y - t.y;
+    const d = dx*dx + dy*dy;
+    if (d < bestD) { bestD = d; best = t.id; }
+  }
+  return best;
+}
+
+// ============================================================
+//  DATA OPERATIONS
+// ============================================================
+function addTerritory(x, y) {
+  const id = nextTerrId++;
+  territories.push({
+    id, name: `Territory ${id}`, x, y,
+    bonus_id: 0, is_wasteland: false, default_armies: 2,
+    shape: null
+  });
+  return id;
+}
+
+function addConnection(a, b) {
+  if (a === b) return;
+  const exists = connections.some(c =>
+    (c[0] === a && c[1] === b) || (c[0] === b && c[1] === a)
+  );
+  if (!exists) connections.push([a, b]);
+}
+
+function removeConnection(a, b) {
+  connections = connections.filter(c =>
+    !((c[0]===a && c[1]===b) || (c[0]===b && c[1]===a))
+  );
+}
+
+function deleteTerritory(id) {
+  territories = territories.filter(t => t.id !== id);
+  connections = connections.filter(c => c[0] !== id && c[1] !== id);
+  bonuses.forEach(b => { b.territory_ids = b.territory_ids.filter(t => t !== id); });
+}
+
+function addBonus() {
+  pushUndo('Add bonus');
+  const id = nextBonusId++;
+  bonuses.push({
+    id, name: `Bonus ${id}`, value: 2,
+    color: BONUS_COLORS[id % BONUS_COLORS.length],
+    territory_ids: []
+  });
+  fullRender();
+  selectBonus(id);
+}
+
+function deleteBonus(id) {
+  bonuses = bonuses.filter(b => b.id !== id);
+  territories.forEach(t => { if (t.bonus_id === id) t.bonus_id = 0; });
+}
+
+// ============================================================
+//  SELECTION
+// ============================================================
+function selectTerritory(id) {
+  selectedTerr = id;
+  const edEmpty = document.getElementById('terr-editor-empty');
+  const ed = document.getElementById('terr-editor');
+  if (id === null) {
+    edEmpty.style.display = ''; ed.style.display = 'none';
+    renderNodes();
+    renderTerrList();
+    return;
+  }
+  const t = territories.find(t => t.id === id);
+  if (!t) return;
+  edEmpty.style.display = 'none'; ed.style.display = '';
+  document.getElementById('te-id').textContent = t.id;
+  document.getElementById('te-name').value = t.name;
+  document.getElementById('te-armies').value = t.default_armies;
+  document.getElementById('te-waste').checked = t.is_wasteland;
+
+  // Bonus dropdown
+  const sel = document.getElementById('te-bonus');
+  sel.innerHTML = '<option value="-1">(none)</option>';
+  bonuses.forEach(b => {
+    sel.innerHTML += `<option value="${b.id}" ${t.bonus_id===b.id?'selected':''}>${b.name}</option>`;
+  });
+
+  // Connections
+  const adj = connections.filter(c => c[0]===id || c[1]===id).map(c => c[0]===id?c[1]:c[0]);
+  document.getElementById('te-conn').textContent = adj.map(a => {
+    const at = territories.find(t => t.id === a);
+    return at ? at.name : a;
+  }).join(', ') || 'none';
+
+  renderNodes();
+  renderTerrList();
+}
+
+function selectBonus(id) {
+  selectedBonus = id;
+  const panel = document.getElementById('panel-bonusedit');
+  if (id === null) { panel.style.display = 'none'; renderBonusList(); return; }
+  const b = bonuses.find(b => b.id === id);
+  if (!b) return;
+  panel.style.display = '';
+  document.getElementById('be-name').value = b.name;
+  document.getElementById('be-value').value = b.value;
+  document.getElementById('be-color').value = b.color;
+  renderBonusTerrChips();
+  renderBonusList();
+  renderNodes();
+  renderShapes();
+}
+
+// ============================================================
+//  TERRITORY EDITOR CALLBACKS
+// ============================================================
+function updateTerrName(v) {
+  const t = territories.find(t => t.id === selectedTerr);
+  if (t) { t.name = v; renderLabels(); renderTerrList(); }
+}
+function updateTerrArmies(v) {
+  const t = territories.find(t => t.id === selectedTerr);
+  if (t) t.default_armies = v;
+}
+function updateTerrWasteland(v) {
+  const t = territories.find(t => t.id === selectedTerr);
+  if (t) {
+    t.is_wasteland = v;
+    if (v) { t.default_armies = 10; document.getElementById('te-armies').value = 10; }
+    else { t.default_armies = 2; document.getElementById('te-armies').value = 2; }
+  }
+}
+function updateTerrBonus(bid) {
+  const t = territories.find(t => t.id === selectedTerr);
+  if (!t) return;
+  // Remove from old bonus
+  bonuses.forEach(b => { b.territory_ids = b.territory_ids.filter(x => x !== selectedTerr); });
+  if (bid >= 0) {
+    const b = bonuses.find(b => b.id === bid);
+    if (b) { b.territory_ids.push(selectedTerr); t.bonus_id = bid; }
+  }
+  renderBonusList();
+  renderNodes();
+  renderShapes();
+}
+function deleteSelectedTerritory() {
+  if (selectedTerr === null) return;
+  pushUndo('Delete territory');
+  deleteTerritory(selectedTerr);
+  selectedTerr = null;
+  fullRender();
+}
+
+// ============================================================
+//  BONUS EDITOR CALLBACKS
+// ============================================================
+function updateBonusName(v) {
+  const b = bonuses.find(b => b.id === selectedBonus);
+  if (b) { b.name = v; renderBonusList(); }
+}
+function updateBonusValue(v) {
+  const b = bonuses.find(b => b.id === selectedBonus);
+  if (b) { b.value = v; renderBonusList(); }
+}
+function updateBonusColor(v) {
+  const b = bonuses.find(b => b.id === selectedBonus);
+  if (b) { b.color = v; renderBonusList(); renderNodes(); renderShapes(); }
+}
+function startAddTerrToBonus() {
+  addingTerrToBonus = true;
+  document.getElementById('status-mode').textContent = 'Click a territory to add to bonus...';
+}
+function deleteSelectedBonus() {
+  if (selectedBonus === null) return;
+  pushUndo('Delete bonus');
+  deleteBonus(selectedBonus);
+  selectedBonus = null;
+  document.getElementById('panel-bonusedit').style.display = 'none';
+  fullRender();
+}
+function removeTerrFromBonus(tid) {
+  pushUndo('Remove territory from bonus');
+  const b = bonuses.find(b => b.id === selectedBonus);
+  if (b) {
+    b.territory_ids = b.territory_ids.filter(x => x !== tid);
+    renderBonusTerrChips();
+    renderBonusList();
+    renderNodes();
+    renderShapes();
+  }
+}
+function renderBonusTerrChips() {
+  const b = bonuses.find(b => b.id === selectedBonus);
+  const el = document.getElementById('be-terrs');
+  if (!b) { el.innerHTML = ''; return; }
+  el.innerHTML = b.territory_ids.map(tid => {
+    const t = territories.find(t => t.id === tid);
+    return `<span class="chip" onclick="removeTerrFromBonus(${tid})" title="Click to remove">${t ? t.name : tid}</span>`;
+  }).join('');
+}
+
+// ============================================================
+//  PANEL TOGGLING
+// ============================================================
+function togglePanel(name) {
+  const body = document.getElementById('body-' + name);
+  const arrow = document.getElementById('arrow-' + name);
+  if (body.classList.contains('collapsed')) {
+    body.classList.remove('collapsed');
+    arrow.innerHTML = '&#9660;';
+  } else {
+    body.classList.add('collapsed');
+    arrow.innerHTML = '&#9654;';
+  }
+}
+
+// ============================================================
+//  RENDERING
+// ============================================================
+function fullRender() {
+  renderShapes();
+  renderConnections();
+  renderNodes();
+  renderLabels();
+  renderTerrList();
+  renderBonusList();
+  updateStatus();
+  if (selectedTerr !== null) selectTerritory(selectedTerr);
+  if (selectedBonus !== null) selectBonus(selectedBonus);
+}
+
+function renderNodes() {
+  const g = document.getElementById('g-nodes');
+  g.innerHTML = '';
+  for (const t of territories) {
+    const b = bonuses.find(b => b.territory_ids.includes(t.id));
+    const color = b ? b.color : '#8b949e';
+    const sel = t.id === selectedTerr;
+    const inBonus = selectedBonus !== null && b && b.id === selectedBonus;
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', t.x);
+    circle.setAttribute('cy', t.y);
+    circle.setAttribute('r', sel ? 12 : 9);
+    circle.setAttribute('fill', color);
+    circle.setAttribute('fill-opacity', '0.9');
+    circle.setAttribute('stroke', sel ? '#ffffff' : (inBonus ? '#ffffff' : 'none'));
+    circle.setAttribute('stroke-width', sel ? 3 : 2);
+    circle.style.filter = sel ? 'drop-shadow(0 0 6px rgba(255,255,255,0.4))' : '';
+    circle.style.cursor = 'pointer';
+    circle.setAttribute('data-id', t.id);
+    g.appendChild(circle);
+  }
+}
+
+function renderConnections() {
+  const g = document.getElementById('g-connections');
+  g.innerHTML = '';
+  for (const [a, b] of connections) {
+    const ta = territories.find(t => t.id === a);
+    const tb = territories.find(t => t.id === b);
+    if (!ta || !tb) continue;
+
+    const dx = tb.x - ta.x, dy = tb.y - ta.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    // Check if cross-cluster (different bonuses)
+    const ba = bonuses.find(bn => bn.territory_ids.includes(a));
+    const bb = bonuses.find(bn => bn.territory_ids.includes(b));
+    const crossCluster = ba && bb && ba.id !== bb.id && dist > 200;
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', crossCluster ? 'path' : 'line');
+    if (crossCluster) {
+      // Curved dashed line
+      const mx = (ta.x + tb.x)/2, my = (ta.y + tb.y)/2;
+      const nx = -dy / dist * 40, ny = dx / dist * 40;
+      line.setAttribute('d', `M${ta.x},${ta.y} Q${mx+nx},${my+ny} ${tb.x},${tb.y}`);
+      line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', '#8b949e');
+      line.setAttribute('stroke-width', '1.5');
+      line.setAttribute('stroke-dasharray', '8,5');
+      line.setAttribute('opacity', '0.5');
+    } else {
+      line.setAttribute('x1', ta.x); line.setAttribute('y1', ta.y);
+      line.setAttribute('x2', tb.x); line.setAttribute('y2', tb.y);
+      line.setAttribute('stroke', '#8b949e');
+      line.setAttribute('stroke-width', '1.5');
+      line.setAttribute('opacity', '0.4');
+    }
+    g.appendChild(line);
+  }
+}
+
+function renderLabels() {
+  const g = document.getElementById('g-labels');
+  g.innerHTML = '';
+  for (const t of territories) {
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', t.x);
+    text.setAttribute('y', t.y - 16);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('fill', '#e6edf3');
+    text.setAttribute('font-size', '10');
+    text.setAttribute('font-family', 'sans-serif');
+    text.setAttribute('pointer-events', 'none');
+    text.textContent = t.name;
+    g.appendChild(text);
+  }
+}
+
+function renderShapes() {
+  const g = document.getElementById('g-shapes');
+  g.innerHTML = '';
+  for (const t of territories) {
+    if (!t.shape) continue;
+    const b = bonuses.find(b => b.territory_ids.includes(t.id));
+    const color = b ? b.color : '#8b949e';
+    const sel = t.id === selectedTerr;
+    const inBonus = selectedBonus !== null && b && b.id === selectedBonus;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', t.shape);
+    path.setAttribute('fill', color);
+    path.setAttribute('fill-opacity', inBonus ? '0.35' : '0.15');
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', sel ? 2.5 : 1);
+    path.setAttribute('stroke-opacity', sel ? 1 : 0.5);
+    g.appendChild(path);
+  }
+}
+
+function renderTerrList() {
+  const el = document.getElementById('terr-list');
+  document.getElementById('terr-count').textContent = territories.length;
+  el.innerHTML = territories.map(t => {
+    const b = bonuses.find(b => b.territory_ids.includes(t.id));
+    const color = b ? b.color : '#8b949e';
+    return `<div class="terr-item ${t.id===selectedTerr?'selected':''}" onclick="selectTerritory(${t.id})">
+      <span class="dot" style="background:${color}"></span>
+      <span class="name">${t.name}</span>
+      <span class="tid">#${t.id}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderBonusList() {
+  const el = document.getElementById('bonus-list');
+  document.getElementById('bonus-count').textContent = bonuses.length;
+  el.innerHTML = bonuses.map(b => {
+    return `<div class="bonus-item ${b.id===selectedBonus?'selected':''}" onclick="selectBonus(${b.id})">
+      <div class="bonus-header">
+        <span class="swatch" style="background:${b.color}"></span>
+        <span class="bname">${b.name}</span>
+        <span class="bval">+${b.value}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2)">${b.territory_ids.length} territories</div>
+    </div>`;
+  }).join('');
+}
+
+function updateStatus() {
+  document.getElementById('status-info').textContent =
+    `${territories.length} territories, ${connections.length} connections, ${bonuses.length} bonuses`;
+}
+
+// ============================================================
+//  FORCE-DIRECTED LAYOUT
+// ============================================================
+function forceLayout() {
+  if (territories.length === 0) return;
+  pushUndo('Auto-layout');
+
+  const N = territories.length;
+  const k_spring = 0.005;
+  const k_repel = 8000;
+  const damping = 0.92;
+  const idealLen = 120;
+  const iterations = 600;
+
+  // Center territories if spread is tiny
+  const cx = territories.reduce((s,t)=>s+t.x,0)/N;
+  const cy = territories.reduce((s,t)=>s+t.y,0)/N;
+  const spread = Math.sqrt(territories.reduce((s,t)=>s+(t.x-cx)**2+(t.y-cy)**2,0)/N);
+  if (spread < 50) {
+    // Randomize positions in a circle
+    territories.forEach((t, i) => {
+      const angle = (2*Math.PI*i)/N;
+      const r = 100 + Math.random()*200;
+      t.x = 600 + Math.cos(angle)*r;
+      t.y = 400 + Math.sin(angle)*r;
+    });
+  }
+
+  const vx = new Float64Array(N);
+  const vy = new Float64Array(N);
+
+  // Build adjacency lookup
+  const adj = new Set();
+  connections.forEach(([a,b]) => { adj.add(a+','+b); adj.add(b+','+a); });
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const fx = new Float64Array(N);
+    const fy = new Float64Array(N);
+
+    // Repulsion between all pairs
+    for (let i = 0; i < N; i++) {
+      for (let j = i+1; j < N; j++) {
+        let dx = territories[j].x - territories[i].x;
+        let dy = territories[j].y - territories[i].y;
+        let d2 = dx*dx + dy*dy;
+        if (d2 < 1) d2 = 1;
+        const d = Math.sqrt(d2);
+        const f = k_repel / d2;
+        const fdx = f * dx / d;
+        const fdy = f * dy / d;
+        fx[i] -= fdx; fy[i] -= fdy;
+        fx[j] += fdx; fy[j] += fdy;
+      }
+    }
+
+    // Spring attraction for connections
+    for (const [a, b] of connections) {
+      const ia = territories.findIndex(t => t.id === a);
+      const ib = territories.findIndex(t => t.id === b);
+      if (ia < 0 || ib < 0) continue;
+      let dx = territories[ib].x - territories[ia].x;
+      let dy = territories[ib].y - territories[ia].y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      if (d < 1) continue;
+      const displacement = d - idealLen;
+      const f = k_spring * displacement;
+      const fdx = f * dx / d;
+      const fdy = f * dy / d;
+      fx[ia] += fdx; fy[ia] += fdy;
+      fx[ib] -= fdx; fy[ib] -= fdy;
+    }
+
+    // Center gravity
+    const gcx = territories.reduce((s,t)=>s+t.x,0)/N;
+    const gcy = territories.reduce((s,t)=>s+t.y,0)/N;
+    for (let i = 0; i < N; i++) {
+      fx[i] += (600 - gcx) * 0.001;
+      fy[i] += (400 - gcy) * 0.001;
+    }
+
+    // Update velocities and positions
+    for (let i = 0; i < N; i++) {
+      vx[i] = (vx[i] + fx[i]) * damping;
+      vy[i] = (vy[i] + fy[i]) * damping;
+      // Limit velocity
+      const speed = Math.sqrt(vx[i]*vx[i]+vy[i]*vy[i]);
+      if (speed > 20) {
+        vx[i] = vx[i]/speed*20;
+        vy[i] = vy[i]/speed*20;
+      }
+      territories[i].x += vx[i];
+      territories[i].y += vy[i];
+    }
+  }
+
+  fullRender();
+  fitView();
+}
+
+function autoLayout() {
+  forceLayout();
+}
+
+function fitView() {
+  if (territories.length === 0) return;
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  territories.forEach(t => {
+    if (t.x < minX) minX = t.x;
+    if (t.y < minY) minY = t.y;
+    if (t.x > maxX) maxX = t.x;
+    if (t.y > maxY) maxY = t.y;
+  });
+  const pad = 100;
+  const w = maxX - minX + pad*2;
+  const h = maxY - minY + pad*2;
+  const rect = svg.getBoundingClientRect();
+  const aspect = rect.width / rect.height;
+  if (w/h > aspect) {
+    viewBox.w = w; viewBox.h = w / aspect;
+  } else {
+    viewBox.h = h; viewBox.w = h * aspect;
+  }
+  viewBox.x = minX - pad - (viewBox.w - (maxX-minX))/2;
+  viewBox.y = minY - pad - (viewBox.h - (maxY-minY))/2;
+  updateViewBox();
+}
+
+// ============================================================
+//  VORONOI SHAPE GENERATION
+// ============================================================
+function generateShapes() {
+  if (territories.length < 2) return;
+  pushUndo('Generate shapes');
+
+  // Compute bounding box
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  territories.forEach(t => {
+    if (t.x < minX) minX = t.x;
+    if (t.y < minY) minY = t.y;
+    if (t.x > maxX) maxX = t.x;
+    if (t.y > maxY) maxY = t.y;
+  });
+  const pad = 80;
+  const bx = minX - pad, by = minY - pad;
+  const bw = (maxX - minX) + pad*2, bh = (maxY - minY) + pad*2;
+
+  // Compute Voronoi using half-plane intersection for each site
+  for (const t of territories) {
+    t.shape = computeVoronoiCell(t, bx, by, bw, bh);
+  }
+  fullRender();
+}
+
+function computeVoronoiCell(site, bx, by, bw, bh) {
+  // Start with bounding rectangle as polygon
+  let poly = [
+    {x: bx, y: by},
+    {x: bx+bw, y: by},
+    {x: bx+bw, y: by+bh},
+    {x: bx, y: by+bh}
+  ];
+
+  // Clip by perpendicular bisector with every other site
+  for (const other of territories) {
+    if (other.id === site.id) continue;
+    poly = clipPolygonByBisector(poly, site, other);
+    if (poly.length < 3) return '';
+  }
+
+  // Convert to SVG path
+  if (poly.length < 3) return '';
+  let d = `M${poly[0].x.toFixed(1)},${poly[0].y.toFixed(1)}`;
+  for (let i = 1; i < poly.length; i++) {
+    d += `L${poly[i].x.toFixed(1)},${poly[i].y.toFixed(1)}`;
+  }
+  d += 'Z';
+  return d;
+}
+
+function clipPolygonByBisector(poly, site, other) {
+  // Perpendicular bisector: all points closer to site than other
+  // The bisector passes through midpoint, normal = (other - site)
+  const mx = (site.x + other.x) / 2;
+  const my = (site.y + other.y) / 2;
+  const nx = other.x - site.x;
+  const ny = other.y - site.y;
+
+  // Clip polygon to half-plane dot(p - mid, n) <= 0
+  const output = [];
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const curr = poly[i];
+    const next = poly[(i+1) % n];
+    const dc = (curr.x - mx)*nx + (curr.y - my)*ny;
+    const dn = (next.x - mx)*nx + (next.y - my)*ny;
+    if (dc <= 0) output.push(curr);
+    if ((dc <= 0) !== (dn <= 0)) {
+      // Intersection
+      const t = dc / (dc - dn);
+      output.push({
+        x: curr.x + t*(next.x - curr.x),
+        y: curr.y + t*(next.y - curr.y)
+      });
+    }
+  }
+  return output;
+}
+
+function clearShapes() {
+  pushUndo('Clear shapes');
+  territories.forEach(t => t.shape = null);
+  renderShapes();
+}
+
+// ============================================================
+//  AUTO CLUSTERING (Label Propagation)
+// ============================================================
+function autoClusters() {
+  if (territories.length === 0) return;
+  pushUndo('Auto-cluster');
+
+  // Build adjacency
+  const adjMap = {};
+  territories.forEach(t => adjMap[t.id] = []);
+  connections.forEach(([a,b]) => {
+    if (adjMap[a]) adjMap[a].push(b);
+    if (adjMap[b]) adjMap[b].push(a);
+  });
+
+  // Initialize labels
+  const label = {};
+  territories.forEach(t => label[t.id] = t.id);
+
+  // Iterate
+  for (let iter = 0; iter < 30; iter++) {
+    let changed = false;
+    // Shuffle order
+    const order = territories.map(t => t.id).sort(() => Math.random() - 0.5);
+    for (const id of order) {
+      const neighbors = adjMap[id];
+      if (neighbors.length === 0) continue;
+      // Count neighbor labels
+      const counts = {};
+      neighbors.forEach(n => {
+        const l = label[n];
+        counts[l] = (counts[l] || 0) + 1;
+      });
+      // Pick most common
+      let maxCount = 0, maxLabel = label[id];
+      for (const [l, c] of Object.entries(counts)) {
+        if (c > maxCount || (c === maxCount && Math.random() > 0.5)) {
+          maxCount = c; maxLabel = +l;
+        }
+      }
+      if (label[id] !== maxLabel) {
+        label[id] = maxLabel;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  // Collect clusters
+  const clusters = {};
+  territories.forEach(t => {
+    const l = label[t.id];
+    if (!clusters[l]) clusters[l] = [];
+    clusters[l].push(t.id);
+  });
+
+  // Create bonuses from clusters
+  bonuses = [];
+  nextBonusId = 0;
+  const clusterKeys = Object.keys(clusters).sort((a,b) => clusters[b].length - clusters[a].length);
+  const regionNames = ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta','Eta','Theta','Iota','Kappa',
+    'Lambda','Mu','Nu','Xi','Omicron','Pi','Rho','Sigma','Tau','Upsilon'];
+  clusterKeys.forEach((k, i) => {
+    const ids = clusters[k];
+    const id = nextBonusId++;
+    const value = Math.max(1, ids.length - 1);
+    bonuses.push({
+      id, name: regionNames[i] || `Region ${i}`,
+      value, color: BONUS_COLORS[i % BONUS_COLORS.length],
+      territory_ids: ids
+    });
+    ids.forEach(tid => {
+      const t = territories.find(t => t.id === tid);
+      if (t) t.bonus_id = id;
+    });
+  });
+
+  fullRender();
+}
+
+// ============================================================
+//  EXPORT / IMPORT
+// ============================================================
+function buildExportJSON() {
+  // Build adjacency lists
+  const adjMap = {};
+  territories.forEach(t => adjMap[t.id] = []);
+  connections.forEach(([a,b]) => {
+    adjMap[a].push(b);
+    adjMap[b].push(a);
+  });
+
+  // Re-index territories 0..N-1
+  const idMap = {};
+  territories.forEach((t, i) => idMap[t.id] = i);
+
+  const exportTerrs = territories.map((t, i) => {
+    const adj = (adjMap[t.id] || []).map(a => idMap[a]).filter(x => x !== undefined).sort((a,b)=>a-b);
+    const bonusIdx = bonuses.findIndex(b => b.territory_ids.includes(t.id));
+    const obj = {
+      id: i,
+      name: t.name,
+      bonus_id: bonusIdx >= 0 ? bonusIdx : 0,
+      is_wasteland: t.is_wasteland,
+      default_armies: t.default_armies,
+      adjacent: adj,
+    };
+    // Add visual with shape and label position
+    obj.visual = {
+      path: t.shape || '',
+      label_pos: [Math.round(t.x * 10)/10, Math.round(t.y * 10)/10]
+    };
+    return obj;
+  });
+
+  const exportBonuses = bonuses.map((b, i) => ({
+    id: i,
+    name: b.name,
+    value: b.value,
+    territory_ids: b.territory_ids.map(tid => idMap[tid]).filter(x => x !== undefined).sort((a,b)=>a-b)
+  }));
+
+  return {
+    id: mapData.id,
+    name: mapData.name,
+    territories: exportTerrs,
+    bonuses: exportBonuses,
+    picking: { ...mapData.picking },
+    settings: { ...mapData.settings }
+  };
+}
+
+function showExport() {
+  const json = JSON.stringify(buildExportJSON(), null, 2);
+  showModal('Export Map JSON', `<textarea id="export-text">${escapeHtml(json)}</textarea>`,
+    [
+      {label:'Copy to Clipboard', cls:'primary', action:()=>{
+        navigator.clipboard.writeText(document.getElementById('export-text').value);
+      }},
+      {label:'Download', cls:'primary', action:()=>{
+        const blob = new Blob([document.getElementById('export-text').value], {type:'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = mapData.id + '.json';
+        a.click();
+      }},
+      {label:'Close', action:closeModal}
+    ]
+  );
+}
+
+function showImport() {
+  showModal('Import Map JSON', `<textarea id="import-text" placeholder="Paste map JSON here..."></textarea>`,
+    [
+      {label:'Import', cls:'primary', action:()=>{
+        try {
+          const data = JSON.parse(document.getElementById('import-text').value);
+          importMap(data);
+          closeModal();
+        } catch(e) { alert('Invalid JSON: ' + e.message); }
+      }},
+      {label:'Cancel', action:closeModal}
+    ]
+  );
+}
+
+function importMap(data) {
+  pushUndo('Import map');
+  territories = [];
+  connections = [];
+  bonuses = [];
+  nextTerrId = 0;
+  nextBonusId = 0;
+
+  mapData.id = data.id || 'imported';
+  mapData.name = data.name || 'Imported Map';
+  if (data.picking) mapData.picking = {...mapData.picking, ...data.picking};
+  if (data.settings) mapData.settings = {...mapData.settings, ...data.settings};
+
+  // Update settings UI
+  document.getElementById('set-id').value = mapData.id;
+  document.getElementById('set-name').value = mapData.name;
+  document.getElementById('set-picks').value = mapData.picking.num_picks;
+  document.getElementById('set-income').value = mapData.settings.base_income;
+  document.getElementById('set-fog').checked = mapData.settings.fog_of_war;
+
+  // Import territories
+  const terrMap = {}; // old id -> new id
+  if (data.territories) {
+    data.territories.forEach(t => {
+      const lx = t.visual ? t.visual.label_pos[0] : (100 + Math.random()*1000);
+      const ly = t.visual ? t.visual.label_pos[1] : (100 + Math.random()*600);
+      const id = nextTerrId++;
+      terrMap[t.id] = id;
+      territories.push({
+        id, name: t.name, x: lx, y: ly,
+        bonus_id: t.bonus_id || 0,
+        is_wasteland: t.is_wasteland || false,
+        default_armies: t.default_armies || 2,
+        shape: (t.visual && t.visual.path) ? t.visual.path : null
+      });
+    });
+
+    // Build connections from adjacency lists
+    const connSet = new Set();
+    data.territories.forEach(t => {
+      (t.adjacent || []).forEach(adj => {
+        const a = terrMap[t.id], b = terrMap[adj];
+        if (a !== undefined && b !== undefined) {
+          const key = Math.min(a,b)+','+Math.max(a,b);
+          if (!connSet.has(key)) {
+            connSet.add(key);
+            connections.push([a, b]);
+          }
+        }
+      });
+    });
+  }
+
+  // Import bonuses
+  if (data.bonuses) {
+    data.bonuses.forEach((b, i) => {
+      const id = nextBonusId++;
+      bonuses.push({
+        id, name: b.name, value: b.value,
+        color: BONUS_COLORS[i % BONUS_COLORS.length],
+        territory_ids: (b.territory_ids || []).map(tid => terrMap[tid]).filter(x => x !== undefined)
+      });
+    });
+  }
+
+  selectedTerr = null; selectedBonus = null;
+  fullRender();
+  fitView();
+}
+
+// ============================================================
+//  MODAL SYSTEM
+// ============================================================
+let currentModal = null;
+function showModal(title, bodyHtml, buttons) {
+  closeModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.onclick = e => { if (e.target === overlay) closeModal(); };
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `<h3>${title}</h3>${bodyHtml}<div class="actions">${
+    buttons.map(b => `<button class="${b.cls||''}" data-action="${b.label}">${b.label}</button>`).join('')
+  }</div>`;
+  buttons.forEach(b => {
+    modal.querySelector(`[data-action="${b.label}"]`).onclick = b.action;
+  });
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  currentModal = overlay;
+}
+function closeModal() {
+  if (currentModal) { currentModal.remove(); currentModal = null; }
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================================================
+//  KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 's' || e.key === 'S') setMode('select');
+  else if (e.key === 't' || e.key === 'T') setMode('territory');
+  else if (e.key === 'c' || e.key === 'C') setMode('connection');
+  else if (e.key === 'l' || e.key === 'L') autoLayout();
+  else if (e.key === 'g' || e.key === 'G') generateShapes();
+  else if (e.key === 'k' || e.key === 'K') autoClusters();
+  else if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedTerr !== null) deleteSelectedTerritory();
+  }
+  else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+  else if (e.key === 'Escape') {
+    connStart = null;
+    addingTerrToBonus = false;
+    document.getElementById('conn-preview').style.display = 'none';
+    setMode('select');
+  }
+  else if (e.key === 'f' || e.key === 'F') fitView();
+});
+
+// ============================================================
+//  INIT
+// ============================================================
+window.addEventListener('resize', () => { initView(); fullRender(); });
+initView();
+fullRender();
+</script>
+</body>
+</html>

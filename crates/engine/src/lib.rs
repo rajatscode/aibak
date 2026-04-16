@@ -1,8 +1,10 @@
 pub mod ai;
+pub mod analysis;
 pub mod cards;
 pub mod combat;
 pub mod fog;
 pub mod map;
+pub mod mcts;
 pub mod orders;
 pub mod picking;
 pub mod state;

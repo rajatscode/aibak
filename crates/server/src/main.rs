@@ -19,7 +19,8 @@ use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use strat_engine::ai;
+use strat_engine::ai::{self, AiStrength};
+use strat_engine::analysis;
 use strat_engine::fog;
 use strat_engine::map::Map;
 use strat_engine::orders::Order;
@@ -76,6 +77,7 @@ pub struct LocalState {
     rng: StdRng,
     pick_options: Vec<usize>,
     turn_history: Vec<TurnLog>,
+    ai_strength: AiStrength,
 }
 
 #[derive(Clone, Serialize)]
@@ -99,6 +101,14 @@ struct GameView {
     territories: Vec<TerritoryView>,
     bonuses: Vec<BonusView>,
     history: Vec<TurnLog>,
+    win_probability: WinProbView,
+}
+
+#[derive(Serialize)]
+struct WinProbView {
+    player_0: f64,
+    player_1: f64,
+    simulations: u32,
 }
 
 #[derive(Serialize)]
@@ -203,6 +213,9 @@ fn build_game_view(app: &LocalState) -> GameView {
         })
         .collect();
 
+    // Compute win probability (small simulation count for responsiveness).
+    let wp = analysis::estimate_win_probability(&app.game, &app.map, 100, 30);
+
     GameView {
         phase: match app.game.phase {
             Phase::Picking => "picking".into(),
@@ -219,6 +232,11 @@ fn build_game_view(app: &LocalState) -> GameView {
         territories,
         bonuses,
         history: app.turn_history.clone(),
+        win_probability: WinProbView {
+            player_0: wp.player_0,
+            player_1: wp.player_1,
+            simulations: wp.simulations_run,
+        },
     }
 }
 
@@ -297,7 +315,7 @@ async fn submit_local_orders(
 
     let visible_before = fog::visible_territories(&app.game, PLAYER, &app.map);
 
-    let ai_orders = ai::generate_orders(&app.game, AI_PLAYER, &app.map);
+    let ai_orders = ai::generate_orders_for_strength(&app.game, AI_PLAYER, &app.map, app.ai_strength);
     let game_clone = app.game.clone();
     let map = app.map.clone();
 
@@ -347,6 +365,10 @@ async fn new_local_game(State(state): State<AppState>) -> Json<ActionResult> {
 
 async fn index() -> Html<&'static str> {
     Html(include_str!("../../static/index.html"))
+}
+
+async fn editor() -> Html<&'static str> {
+    Html(include_str!("../../static/editor.html"))
 }
 
 // ── Auth route handlers ──
@@ -453,6 +475,38 @@ async fn auth_me(
     })))
 }
 
+// ── Analysis & difficulty endpoints ──
+
+async fn get_analysis(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let app = state.local.lock().unwrap();
+    let wp = analysis::estimate_win_probability(&app.game, &app.map, 200, 50);
+    Json(serde_json::json!({
+        "win_probability": {
+            "player_0": wp.player_0,
+            "player_1": wp.player_1,
+            "simulations": wp.simulations_run,
+        }
+    }))
+}
+
+#[derive(Deserialize)]
+struct DifficultyRequest {
+    level: AiStrength,
+}
+
+async fn set_difficulty(
+    State(state): State<AppState>,
+    Json(body): Json<DifficultyRequest>,
+) -> Json<ActionResult> {
+    let mut app = state.local.lock().unwrap();
+    app.ai_strength = body.level;
+    Json(ActionResult {
+        success: true,
+        message: format!("AI difficulty set to {:?}", body.level),
+        events: Vec::new(),
+    })
+}
+
 async fn app_placeholder() -> Html<&'static str> {
     Html("<html><body><h1>strat-club multiplayer</h1><p>Frontend coming soon.</p></body></html>")
 }
@@ -495,6 +549,7 @@ async fn main() {
         rng,
         pick_options,
         turn_history: Vec::new(),
+        ai_strength: AiStrength::Hard,
     };
 
     // Set up WebSocket hub.
@@ -553,6 +608,10 @@ async fn main() {
         .route("/api/picks", post(submit_local_picks))
         .route("/api/orders", post(submit_local_orders))
         .route("/api/new", post(new_local_game))
+        .route("/api/game/analysis", get(get_analysis))
+        .route("/api/difficulty", post(set_difficulty))
+        // Map editor.
+        .route("/editor", get(editor))
         // Multiplayer app placeholder.
         .route("/app", get(app_placeholder))
         // Auth routes.

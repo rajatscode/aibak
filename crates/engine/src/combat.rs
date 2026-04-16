@@ -26,7 +26,16 @@ pub fn resolve_attack(
     settings: &MapSettings,
 ) -> CombatResult {
     assert!(attackers > 0, "must attack with at least 1 army");
-    assert!(defenders > 0, "territory must have at least 1 defender");
+    // Handle edge case where territory has been emptied by prior combat in the same turn.
+    if defenders == 0 {
+        return CombatResult {
+            defenders_killed: 0,
+            attackers_killed: 0,
+            captured: true,
+            surviving_attackers: attackers,
+            surviving_defenders: 0,
+        };
+    }
 
     let offense_kills = straight_round(attackers as f64 * settings.offense_kill_rate);
     let defense_kills = straight_round(defenders as f64 * settings.defense_kill_rate);

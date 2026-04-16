@@ -1,5 +1,10 @@
+use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
+
 use crate::combat::resolve_attack;
 use crate::map::Map;
+use crate::mcts::{MctsConfig, mcts_generate_orders};
 use crate::orders::Order;
 use crate::state::{GameState, PlayerId, NEUTRAL};
 
@@ -10,6 +15,94 @@ pub enum AiProfile {
     Standard,
     /// Multi-step planning with expansion focus.
     Aggressive,
+}
+
+/// AI strength level for player-facing difficulty selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AiStrength {
+    /// Random deployment and attacks (weakest).
+    Easy,
+    /// Greedy heuristic (existing AI).
+    Medium,
+    /// MCTS-based search (strongest).
+    Hard,
+}
+
+impl Default for AiStrength {
+    fn default() -> Self {
+        Self::Hard
+    }
+}
+
+/// Generate orders using the specified AI strength level.
+pub fn generate_orders_for_strength(
+    state: &GameState,
+    player: PlayerId,
+    map: &Map,
+    strength: AiStrength,
+) -> Vec<Order> {
+    match strength {
+        AiStrength::Easy => generate_random_orders(state, player, map),
+        AiStrength::Medium => generate_orders(state, player, map),
+        AiStrength::Hard => {
+            let config = MctsConfig {
+                time_budget: Duration::from_millis(500),
+                ..Default::default()
+            };
+            mcts_generate_orders(state, player, map, &config)
+        }
+    }
+}
+
+/// Generate random (easy) orders: deploy all income on a random border territory,
+/// then attack a random neighbor if possible.
+fn generate_random_orders(state: &GameState, player: PlayerId, map: &Map) -> Vec<Order> {
+    use rand::seq::SliceRandom;
+
+    let income = state.income(player, map);
+    if income == 0 {
+        return Vec::new();
+    }
+
+    let owned: Vec<usize> = (0..map.territory_count())
+        .filter(|&tid| state.territory_owners[tid] == player)
+        .collect();
+
+    if owned.is_empty() {
+        return Vec::new();
+    }
+
+    let mut rng = rand::thread_rng();
+    let deploy_target = *owned.choose(&mut rng).unwrap();
+
+    let mut orders = vec![Order::Deploy {
+        territory: deploy_target,
+        armies: income,
+    }];
+
+    // Maybe attack a random neighbor.
+    let mut sim_armies = state.territory_armies.clone();
+    sim_armies[deploy_target] += income;
+
+    let attackable: Vec<usize> = map.territories[deploy_target]
+        .adjacent
+        .iter()
+        .copied()
+        .filter(|&adj| state.territory_owners[adj] != player)
+        .collect();
+
+    if let Some(&target) = attackable.choose(&mut rng) {
+        if sim_armies[deploy_target] > 1 {
+            orders.push(Order::Attack {
+                from: deploy_target,
+                to: target,
+                armies: sim_armies[deploy_target] - 1,
+            });
+        }
+    }
+
+    orders
 }
 
 /// Generate AI orders with multi-step attack planning.
@@ -123,6 +216,9 @@ pub fn generate_orders_with_profile(
                 }
                 let attackers = sim_armies[src] - 1;
                 let defenders = sim_armies[target];
+                if defenders == 0 || attackers == 0 {
+                    continue;
+                }
                 let result = resolve_attack(attackers, defenders, &map.settings);
 
                 if result.captured {
@@ -145,8 +241,8 @@ pub fn generate_orders_with_profile(
         if sim_owners[tid] == player {
             continue;
         }
-        if sim_armies[tid] > 3 {
-            continue; // Not easy
+        if sim_armies[tid] > 3 || sim_armies[tid] == 0 {
+            continue; // Not easy or empty
         }
         let source = map.territories[tid]
             .adjacent
@@ -158,6 +254,9 @@ pub fn generate_orders_with_profile(
         if let Some(src) = source {
             let attackers = sim_armies[src] - 1;
             let defenders = sim_armies[tid];
+            if defenders == 0 || attackers == 0 {
+                continue;
+            }
             let result = resolve_attack(attackers, defenders, &map.settings);
 
             if result.captured && !attack_plan.iter().any(|a| a.from == src) {
@@ -225,6 +324,9 @@ pub fn generate_orders_with_profile(
                 }
                 let attackers = sim_armies[src] - 1;
                 let defenders = sim_armies[target];
+                if defenders == 0 || attackers == 0 {
+                    continue;
+                }
                 let result = resolve_attack(attackers, defenders, &map.settings);
 
                 if result.captured {
@@ -244,7 +346,7 @@ pub fn generate_orders_with_profile(
 
     // Opportunistic attacks on weak neighbors
     for tid in 0..map.territory_count() {
-        if sim_owners[tid] == player || sim_armies[tid] > 3 {
+        if sim_owners[tid] == player || sim_armies[tid] > 3 || sim_armies[tid] == 0 {
             continue;
         }
         let source = map.territories[tid]
@@ -257,6 +359,9 @@ pub fn generate_orders_with_profile(
         if let Some(src) = source {
             let attackers = sim_armies[src] - 1;
             let defenders = sim_armies[tid];
+            if defenders == 0 || attackers == 0 {
+                continue;
+            }
             let result = resolve_attack(attackers, defenders, &map.settings);
 
             if result.captured {
