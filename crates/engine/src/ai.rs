@@ -116,12 +116,21 @@ pub fn generate_orders_with_profile(
     map: &Map,
     _profile: AiProfile,
 ) -> Vec<Order> {
-    let mut orders = Vec::new();
     let income = state.income(player, map);
     if income == 0 {
-        return orders;
+        return Vec::new();
     }
 
+    // ========== CLEANUP MODE ==========
+    // When the AI owns >60% of the map, switch to aggressive cleanup strategy
+    // that spreads deployment and attacks from every border.
+    let total_territories = map.territory_count();
+    let ai_territories = state.territory_count_for(player);
+    if ai_territories as f64 / total_territories as f64 > 0.6 {
+        return generate_cleanup_orders(state, player, map);
+    }
+
+    let mut orders = Vec::new();
     let opp = 1 - player;
 
     // ========== ENDGAME DETECTION ==========
@@ -141,7 +150,7 @@ pub fn generate_orders_with_profile(
     } else {
         100.0
     };
-    let endgame = my_share > 0.70;
+    let endgame = my_share > 0.60;
     let dominant = territory_ratio >= 2.0 || income_ratio >= 3.0;
 
     // ========== ANALYZE BONUSES ==========
@@ -480,6 +489,145 @@ pub fn generate_orders_with_profile(
             continue;
         }
         // Transfer toward the neighbor that borders the most enemies
+        if let Some(&toward) = map.territories[tid]
+            .adjacent
+            .iter()
+            .max_by_key(|&&adj| {
+                map.territories[adj]
+                    .adjacent
+                    .iter()
+                    .filter(|&&a2| sim_owners[a2] != player)
+                    .count()
+            })
+        {
+            let amount = sim_armies[tid] - 1;
+            if amount > 0 {
+                orders.push(Order::Transfer {
+                    from: tid,
+                    to: toward,
+                    armies: amount,
+                });
+                sim_armies[tid] = 1;
+                sim_armies[toward] += amount;
+            }
+        }
+    }
+
+    orders
+}
+
+/// Cleanup mode: spread deployment across all border territories, attack every
+/// capturable target, and transfer interior armies toward the front.
+fn generate_cleanup_orders(state: &GameState, player: PlayerId, map: &Map) -> Vec<Order> {
+    let mut orders = Vec::new();
+    let income = state.income(player, map);
+    if income == 0 {
+        return orders;
+    }
+
+    // Find all border territories (owned territories adjacent to at least one enemy)
+    let mut border_territories: Vec<usize> = Vec::new();
+    for tid in 0..map.territory_count() {
+        if state.territory_owners[tid] != player {
+            continue;
+        }
+        let has_enemy_neighbor = map.territories[tid]
+            .adjacent
+            .iter()
+            .any(|&adj| state.territory_owners[adj] != player);
+        if has_enemy_neighbor {
+            border_territories.push(tid);
+        }
+    }
+
+    if border_territories.is_empty() {
+        return orders;
+    }
+
+    // 1. Spread income evenly across all border territories
+    let per_territory = income / border_territories.len() as u32;
+    let remainder = income % border_territories.len() as u32;
+    for (i, &tid) in border_territories.iter().enumerate() {
+        let amount = per_territory + if (i as u32) < remainder { 1 } else { 0 };
+        if amount > 0 {
+            orders.push(Order::Deploy {
+                territory: tid,
+                armies: amount,
+            });
+        }
+    }
+
+    // Build simulated army state with deployments applied
+    let mut sim_armies = state.territory_armies.clone();
+    let mut sim_owners = state.territory_owners.clone();
+    for order in &orders {
+        if let Order::Deploy { territory, armies } = order {
+            sim_armies[*territory] += armies;
+        }
+    }
+
+    // 2. Attack every adjacent non-owned territory where capture is possible
+    let max_attacks = map.territory_count().min(30);
+    let mut attack_count = 0usize;
+    let mut used_sources = vec![false; map.territory_count()];
+
+    for &tid in &border_territories {
+        if attack_count >= max_attacks {
+            break;
+        }
+        if used_sources[tid] || sim_armies[tid] <= 1 {
+            continue;
+        }
+        // Attack the weakest adjacent enemy
+        let targets: Vec<usize> = map.territories[tid]
+            .adjacent
+            .iter()
+            .copied()
+            .filter(|&adj| sim_owners[adj] != player)
+            .collect();
+
+        for target in targets {
+            if attack_count >= max_attacks {
+                break;
+            }
+            if sim_armies[tid] <= 1 {
+                break;
+            }
+            let attackers = sim_armies[tid] - 1;
+            let defenders = sim_armies[target];
+            if defenders == 0 || attackers == 0 {
+                continue;
+            }
+            let result = resolve_attack(attackers, defenders, &map.settings);
+            if result.captured {
+                orders.push(Order::Attack {
+                    from: tid,
+                    to: target,
+                    armies: attackers,
+                });
+                sim_armies[tid] = 1;
+                sim_armies[target] = result.surviving_attackers;
+                sim_owners[target] = player;
+                used_sources[tid] = true;
+                attack_count += 1;
+                break; // This source is spent
+            }
+        }
+    }
+
+    // 3. Transfer interior armies toward the front
+    for tid in 0..map.territory_count() {
+        if sim_owners[tid] != player || used_sources[tid] || sim_armies[tid] <= 1 {
+            continue;
+        }
+        let is_interior = map.territories[tid]
+            .adjacent
+            .iter()
+            .all(|&adj| sim_owners[adj] == player);
+        if !is_interior {
+            continue;
+        }
+        // Transfer toward the neighbor closest to an enemy
         if let Some(&toward) = map.territories[tid]
             .adjacent
             .iter()

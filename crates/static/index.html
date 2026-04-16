@@ -1328,9 +1328,15 @@ async function confirmPicks() {
 
 // ========== UNIFIED ORDERS CLICK ==========
 function onOrdersClick(id, e) {
-  // If pending army selector is open, cancel it on any territory click
+  // If the army popup is open (pendingTarget set):
+  // - clicking the pending target confirms the order
+  // - clicking anything else cancels
   if (pendingTarget !== null) {
-    cancelPending();
+    if (id === pendingTarget) {
+      popupConfirm();
+    } else {
+      cancelPending();
+    }
     return;
   }
 
