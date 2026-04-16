@@ -457,6 +457,14 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #income-breakdown .ib-line{display:flex;justify-content:space-between;color:var(--text2);padding:1px 0;font-size:11px}
 #income-breakdown .ib-line .ib-label{color:var(--text3)}
 #income-breakdown .ib-line .ib-val{font-weight:600;color:var(--text)}
+
+/* Strategic tips */
+#strat-tips{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);line-height:1.5;flex-shrink:0;position:relative}
+#strat-tips .tip-label{font-weight:600;color:var(--text2);margin-right:4px}
+#strat-tips .tip-dismiss{position:absolute;top:4px;right:8px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1;padding:2px}
+#strat-tips .tip-dismiss:hover{color:var(--text)}
+#strat-tips.hidden{display:none}
+#strat-tips .tip-toggle{font-size:10px;color:var(--text3);cursor:pointer;text-decoration:underline;margin-top:4px;display:inline-block}
 </style>
 </head>
 <body>
@@ -562,6 +570,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <button id="chat-send-btn" onclick="sendChat()">Send</button>
         </div>
       </div>
+      <div id="strat-tips"></div>
     </div>
     <div id="mobile-sidebar-tab" onclick="toggleMobileSidebar()">Show Orders <span class="tab-arrow">&#9650;</span></div>
   </div>
@@ -738,6 +747,8 @@ let gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
 let selectedTemplate = null;
 let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
+let showTips = true; // strategic tips toggle
+let openingBook = []; // cached openings from server
 
 // ========== SESSION & REMATCH STATE ==========
 let sessionGames = 0;
@@ -1076,7 +1087,11 @@ async function startGameWithSettings() {
   sessionGames++;
   updateSessionDisplay();
   const res = await api('POST', '/api/new', lastGameSettings);
-  if (res) await fetchState();
+  if (res) {
+    showTips = true;
+    fetchOpeningBook(selectedTemplate);
+    await fetchState();
+  }
 }
 
 // ========== WIN PROBABILITY ==========
@@ -1781,6 +1796,67 @@ function renderSidebar() {
     }
     tab.innerHTML = label + ' <span class="tab-arrow">' + (isOpen ? '&#9660;' : '&#9650;') + '</span>';
   }
+
+  renderStratTips();
+}
+
+function renderStratTips() {
+  const el = document.getElementById('strat-tips');
+  if (!el) return;
+  if (!showTips || !G) { el.className = 'hidden'; el.innerHTML = ''; return; }
+  el.className = '';
+
+  let tipText = '';
+
+  if (phase === 'picking') {
+    // Show bonus info for the focused pick option
+    if (typeof focusedId === 'number' && G.bonuses) {
+      const b = G.bonuses.find(function(b) {
+        return (b.territory_ids || b.territories || []).includes(focusedId);
+      });
+      if (b) tipText = 'This territory belongs to ' + b.name + ' (+' + b.value + ' income, ' + (b.territory_ids || b.territories || []).length + ' territories).';
+    }
+    if (!tipText) {
+      tipText = 'South America is the easiest bonus to complete (4 territories, +2 income).';
+    }
+  } else if (phase === 'orders') {
+    const hasAttack = orders.some(function(o) { return o.type === 'attack'; });
+    const hasTransfer = orders.some(function(o) { return o.type === 'transfer'; });
+
+    if (deployLeft > 0 && orders.length === 0) {
+      tipText = 'Concentrate armies for one strong attack rather than spreading thin.';
+    } else if (!hasAttack && deployLeft === 0) {
+      tipText = 'Attack neutrals to expand and earn card pieces.';
+    } else if (!hasTransfer && orders.length > 0) {
+      tipText = 'Move interior armies to the border after attacking.';
+    } else {
+      tipText = 'Completing a bonus gives income every turn. Check the Bonuses list below your orders.';
+    }
+  }
+
+  if (!tipText) { el.className = 'hidden'; el.innerHTML = ''; return; }
+
+  el.innerHTML = '<span class="tip-label">Tip:</span>' + tipText +
+    '<button class="tip-dismiss" onclick="dismissTips()" title="Hide tips">&times;</button>' +
+    '<br><span class="tip-toggle" onclick="dismissTips()">hide tips</span>';
+}
+
+function dismissTips() {
+  showTips = false;
+  var el = document.getElementById('strat-tips');
+  if (el) { el.className = 'hidden'; el.innerHTML = ''; }
+}
+
+function enableTips() {
+  showTips = true;
+  renderStratTips();
+}
+
+function fetchOpeningBook(mapId) {
+  fetch('/api/openings?map=' + encodeURIComponent(mapId || 'small_earth'))
+    .then(function(r) { return r.json(); })
+    .then(function(data) { openingBook = data.openings || []; })
+    .catch(function() { openingBook = []; });
 }
 
 function renderPickingPanel(pp, cp) {
@@ -1792,9 +1868,14 @@ function renderPickingPanel(pp, cp) {
     '<div style="margin-top:8px" id="pick-list-container">' +
       picks.map(function(id, idx) {
         var t = terr(id);
+        var bonusLabel = '';
+        if (G && G.bonuses) {
+          var pb = G.bonuses.find(function(b) { return (b.territory_ids || b.territories || []).includes(id); });
+          if (pb) bonusLabel = '<span style="font-size:9px;color:var(--text3);margin-left:4px">(' + pb.name + ')</span>';
+        }
         return '<div class="order-item" draggable="true" data-pick-idx="' + idx + '" ondragstart="pickDragStart(event,' + idx + ')" ondragover="pickDragOver(event)" ondrop="pickDrop(event,' + idx + ')" style="cursor:grab">' +
           '<span style="color:var(--gold);font-weight:900;font-size:16px;margin-right:8px;min-width:24px;text-align:center">' + (idx+1) + '</span>' +
-          '<span style="flex:1">' + (t ? t.name : id) + '</span>' +
+          '<span style="flex:1">' + (t ? t.name : id) + bonusLabel + '</span>' +
           '<button class="remove-btn" onclick="movePickUp(' + idx + ')" title="Move up" style="color:var(--text2)"' + (idx===0?' disabled':'') + '>\u25B2</button>' +
           '<button class="remove-btn" onclick="movePickDown(' + idx + ')" title="Move down" style="color:var(--text2)"' + (idx===picks.length-1?' disabled':'') + '>\u25BC</button>' +
           '<button class="remove-btn" onclick="unpick(' + id + ')" title="Remove">\u2715</button>' +

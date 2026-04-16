@@ -8,6 +8,7 @@ pub mod fog;
 pub mod game_analysis;
 pub mod map;
 pub mod mcts;
+pub mod openings;
 pub mod orders;
 pub mod picking;
 pub mod puzzle;

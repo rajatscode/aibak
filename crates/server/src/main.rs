@@ -24,6 +24,7 @@ use strat_engine::analysis;
 use strat_engine::fog;
 use strat_engine::game_analysis;
 use strat_engine::map::Map;
+use strat_engine::openings;
 use strat_engine::orders::Order;
 use strat_engine::picking;
 use strat_engine::puzzle;
@@ -1334,6 +1335,21 @@ async fn submit_puzzle(Json(body): Json<PuzzleSubmission>) -> Json<serde_json::V
     }))
 }
 
+// ── Opening book ──
+
+#[derive(Deserialize)]
+struct OpeningsQuery {
+    map: Option<String>,
+}
+
+async fn get_openings(
+    axum::extract::Query(query): axum::extract::Query<OpeningsQuery>,
+) -> Json<serde_json::Value> {
+    let map_id = query.map.as_deref().unwrap_or("small_earth");
+    let book = openings::get_openings(map_id);
+    Json(serde_json::json!({ "map": map_id, "openings": book }))
+}
+
 // ── Entrypoint ──
 
 #[tokio::main]
@@ -1466,6 +1482,7 @@ async fn main() {
         .route("/api/difficulty", post(set_difficulty))
         .route("/api/stats", get(get_local_stats))
         .route("/api/achievements", get(get_achievements))
+        .route("/api/openings", get(get_openings))
         // Landing page.
         .route("/landing", get(landing))
         // Profile page.
