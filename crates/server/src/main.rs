@@ -29,6 +29,7 @@ use strat_engine::state::{GameState, Phase, PlayerId, NEUTRAL};
 use strat_engine::turn::{resolve_turn, TurnEvent};
 
 use crate::config::Config;
+use crate::game::achievements::{self, EarnedAchievement};
 
 const PLAYER: PlayerId = 0;
 const AI_PLAYER: PlayerId = 1;
@@ -86,6 +87,12 @@ pub struct LocalState {
     win_prob_history: Vec<f64>,
     /// Persistent local play statistics across games.
     local_stats: LocalStats,
+    /// Earned achievements.
+    achievements: Vec<EarnedAchievement>,
+    /// Territories the player owned after picking phase (for flawless victory check).
+    starting_territories: Vec<usize>,
+    /// Maximum number of complete bonuses owned simultaneously during the current game.
+    max_simultaneous_bonuses: u32,
 }
 
 /// Cumulative statistics for local play sessions (no database required).
@@ -188,6 +195,8 @@ struct ActionResult {
     success: bool,
     message: String,
     events: Vec<TurnEvent>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    new_achievements: Vec<achievements::AchievementView>,
 }
 
 fn build_game_view(app: &LocalState) -> GameView {
@@ -351,10 +360,16 @@ async fn submit_local_picks(
 
     picking::resolve_picks(&mut app.game, [&body.picks, &ai_picks], &map);
 
+    // Record starting territories for flawless victory tracking.
+    app.starting_territories = (0..app.game.territory_owners.len())
+        .filter(|&i| app.game.territory_owners[i] == PLAYER)
+        .collect();
+
     Ok(Json(ActionResult {
         success: true,
         message: "Picks resolved. Game begins!".into(),
         events: Vec::new(),
+        new_achievements: Vec::new(),
     }))
 }
 
@@ -391,9 +406,19 @@ async fn submit_local_orders(
 
     app.game = result.state;
 
+    // Track max simultaneous bonuses owned by the player this turn.
+    let bonuses_owned_now = app.map.bonuses.iter()
+        .filter(|b| b.territory_ids.iter().all(|&tid| app.game.territory_owners[tid] == PLAYER))
+        .count() as u32;
+    if bonuses_owned_now > app.max_simultaneous_bonuses {
+        app.max_simultaneous_bonuses = bonuses_owned_now;
+    }
+
     // Record win probability after the turn resolves (1-ply lookahead for history).
     let wp = analysis::win_probability_with_lookahead(&app.game, &app.map);
     app.win_prob_history.push(wp.player_0);
+
+    let mut newly_earned_achievements: Vec<achievements::EarnedAchievement> = Vec::new();
 
     let msg = if app.game.phase == Phase::Finished {
         let won = app.game.winner == Some(PLAYER);
@@ -441,6 +466,40 @@ async fn submit_local_orders(
             }
         }
 
+        // Check achievements.
+        let kept_all = app.starting_territories.iter().all(|&tid| app.game.territory_owners[tid] == PLAYER);
+        // Count distinct maps played.
+        let mut distinct_maps: Vec<String> = app.local_stats.game_maps.clone();
+        distinct_maps.sort();
+        distinct_maps.dedup();
+        // Count available built-in maps.
+        let total_maps = std::fs::read_dir("maps")
+            .map(|entries| entries.flatten().filter(|e| {
+                let p = e.path();
+                p.is_file() && p.extension().is_some_and(|ext| ext == "json")
+            }).count() as u32)
+            .unwrap_or(0);
+
+        let ctx = achievements::GameContext {
+            won,
+            total_wins: app.local_stats.wins,
+            turn_count: game_turn,
+            streak: app.local_stats.streak,
+            start_win_prob: start_wp,
+            rating: new_rating,
+            kept_all_starting_territories: kept_all,
+            max_simultaneous_bonuses: app.max_simultaneous_bonuses,
+            maps_played: distinct_maps,
+            total_maps_available: total_maps,
+        };
+
+        newly_earned_achievements = achievements::check_achievements(
+            &app.achievements,
+            &ctx,
+            app.local_stats.games_played,
+        );
+        app.achievements.extend(newly_earned_achievements.clone());
+
         if won {
             "Victory!".to_string()
         } else {
@@ -450,10 +509,14 @@ async fn submit_local_orders(
         format!("Turn {} complete", app.game.turn - 1)
     };
 
+    // Build achievement views for newly earned ones.
+    let achievement_views = achievements::build_achievement_views(&newly_earned_achievements);
+
     Ok(Json(ActionResult {
         success: true,
         message: msg,
         events: filtered_events,
+        new_achievements: achievement_views,
     }))
 }
 
@@ -483,6 +546,7 @@ async fn new_local_game(
                     success: false,
                     message: format!("Failed to load template '{}': {}", template, e),
                     events: Vec::new(),
+                    new_achievements: Vec::new(),
                 });
             }
         }
@@ -495,10 +559,13 @@ async fn new_local_game(
     app.turn_history.clear();
     app.state_history.clear();
     app.win_prob_history.clear();
+    app.starting_territories.clear();
+    app.max_simultaneous_bonuses = 0;
     Json(ActionResult {
         success: true,
         message: format!("New game on {}", map.name),
         events: Vec::new(),
+        new_achievements: Vec::new(),
     })
 }
 
@@ -713,6 +780,7 @@ async fn set_difficulty(
         success: true,
         message: format!("AI difficulty set to {:?}", body.level),
         events: Vec::new(),
+        new_achievements: Vec::new(),
     })
 }
 
@@ -802,6 +870,17 @@ async fn get_local_stats(State(state): State<AppState>) -> Json<serde_json::Valu
     }))
 }
 
+async fn get_achievements(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let app = state.local.lock().unwrap();
+    let views = achievements::build_achievement_views(&app.achievements);
+    let earned_count = views.iter().filter(|v| v.earned).count();
+    Json(serde_json::json!({
+        "achievements": views,
+        "earned": earned_count,
+        "total": views.len(),
+    }))
+}
+
 async fn landing() -> Html<&'static str> {
     Html(include_str!("../../static/landing.html"))
 }
@@ -852,6 +931,9 @@ async fn main() {
         state_history: Vec::new(),
         win_prob_history: Vec::new(),
         local_stats: LocalStats::default(),
+        achievements: Vec::new(),
+        starting_territories: Vec::new(),
+        max_simultaneous_bonuses: 0,
     };
 
     // Set up WebSocket hub.
@@ -931,6 +1013,7 @@ async fn main() {
         .route("/api/game/analysis", get(get_analysis))
         .route("/api/difficulty", post(set_difficulty))
         .route("/api/stats", get(get_local_stats))
+        .route("/api/achievements", get(get_achievements))
         // Landing page.
         .route("/landing", get(landing))
         // Profile page.
