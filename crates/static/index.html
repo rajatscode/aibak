@@ -37,6 +37,22 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #topbar .controls{display:flex;align-items:center;gap:8px}
 #topbar select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
 
+/* TURN TIMER */
+#turn-timer-wrap{display:none;align-items:center;gap:6px;margin-left:4px}
+#turn-timer-wrap.active{display:flex}
+#turn-timer-wrap .timer-ring-svg{width:36px;height:36px;transform:rotate(-90deg)}
+#turn-timer-wrap .timer-ring-bg{fill:none;stroke:var(--bg3);stroke-width:3}
+#turn-timer-wrap .timer-ring-fg{fill:none;stroke:var(--green);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset 1s linear,stroke .3s}
+#turn-timer-wrap .timer-text{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:14px;font-weight:700;color:var(--green);min-width:36px;text-align:center}
+#turn-timer-wrap.yellow .timer-ring-fg{stroke:var(--gold)}
+#turn-timer-wrap.yellow .timer-text{color:var(--gold)}
+#turn-timer-wrap.red .timer-ring-fg{stroke:var(--red)}
+#turn-timer-wrap.red .timer-text{color:var(--red)}
+#turn-timer-wrap.urgent .timer-ring-fg{stroke:var(--red)}
+#turn-timer-wrap.urgent .timer-text{color:var(--red);animation:timer-pulse .5s ease-in-out infinite}
+#turn-timer-wrap.urgent .timer-ring-svg{animation:timer-pulse .5s ease-in-out infinite}
+@keyframes timer-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
 /* WIN PROBABILITY BAR */
 #win-prob-bar{display:none;height:6px;background:var(--red);flex-shrink:0;position:relative;overflow:hidden}
 #win-prob-bar .blue-side{height:100%;background:var(--blue);transition:width 0.6s ease}
@@ -527,6 +543,13 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <span class="game-counter" id="game-counter"></span>
       <span class="session-timer" id="session-timer"></span>
     </div>
+    <div id="turn-timer-wrap">
+      <svg class="timer-ring-svg" viewBox="0 0 40 40">
+        <circle class="timer-ring-bg" cx="20" cy="20" r="16"/>
+        <circle class="timer-ring-fg" id="timer-ring" cx="20" cy="20" r="16" stroke-dasharray="100.53" stroke-dashoffset="0"/>
+      </svg>
+      <span class="timer-text" id="timer-text">1:30</span>
+    </div>
     <div class="controls">
       <button class="btn-quickplay" id="quickplay-btn" onclick="quickPlay()" title="Quick Play (instant new game)">Quick Play</button>
       <select id="difficulty-select" onchange="setDifficulty(this.value)" title="AI Difficulty">
@@ -700,6 +723,17 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
             <option value="6">6</option>
           </select>
         </div>
+        <div class="setting-row">
+          <label>Turn Timer</label>
+          <select id="set-timer">
+            <option value="0">Off</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+            <option value="90" selected>90s</option>
+            <option value="120">120s</option>
+            <option value="180">180s</option>
+          </select>
+        </div>
       </div>
       <button id="start-game-btn" onclick="startGameWithSettings()">Start Game</button>
     </div>
@@ -795,6 +829,12 @@ let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
 let showTips = true; // strategic tips toggle
 let openingBook = []; // cached openings from server
+
+// ========== TURN TIMER STATE ==========
+let turnTimerDuration = 90; // seconds, 0 = off
+let turnTimerRemaining = 0;
+let turnTimerInterval = null;
+let turnTimerPaused = false;
 
 // ========== UNDO/REDO STATE ==========
 let actionStack = [];  // past actions
@@ -1231,6 +1271,7 @@ function showTemplateModal() {
   document.getElementById('set-income').value = '5';
   document.getElementById('set-picks').value = '4';
   document.getElementById('set-ai').value = 'hard';
+  document.getElementById('set-timer').value = '90';
   document.getElementById('template-modal').classList.add('show');
 }
 
@@ -1256,6 +1297,7 @@ async function startGameWithSettings() {
   const income = parseInt(document.getElementById('set-income').value);
   const numPicks = parseInt(document.getElementById('set-picks').value);
   const aiDiff = document.getElementById('set-ai').value;
+  turnTimerDuration = parseInt(document.getElementById('set-timer').value) || 0;
   hideTemplateModal();
   playSound('tick');
   lastGameSettings = {
@@ -1266,7 +1308,8 @@ async function startGameWithSettings() {
       base_income: income,
       num_picks: numPicks,
       ai_difficulty: aiDiff
-    }
+    },
+    turn_timer: turnTimerDuration
   };
   sessionGames++;
   updateSessionDisplay();
@@ -1918,9 +1961,11 @@ function onStateUpdate() {
   // Determine phase
   if (G.phase === 'finished') {
     phase = 'finished';
+    turnTimerHide();
   } else if (G.phase === 'picking') {
     phase = 'picking';
     picks = [];
+    turnTimerHide();
   } else if (G.phase === 'play') {
     // Reset state on new turn or first entry
     const currentTurn = G.turn || 1;
@@ -1933,6 +1978,8 @@ function onStateUpdate() {
       selectedSource = null;
       pendingTarget = null;
       gameStats.turnsPlayed = currentTurn;
+      // Start turn timer for the new turn
+      turnTimerStart();
     }
   }
 
@@ -2574,10 +2621,108 @@ function flashTerritory(territoryId, className) {
   setTimeout(function() { pathEl.classList.remove(className); }, 600);
 }
 
+// ========== TURN TIMER ==========
+function turnTimerStart() {
+  turnTimerStop();
+  if (turnTimerDuration <= 0) {
+    document.getElementById('turn-timer-wrap').classList.remove('active');
+    return;
+  }
+  turnTimerRemaining = turnTimerDuration;
+  turnTimerPaused = false;
+  var wrap = document.getElementById('turn-timer-wrap');
+  wrap.classList.add('active');
+  turnTimerUpdateDisplay();
+  turnTimerInterval = setInterval(function() {
+    if (turnTimerPaused) return;
+    turnTimerRemaining--;
+    if (turnTimerRemaining <= 0) {
+      turnTimerRemaining = 0;
+      turnTimerUpdateDisplay();
+      turnTimerStop();
+      turnTimerAutoSubmit();
+      return;
+    }
+    turnTimerUpdateDisplay();
+  }, 1000);
+}
+
+function turnTimerStop() {
+  if (turnTimerInterval) {
+    clearInterval(turnTimerInterval);
+    turnTimerInterval = null;
+  }
+  var wrap = document.getElementById('turn-timer-wrap');
+  if (turnTimerDuration <= 0) wrap.classList.remove('active');
+}
+
+function turnTimerPause() {
+  turnTimerPaused = true;
+}
+
+function turnTimerResume() {
+  turnTimerPaused = false;
+}
+
+function turnTimerHide() {
+  turnTimerStop();
+  document.getElementById('turn-timer-wrap').classList.remove('active');
+}
+
+function turnTimerUpdateDisplay() {
+  var wrap = document.getElementById('turn-timer-wrap');
+  var textEl = document.getElementById('timer-text');
+  var ringEl = document.getElementById('timer-ring');
+  var secs = turnTimerRemaining;
+  var mins = Math.floor(secs / 60);
+  var s = secs % 60;
+  textEl.textContent = mins + ':' + (s < 10 ? '0' : '') + s;
+
+  // Ring progress: circumference = 2 * PI * 16 = 100.53
+  var circumference = 100.53;
+  var fraction = turnTimerDuration > 0 ? secs / turnTimerDuration : 0;
+  ringEl.setAttribute('stroke-dashoffset', circumference * (1 - fraction));
+
+  // Color classes
+  wrap.classList.remove('yellow', 'red', 'urgent');
+  if (secs < 10) {
+    wrap.classList.add('urgent');
+  } else if (secs < 30) {
+    wrap.classList.add('red');
+  } else if (secs <= 60) {
+    wrap.classList.add('yellow');
+  }
+}
+
+function turnTimerAutoSubmit() {
+  if (phase !== 'orders' || resolving) return;
+
+  // Auto-deploy remaining armies to territory with most current armies
+  if (deployLeft > 0 && G && G.territories) {
+    var owned = G.territories.filter(function(t) { return t.owner === 0; });
+    if (owned.length > 0) {
+      // Find territory with most armies (including already-deployed)
+      var best = owned[0];
+      owned.forEach(function(t) {
+        var existingDeploy = deploys[t.id] || 0;
+        var bestExisting = deploys[best.id] || 0;
+        if ((t.armies + existingDeploy) > (best.armies + bestExisting)) best = t;
+      });
+      if (!deploys[best.id]) deploys[best.id] = 0;
+      deploys[best.id] += deployLeft;
+      deployLeft = 0;
+    }
+  }
+
+  toast("Time's up! Orders auto-submitted.", 'error');
+  endTurn();
+}
+
 // ========== END TURN ==========
 async function endTurn() {
   if (resolving) return;
   resolving = true;
+  turnTimerStop();
 
   // Build API orders
   const apiOrders = [];
@@ -2907,6 +3052,7 @@ async function newGame() {
   document.getElementById('game-over').classList.remove('show');
   document.getElementById('turn-log').innerHTML = '';
   phase = 'loading';
+  turnTimerHide();
   picks = [];
   deploys = {};
   orders = [];
@@ -2945,6 +3091,7 @@ async function rematch() {
   document.getElementById('game-over').classList.remove('show');
   document.getElementById('turn-log').innerHTML = '';
   phase = 'loading';
+  turnTimerHide();
   picks = [];
   deploys = {};
   orders = [];
@@ -2986,6 +3133,7 @@ async function quickPlay() {
     document.getElementById('game-over').classList.remove('show');
     document.getElementById('turn-log').innerHTML = '';
     phase = 'loading';
+    turnTimerHide();
     picks = [];
     deploys = {};
     orders = [];
@@ -4207,6 +4355,7 @@ async function importGameData(data) {
   if (res) {
     // Clear local state and fetch the imported game.
     phase = 'loading';
+    turnTimerHide();
     picks = [];
     deploys = {};
     orders = [];
