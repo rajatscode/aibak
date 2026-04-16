@@ -48,6 +48,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .name-text{pointer-events:none;font-size:9px;fill:var(--text2);text-anchor:middle;opacity:0;transition:opacity .15s}
 .territory-group:hover .name-text{opacity:1}
 .pick-ring{pointer-events:none;fill:none;stroke:var(--gold);stroke-width:3}
+.pick-rank{pointer-events:none;font-size:16px;font-weight:900;fill:var(--gold);text-anchor:middle;dominant-baseline:central;text-shadow:0 0 4px rgba(0,0,0,1),0 0 8px rgba(0,0,0,.8)}
 .pick-ring-anim{animation:pulse-ring 1.2s ease-in-out infinite}
 @keyframes pulse-ring{0%,100%{r:22;opacity:1}50%{r:28;opacity:.4}}
 .selected-ring{fill:none;stroke:var(--gold);stroke-width:3;pointer-events:none}
@@ -893,6 +894,29 @@ function updateMap() {
     });
   }
 
+  // Draw pick rank numbers on the map during picking phase
+  let existingRanks = document.getElementById('pick-ranks');
+  if (existingRanks) existingRanks.remove();
+  if (phase === 'picking' && picks.length > 0) {
+    const rankGroup = svgEl('g', {id:'pick-ranks'});
+    picks.forEach(function(id, idx) {
+      const pos = POS[id];
+      if (!pos) return;
+      // Gold ring around picked territory
+      rankGroup.appendChild(svgEl('circle', {
+        cx: pos[0], cy: pos[1], r: 22,
+        class: 'pick-ring'
+      }));
+      // Large rank number
+      rankGroup.appendChild(svgEl('text', {
+        x: pos[0], y: pos[1],
+        class: 'pick-rank'
+      }, '' + (idx + 1)));
+    });
+    const mapSvg = document.getElementById('map-svg');
+    if (mapSvg) mapSvg.appendChild(rankGroup);
+  }
+
   // Apply threat overlay if enabled
   if (threatsEnabled) updateThreatOverlay();
 
@@ -1079,11 +1103,11 @@ function renderPickingPanel(pp, cp) {
   pp.innerHTML = '<div class="sb-phase">Picking Phase</div>' +
     '<div class="sb-sub">Rank all territories by priority (you\'ll receive ' + needed + ')</div>' +
     '<div style="margin-top:8px;font-size:13px;color:var(--gold)">' + picks.length + ' / ' + totalOptions + ' ranked</div>' +
-    '<div style="margin-top:8px">' +
+    '<div style="margin-top:8px" id="pick-list-container">' +
       picks.map(function(id, idx) {
         var t = terr(id);
-        return '<div class="order-item" style="cursor:grab">' +
-          '<span style="color:var(--gold);font-weight:700;margin-right:6px">#' + (idx+1) + '</span>' +
+        return '<div class="order-item" draggable="true" data-pick-idx="' + idx + '" ondragstart="pickDragStart(event,' + idx + ')" ondragover="pickDragOver(event)" ondrop="pickDrop(event,' + idx + ')" style="cursor:grab">' +
+          '<span style="color:var(--gold);font-weight:900;font-size:16px;margin-right:8px;min-width:24px;text-align:center">' + (idx+1) + '</span>' +
           '<span style="flex:1">' + (t ? t.name : id) + '</span>' +
           '<button class="remove-btn" onclick="movePickUp(' + idx + ')" title="Move up" style="color:var(--text2)"' + (idx===0?' disabled':'') + '>\u25B2</button>' +
           '<button class="remove-btn" onclick="movePickDown(' + idx + ')" title="Move down" style="color:var(--text2)"' + (idx===picks.length-1?' disabled':'') + '>\u25BC</button>' +
@@ -1266,6 +1290,25 @@ function movePickDown(idx) {
   renderSidebar();
 }
 
+let _pickDragIdx = null;
+function pickDragStart(e, idx) {
+  _pickDragIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function pickDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+function pickDrop(e, targetIdx) {
+  e.preventDefault();
+  if (_pickDragIdx === null || _pickDragIdx === targetIdx) return;
+  const item = picks.splice(_pickDragIdx, 1)[0];
+  picks.splice(targetIdx, 0, item);
+  _pickDragIdx = null;
+  updateMap();
+  renderSidebar();
+}
+
 function unpick(id) {
   picks = picks.filter(p => p !== id);
   updateMap();
@@ -1285,8 +1328,11 @@ async function confirmPicks() {
 
 // ========== UNIFIED ORDERS CLICK ==========
 function onOrdersClick(id, e) {
-  // If pending army selector is open, ignore map clicks
-  if (pendingTarget !== null) return;
+  // If pending army selector is open, cancel it on any territory click
+  if (pendingTarget !== null) {
+    cancelPending();
+    return;
+  }
 
   // Alt-click to remove deploys
   if (e.altKey && isOwned(id)) {
@@ -1412,12 +1458,72 @@ function confirmPending() {
   if (pendingType === 'attack') playSound('attack');
   pendingTarget = null;
   selectedSource = null;
+  hideMapArmyPopup();
   updateMap();
   renderSidebar();
 }
 
 function cancelPending() {
   pendingTarget = null;
+  hideMapArmyPopup();
+  updateMap();
+  renderSidebar();
+}
+
+function showMapArmyPopup(territoryId) {
+  const popup = document.getElementById('map-army-popup');
+  const label = document.getElementById('popup-label');
+  const countEl = document.getElementById('popup-count');
+  const tgt = terr(territoryId);
+  const actionLabel = pendingType === 'attack' ? 'Attack' : 'Move';
+  label.textContent = actionLabel + ' ' + (tgt ? tgt.name : territoryId);
+  countEl.textContent = pendingArmies;
+
+  // Position near the territory using SVG coordinates
+  const svgEl = document.getElementById('map-svg');
+  const container = document.getElementById('map-container');
+  if (POS[territoryId] && svgEl) {
+    const pt = svgEl.createSVGPoint();
+    pt.x = POS[territoryId][0];
+    pt.y = POS[territoryId][1];
+    const ctm = svgEl.getScreenCTM();
+    if (ctm) {
+      const screenPt = pt.matrixTransform(ctm);
+      const containerRect = container.getBoundingClientRect();
+      let left = screenPt.x - containerRect.left + 15;
+      let top = screenPt.y - containerRect.top - 30;
+      // Keep popup on screen
+      if (left + 200 > containerRect.width) left = screenPt.x - containerRect.left - 215;
+      if (top < 0) top = screenPt.y - containerRect.top + 15;
+      popup.style.left = left + 'px';
+      popup.style.top = top + 'px';
+    }
+  }
+  popup.style.display = 'block';
+}
+
+function hideMapArmyPopup() {
+  document.getElementById('map-army-popup').style.display = 'none';
+}
+
+function popupAdjust(delta) {
+  pendingArmies = Math.max(1, Math.min(pendingMax, pendingArmies + delta));
+  document.getElementById('popup-count').textContent = pendingArmies;
+}
+
+function popupConfirm() {
+  if (pendingTarget === null || selectedSource === null) return;
+  orders.push({
+    type: pendingType,
+    from: selectedSource,
+    to: pendingTarget,
+    armies: pendingArmies
+  });
+  if (pendingType === 'attack') playSound('attack');
+  else playSound('tick');
+  pendingTarget = null;
+  selectedSource = null;
+  hideMapArmyPopup();
   updateMap();
   renderSidebar();
 }
@@ -1722,12 +1828,20 @@ document.addEventListener('keydown', e => {
   const key = e.key.toLowerCase();
 
   if (key === 'escape') {
+    if (pendingTarget !== null) {
+      cancelPending();
+      return;
+    }
     selectedSource = null;
     pendingTarget = null;
     updateMap();
     renderSidebar();
   }
   if (key === 'enter' && phase === 'orders') {
+    if (pendingTarget !== null) {
+      popupConfirm();
+      return;
+    }
     endTurn();
   }
   if (key === 'n') {

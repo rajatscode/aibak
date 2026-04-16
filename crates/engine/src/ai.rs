@@ -124,6 +124,26 @@ pub fn generate_orders_with_profile(
 
     let opp = 1 - player;
 
+    // ========== ENDGAME DETECTION ==========
+    let my_territory_count = state.territory_count_for(player);
+    let opp_territory_count = state.territory_count_for(opp);
+    let total_territories = map.territory_count();
+    let my_share = my_territory_count as f64 / total_territories as f64;
+    let territory_ratio = if opp_territory_count > 0 {
+        my_territory_count as f64 / opp_territory_count as f64
+    } else {
+        100.0
+    };
+    let my_income = state.income(player, map);
+    let opp_income = state.income(opp, map);
+    let income_ratio = if opp_income > 0 {
+        my_income as f64 / opp_income as f64
+    } else {
+        100.0
+    };
+    let endgame = my_share > 0.70;
+    let dominant = territory_ratio >= 2.0 || income_ratio >= 3.0;
+
     // ========== ANALYZE BONUSES ==========
     // Score each bonus by completion proximity and strategic value
     let mut bonus_priorities: Vec<BonusTarget> = Vec::new();
@@ -274,9 +294,16 @@ pub fn generate_orders_with_profile(
     }
 
     // ========== DECIDE DEPLOYMENT ==========
-    // Deploy to the territory that's the source of our best attack,
-    // or to a border territory if no attacks planned
-    let deploy_target = if let Some(best) = attack_plan.first() {
+    // In endgame mode, spread deployment across border territories.
+    // Otherwise deploy to the best attack source or most threatened border.
+    let deploy_target = if endgame {
+        // Deploy to the border territory that can reach the most enemy territories.
+        find_best_endgame_deploy(state, player, map)
+            .unwrap_or_else(|| {
+                find_most_threatened_border(state, player, map)
+                    .unwrap_or(0)
+            })
+    } else if let Some(best) = attack_plan.first() {
         best.from
     } else {
         // No attacks — deploy defensively on most threatened border
@@ -301,13 +328,22 @@ pub fn generate_orders_with_profile(
     sim_armies[deploy_target] += income;
 
     let mut used_sources = vec![false; map.territory_count()];
+    // Cap total attack orders to prevent unreasonably long chains (Bug 4).
+    let max_attacks = map.territory_count().min(20);
+    let mut attack_count = 0usize;
 
     // Re-evaluate attacks with new army counts
     attack_plan.clear();
 
     // Rebuild attack list with deployed armies
     for bt in &bonus_priorities {
+        if attack_count >= max_attacks {
+            break;
+        }
         for &target in &bt.reachable_missing {
+            if attack_count >= max_attacks {
+                break;
+            }
             if sim_owners[target] == player {
                 continue;
             }
@@ -339,14 +375,23 @@ pub fn generate_orders_with_profile(
                     sim_armies[target] = result.surviving_attackers;
                     sim_owners[target] = player;
                     used_sources[src] = true;
+                    attack_count += 1;
                 }
             }
         }
     }
 
-    // Opportunistic attacks on weak neighbors
+    // Opportunistic attacks on weak neighbors (raise threshold when dominant)
+    let weak_threshold = if dominant || endgame { u32::MAX } else { 3 };
     for tid in 0..map.territory_count() {
-        if sim_owners[tid] == player || sim_armies[tid] > 3 || sim_armies[tid] == 0 {
+        if attack_count >= max_attacks {
+            break;
+        }
+        if sim_owners[tid] == player || sim_armies[tid] == 0 {
+            continue;
+        }
+        // In endgame/dominant mode, attack any enemy territory; otherwise only weak ones.
+        if !dominant && !endgame && sim_armies[tid] > weak_threshold {
             continue;
         }
         let source = map.territories[tid]
@@ -374,6 +419,49 @@ pub fn generate_orders_with_profile(
                 sim_armies[tid] = result.surviving_attackers;
                 sim_owners[tid] = player;
                 used_sources[src] = true;
+                attack_count += 1;
+            }
+        }
+    }
+
+    // ========== ENDGAME: ATTACK FROM EVERY BORDER ==========
+    // When in endgame mode (>70% territories), attack from all border territories
+    // that haven't been used yet, even if the attack isn't guaranteed to capture.
+    if endgame {
+        for tid in 0..map.territory_count() {
+            if attack_count >= max_attacks {
+                break;
+            }
+            if sim_owners[tid] != player || used_sources[tid] || sim_armies[tid] <= 1 {
+                continue;
+            }
+            // Find an enemy neighbor to attack
+            let enemy_neighbor = map.territories[tid]
+                .adjacent
+                .iter()
+                .copied()
+                .filter(|&adj| sim_owners[adj] != player)
+                .min_by_key(|&adj| sim_armies[adj]);
+
+            if let Some(target) = enemy_neighbor {
+                let attackers = sim_armies[tid] - 1;
+                let defenders = sim_armies[target];
+                if attackers == 0 || defenders == 0 {
+                    continue;
+                }
+                let result = resolve_attack(attackers, defenders, &map.settings);
+                if result.captured {
+                    orders.push(Order::Attack {
+                        from: tid,
+                        to: target,
+                        armies: attackers,
+                    });
+                    sim_armies[tid] = 1;
+                    sim_armies[target] = result.surviving_attackers;
+                    sim_owners[target] = player;
+                    used_sources[tid] = true;
+                    attack_count += 1;
+                }
             }
         }
     }
@@ -427,6 +515,32 @@ fn armies_to_take(defenders: u32, settings: &crate::map::MapSettings) -> u32 {
     let attackers_needed = (offense_kills_needed as f64 / settings.offense_kill_rate).ceil() as u32;
     let defense_kills = (defenders as f64 * settings.defense_kill_rate).round() as u32;
     attackers_needed.max(defense_kills + 1) + 1
+}
+
+/// Find the best border territory for endgame deployment: the one adjacent to
+/// the most enemy territories (maximize attack surface for finishing the game).
+fn find_best_endgame_deploy(
+    state: &GameState,
+    player: PlayerId,
+    map: &Map,
+) -> Option<usize> {
+    let mut best = None;
+    let mut best_score = 0usize;
+    for tid in 0..map.territory_count() {
+        if state.territory_owners[tid] != player {
+            continue;
+        }
+        let enemy_neighbors: usize = map.territories[tid]
+            .adjacent
+            .iter()
+            .filter(|&&adj| state.territory_owners[adj] != player)
+            .count();
+        if enemy_neighbors > best_score {
+            best_score = enemy_neighbors;
+            best = Some(tid);
+        }
+    }
+    best
 }
 
 /// Find the owned border territory that faces the most enemy armies.
