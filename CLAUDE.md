@@ -5,10 +5,10 @@ Competitive territory strategy game. 1v1, Glicko-rated ladder with seasons, Disc
 ## Architecture
 
 Rust workspace:
-- `crates/engine` — Pure game logic (no IO). Combat, turns, fog, picking, cards, AI (greedy + MCTS), win probability analysis.
-- `crates/server` — Axum web server. Modules: `api/`, `auth/`, `db/`, `game/`, `ws/`.
+- `crates/engine` — Pure game logic (no IO). Combat, turns, fog, picking, cards, AI (greedy + MCTS), win probability analysis, daily puzzles, openings book.
+- `crates/server` — Axum web server. Modules: `api/`, `auth/`, `config/`, `db/`, `game/` (matchmaking, rating, league, achievements, tournaments, timers), `ws/`.
 - `crates/cli` — CLI game runner.
-- `crates/static/` — Embedded HTML pages (game, editor, tutorial, profile, games browser, landing).
+- `crates/static/` — Embedded HTML pages (game, editor, tutorial, puzzle, profile, games browser, landing).
 - `maps/` — JSON map definitions.
 
 ## Pages
@@ -20,6 +20,7 @@ Rust workspace:
 | `/tutorial` | Interactive 10-step tutorial with combat calculator |
 | `/profile` | Player stats, rating chart, match history |
 | `/games` | Game browser, spectator mode |
+| `/puzzle` | Daily puzzle challenges (optimal attack, min-attackers) |
 | `/landing` | Marketing landing page |
 
 ## Running
@@ -67,6 +68,8 @@ Three-layer evaluation:
 - WebSocket for live game updates
 - Matchmaking queue with rating-based pairing
 - Glicko-2 ratings + seasonal league (Bronze → Grandmaster)
+- Achievements system (First Blood, Explorer, Speedrun, Underdog, Bonus Hunter)
+- Arena tournaments with streak bonuses and berserk mode
 - 24h boot timers
 
 ## API Routes

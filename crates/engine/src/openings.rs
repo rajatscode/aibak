@@ -30,11 +30,10 @@ fn small_earth_openings() -> Vec<Opening> {
     vec![
         Opening {
             name: "South America Rush".into(),
-            description:
-                "Lock down South America early. With only 4 territories and a +2 bonus, \
+            description: "Lock down South America early. With only 4 territories and a +2 bonus, \
                  it is the easiest continent to complete in the first 1-2 turns. Use the \
                  extra income to snowball into Africa or North America."
-                    .into(),
+                .into(),
             recommended_picks: vec![
                 "Brazil".into(),
                 "Argentina".into(),
@@ -49,30 +48,27 @@ fn small_earth_openings() -> Vec<Opening> {
         },
         Opening {
             name: "Australia Lock".into(),
-            description:
-                "Claim Oceania — the classic safe opening. Only one chokepoint \
+            description: "Claim Oceania — the classic safe opening. Only one chokepoint \
                  (Indonesia-Siam) makes it trivially defensible. The +2 bonus is \
                  modest, but you lose almost nothing keeping it."
-                    .into(),
+                .into(),
             recommended_picks: vec![
                 "Indonesia".into(),
                 "Eastern Australia".into(),
                 "Western Australia".into(),
                 "New Guinea".into(),
             ],
-            first_turn_strategy:
-                "Capture any missing Oceania territory turn 1, then stack the \
+            first_turn_strategy: "Capture any missing Oceania territory turn 1, then stack the \
                  chokepoint at Indonesia. Use spare income to probe into Southeast \
                  Asia when safe."
-                    .into(),
+                .into(),
         },
         Opening {
             name: "Africa Control".into(),
-            description:
-                "Africa offers a solid +3 bonus with 6 territories — a good balance \
+            description: "Africa offers a solid +3 bonus with 6 territories — a good balance \
                  of size and reward. Two main entry points (North Africa, East Africa) \
                  are manageable with focused defense."
-                    .into(),
+                .into(),
             recommended_picks: vec![
                 "North Africa".into(),
                 "Egypt".into(),
@@ -81,19 +77,17 @@ fn small_earth_openings() -> Vec<Opening> {
                 "South Africa".into(),
                 "Madagascar".into(),
             ],
-            first_turn_strategy:
-                "Concentrate armies to sweep neutrals in Africa. Prioritize the \
+            first_turn_strategy: "Concentrate armies to sweep neutrals in Africa. Prioritize the \
                  borders with Europe (North Africa) and the Middle East (Egypt/East \
                  Africa) once the bonus is complete."
-                    .into(),
+                .into(),
         },
         Opening {
             name: "Europe Gambit".into(),
-            description:
-                "Europe is risky — 7 territories with multiple entry points — but \
+            description: "Europe is risky — 7 territories with multiple entry points — but \
                  its +5 bonus is the highest reward-per-territory on the map. If you \
                  can hold it, the income advantage is crushing."
-                    .into(),
+                .into(),
             recommended_picks: vec![
                 "Ukraine".into(),
                 "Northern Europe".into(),
@@ -111,12 +105,11 @@ fn small_earth_openings() -> Vec<Opening> {
         },
         Opening {
             name: "Asia Long Game".into(),
-            description:
-                "Spread across Asia for a massive +7 late-game bonus. This is a \
+            description: "Spread across Asia for a massive +7 late-game bonus. This is a \
                  patient strategy: you will not complete the continent quickly, but \
                  controlling key territories denies opponents expansion while you \
                  build an army advantage."
-                    .into(),
+                .into(),
             recommended_picks: vec![
                 "Siam".into(),
                 "India".into(),
@@ -125,11 +118,10 @@ fn small_earth_openings() -> Vec<Opening> {
                 "Ural".into(),
                 "Siberia".into(),
             ],
-            first_turn_strategy:
-                "Do not rush the full bonus. Instead, capture nearby neutrals to \
+            first_turn_strategy: "Do not rush the full bonus. Instead, capture nearby neutrals to \
                  grow your territory count and card income. Focus on chokepoints \
                  (Siam, Middle East, Ural) to slow opponents while you consolidate."
-                    .into(),
+                .into(),
         },
     ]
 }

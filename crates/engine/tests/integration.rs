@@ -5,7 +5,7 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 
 use strat_engine::ai::{self, AiStrength};
-use strat_engine::analysis::{quick_win_probability, material_evaluation};
+use strat_engine::analysis::{material_evaluation, quick_win_probability};
 use strat_engine::combat::resolve_attack;
 use strat_engine::fog::{fog_filter, visible_territories};
 use strat_engine::game_analysis::analyze_game;
@@ -1048,10 +1048,8 @@ fn test_mcts_beats_random() {
             if state.phase == Phase::Finished {
                 break;
             }
-            let p0_orders =
-                ai::generate_orders_for_strength(&state, 0, &map, AiStrength::Hard);
-            let p1_orders =
-                ai::generate_orders_for_strength(&state, 1, &map, AiStrength::Easy);
+            let p0_orders = ai::generate_orders_for_strength(&state, 0, &map, AiStrength::Hard);
+            let p1_orders = ai::generate_orders_for_strength(&state, 1, &map, AiStrength::Easy);
             let result = resolve_turn(&state, [p0_orders, p1_orders], &map, &mut rng);
             state = result.state;
         }
@@ -1273,12 +1271,7 @@ fn test_analysis_detects_key_moments() {
         all_turn_events.push(result.events);
     }
 
-    let analysis = analyze_game(
-        &state_history,
-        &win_prob_history,
-        &all_turn_events,
-        &map,
-    );
+    let analysis = analyze_game(&state_history, &win_prob_history, &all_turn_events, &map);
 
     // A game that plays out over many turns should have at least one key moment
     // (bonus completion, turning point, or big swing).
@@ -1432,10 +1425,7 @@ fn test_picks_with_more_options_than_bonuses() {
 
 #[test]
 fn test_100_random_games_all_maps() {
-    let maps = [
-        ("Small Earth", load_small_earth()),
-        ("MME", load_mme()),
-    ];
+    let maps = [("Small Earth", load_small_earth()), ("MME", load_mme())];
 
     for (map_name, map) in &maps {
         let game_count = 50;

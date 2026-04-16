@@ -975,10 +975,7 @@ async fn import_game(
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<ActionResult>, (StatusCode, String)> {
     // Validate the import data.
-    let version = body
-        .get("version")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
+    let version = body.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
     if version != 1 {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -1012,28 +1009,17 @@ async fn import_game(
             let terrs = snap
                 .get("territories")
                 .and_then(|v| v.as_array())
-                .ok_or((
-                    StatusCode::BAD_REQUEST,
-                    "Invalid state history".to_string(),
-                ))?;
+                .ok_or((StatusCode::BAD_REQUEST, "Invalid state history".to_string()))?;
             let mut owners: Vec<u8> = vec![NEUTRAL; map.territory_count()];
             let mut armies: Vec<u32> = vec![0; map.territory_count()];
             for t in terrs {
                 let id = t.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
                 if id < owners.len() {
-                    owners[id] = t
-                        .get("owner")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(255)
-                        as u8;
-                    armies[id] =
-                        t.get("armies").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                    owners[id] = t.get("owner").and_then(|v| v.as_u64()).unwrap_or(255) as u8;
+                    armies[id] = t.get("armies").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 }
             }
-            let phase_str = snap
-                .get("phase")
-                .and_then(|v| v.as_str())
-                .unwrap_or("play");
+            let phase_str = snap.get("phase").and_then(|v| v.as_str()).unwrap_or("play");
             let phase = match phase_str {
                 "picking" => Phase::Picking,
                 "finished" => Phase::Finished,
@@ -1056,10 +1042,7 @@ async fn import_game(
     let game_data = body
         .get("game")
         .ok_or((StatusCode::BAD_REQUEST, "Missing game data".to_string()))?;
-    let final_turn = game_data
-        .get("turn")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
+    let final_turn = game_data.get("turn").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
     let winner = game_data
         .get("winner")
         .and_then(|v| v.as_u64())
@@ -1086,11 +1069,8 @@ async fn import_game(
         for t in terrs {
             let id = t.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
             if id < final_state.territory_owners.len() {
-                final_state.territory_owners[id] = t
-                    .get("owner")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(255)
-                    as u8;
+                final_state.territory_owners[id] =
+                    t.get("owner").and_then(|v| v.as_u64()).unwrap_or(255) as u8;
                 final_state.territory_armies[id] =
                     t.get("armies").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
             }

@@ -123,9 +123,9 @@ Adjacency validation (bidirectional check) on both map files:
 
 ---
 
-## 5. Branding Check -- "Aibak" References
+## 5. Branding Check -- Legacy Name References
 
-Searched `crates/static/`, `docs/`, and `README.md` for any case variation of "Aibak".
+Searched `crates/static/`, `docs/`, and `README.md` for any legacy project name references.
 
 **Result:** No references found. All user-facing content uses "strat.club" branding. **PASS**
 
@@ -167,7 +167,7 @@ cargo build 2>&1 | grep "warning:" | grep -v "generated"
 | Server routes compile & wired | PASS |
 | Engine modules all exported | PASS |
 | Map adjacency integrity | PASS |
-| No "Aibak" references | PASS |
+| No legacy name references | PASS |
 | Test suite (19/19) | PASS |
 | Compiler warnings | PASS (0 warnings) |
 

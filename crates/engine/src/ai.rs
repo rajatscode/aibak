@@ -437,9 +437,7 @@ pub fn generate_orders_with_profile(
                     .iter()
                     .copied()
                     .find(|&adj| state.territory_owners[adj] == player)
-                    .unwrap_or_else(|| {
-                        find_most_threatened_border(state, player, map).unwrap_or(0)
-                    })
+                    .unwrap_or_else(|| find_most_threatened_border(state, player, map).unwrap_or(0))
             } else {
                 find_most_threatened_border(state, player, map).unwrap_or(0)
             }
@@ -960,12 +958,7 @@ fn find_most_threatened_border(state: &GameState, player: PlayerId, map: &Map) -
 /// Check if attacking a territory is worthwhile for bonus denial, even if
 /// capture isn't possible. Returns true if the target is in a bonus the
 /// opponent is close to completing.
-fn is_bonus_denial_worthwhile(
-    target: usize,
-    opp: PlayerId,
-    map: &Map,
-    state: &GameState,
-) -> bool {
+fn is_bonus_denial_worthwhile(target: usize, opp: PlayerId, map: &Map, state: &GameState) -> bool {
     let bonus = &map.bonuses[map.territories[target].bonus_id];
     let opp_owned = bonus
         .territory_ids
