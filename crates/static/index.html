@@ -12,6 +12,12 @@
   --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
   --neutral:#4b5563;--fog:#1f2937;
 }
+[data-theme="light"]{
+  --bg:#ffffff;--bg2:#f6f8fa;--bg3:#e1e4e8;--border:#d0d7de;
+  --text:#1f2328;--text2:#656d76;--text3:#8c959f;
+  --blue:#0969da;--red:#cf222e;--green:#1a7f37;--gold:#9a6700;
+  --neutral:#8c959f;--fog:#eaeef2;
+}
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
 #app{display:flex;flex-direction:column;height:100vh}
 
@@ -307,6 +313,21 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #mobile-sidebar-tab .tab-arrow{display:inline-block;transition:transform .3s ease;margin-left:6px}
 #main.mobile-sidebar-open #mobile-sidebar-tab .tab-arrow{transform:rotate(180deg)}
 
+/* THEME TOGGLE */
+#theme-toggle{background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;padding:0;transition:background .15s}
+#theme-toggle:hover{background:var(--border)}
+[data-theme="light"] #map-container{background:radial-gradient(ellipse at 50% 45%, #c8d6e5 0%, #dfe6ed 40%, #eaeef2 100%)}
+[data-theme="light"] .toast.error{border-color:var(--red);background:#fee2e2}
+[data-theme="light"] .toast.success{border-color:var(--green);background:#dcfce7}
+[data-theme="light"] .toast.achievement{border-color:var(--gold);background:linear-gradient(135deg,#fef3c7,#fffbeb);box-shadow:0 4px 24px rgba(154,103,0,.15)}
+[data-theme="light"] #game-over{background:rgba(255,255,255,.75)}
+[data-theme="light"] #replay-stepper{background:linear-gradient(180deg,rgba(246,248,250,.92),rgba(246,248,250,.98))}
+[data-theme="light"] .army-text{fill:#1f2328}
+[data-theme="light"] .connection-line{stroke:var(--border)}
+[data-theme="light"] #sidebar{background:linear-gradient(180deg, var(--bg2) 0%, #edf0f3 100%)}
+[data-theme="light"] .phase-flash{background:rgba(255,255,255,.6)}
+[data-theme="light"] #kb-help-overlay{background:rgba(255,255,255,.8)}
+
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -472,6 +493,15 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #strat-tips .tip-dismiss:hover{color:var(--text)}
 #strat-tips.hidden{display:none}
 #strat-tips .tip-toggle{font-size:10px;color:var(--text3);cursor:pointer;text-decoration:underline;margin-top:4px;display:inline-block}
+
+/* SESSION STATS BAR */
+#session-stats-bar{position:fixed;bottom:0;left:0;right:0;height:24px;background:rgba(13,17,23,.95);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:20px;font-size:11px;color:var(--text3);z-index:900;transform:translateY(100%);transition:transform .3s ease;backdrop-filter:blur(6px)}
+#session-stats-bar.visible{transform:translateY(0)}
+#session-stats-bar span{white-space:nowrap}
+#session-stats-bar .ss-val{color:var(--text2);font-weight:600}
+#session-stats-bar .ss-streak{font-weight:700}
+@media (max-width:768px){#session-stats-bar{gap:10px;font-size:10px}}
+@media (max-width:480px){#session-stats-bar{gap:6px;font-size:9px;height:22px}}
 </style>
 </head>
 <body>
@@ -505,6 +535,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         <option value="hard" selected>Hard</option>
       </select>
       <button id="threat-toggle" onclick="toggleThreats()" title="Toggle Threat Heatmap">Threats</button>
+      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">&#9790;</button>
       <button id="mute-toggle" onclick="toggleMute()" title="Toggle Sound">Sound</button>
       <button onclick="newGame()" title="New Game (N)">New Game</button>
     </div>
@@ -720,6 +751,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         <span class="kb-key">Enter</span><span class="kb-desc">End Turn (when nothing is selected)</span>
         <span class="kb-key">N</span><span class="kb-desc">New Game</span>
         <span class="kb-key">M</span><span class="kb-desc">Toggle mute</span>
+        <span class="kb-key">L</span><span class="kb-desc">Toggle light/dark theme</span>
         <span class="kb-key">T</span><span class="kb-desc">Toggle threats overlay</span>
         <span class="kb-key">O</span><span class="kb-desc">Toggle territory overview panel</span>
         <span class="kb-key">R</span><span class="kb-desc">Enter replay mode (after game ends)</span>
@@ -847,6 +879,18 @@ let sessionGames = 0;
 let sessionStart = Date.now();
 let lastGameSettings = null; // {template, settings} from last started game
 let sessionTimerInterval = null;
+
+// ========== SESSION STATISTICS ==========
+let sessionStats = (function() {
+  try {
+    var saved = sessionStorage.getItem('stratclub_session_stats');
+    if (saved) {
+      var parsed = JSON.parse(saved);
+      if (parsed && typeof parsed.games === 'number') return parsed;
+    }
+  } catch(e) {}
+  return { games: 0, wins: 0, losses: 0, streak: 0, totalTurns: 0, startTime: Date.now() };
+})();
 
 // ========== KEYBOARD FOCUS ==========
 function getOwnedTerritoryIds() {
@@ -1066,6 +1110,54 @@ function toggleMute() {
   document.getElementById('mute-toggle').textContent = muted ? 'Muted' : 'Sound';
   document.getElementById('mute-toggle').style.opacity = muted ? '0.5' : '1';
 }
+
+// ========== THEME TOGGLE ==========
+function isLightTheme() { return document.documentElement.getAttribute('data-theme') === 'light'; }
+function applyThemeGradients() {
+  const light = isLightTheme();
+  const setStops = (id, c1, c2) => { const g = document.getElementById(id); if (!g) return; const stops = g.querySelectorAll('stop'); if (stops.length >= 2) { stops[0].setAttribute('stop-color', c1); stops[1].setAttribute('stop-color', c2); } };
+  if (light) {
+    setStops('ocean-bg', '#c8d6e5', '#dfe6ed');
+    const ob = document.getElementById('ocean-bg'); if (ob) { const s = ob.querySelectorAll('stop'); if (s.length >= 3) s[2].setAttribute('stop-color', '#f0f3f6'); }
+    setStops('grad-player', '#3b82f6', '#2563eb'); setStops('grad-enemy', '#ef4444', '#dc2626');
+    setStops('grad-neutral', '#9ca3af', '#6b7280'); setStops('grad-fog', '#d0d7de', '#bbc3cd');
+    setStops('army-bubble-grad', 'rgba(240,240,245,0.9)', 'rgba(220,220,230,0.95)');
+  } else {
+    setStops('ocean-bg', '#0f2238', '#0a1628');
+    const ob = document.getElementById('ocean-bg'); if (ob) { const s = ob.querySelectorAll('stop'); if (s.length >= 3) s[2].setAttribute('stop-color', '#060d15'); }
+    setStops('grad-player', '#3b82f6', '#1d4ed8'); setStops('grad-enemy', '#ef4444', '#b91c1c');
+    setStops('grad-neutral', '#6b7280', '#374151'); setStops('grad-fog', '#283040', '#1a2030');
+    setStops('army-bubble-grad', 'rgba(40,40,50,0.85)', 'rgba(10,10,15,0.9)');
+  }
+  document.querySelectorAll('.territory-path').forEach(p => {
+    const fill = p.getAttribute('fill');
+    if (light) {
+      if (fill === 'url(#grad-player)') p.setAttribute('stroke', '#93b4e8');
+      else if (fill === 'url(#grad-enemy)') p.setAttribute('stroke', '#e8a0a0');
+      else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#b0b8c4');
+      else p.setAttribute('stroke', '#c0c8d0');
+    } else {
+      if (fill === 'url(#grad-player)') p.setAttribute('stroke', '#152a5e');
+      else if (fill === 'url(#grad-enemy)') p.setAttribute('stroke', '#5a1010');
+      else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#1a1f2a');
+      else p.setAttribute('stroke', '#080c12');
+    }
+  });
+}
+function toggleTheme() {
+  const light = !isLightTheme();
+  document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+  document.getElementById('theme-toggle').innerHTML = light ? '&#9728;' : '&#9790;';
+  localStorage.setItem('strat-theme', light ? 'light' : 'dark');
+  applyThemeGradients();
+}
+(function initTheme() {
+  const saved = localStorage.getItem('strat-theme');
+  if (saved === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.getElementById('theme-toggle').innerHTML = '&#9728;';
+  }
+})();
 
 // ========== THREAT HEATMAP ==========
 function toggleThreats() {
@@ -1693,6 +1785,9 @@ function updateMap() {
 
   // Keep minimap in sync
   updateMinimap();
+
+  // Reapply light theme SVG adjustments if active
+  if (isLightTheme()) applyThemeGradients();
 }
 
 function drawOrderLines() {
@@ -2630,6 +2725,12 @@ function showGameOver(winner) {
   analysisDiv.innerHTML = '<p style="color:var(--text3);font-size:12px">Loading analysis...</p>';
   el.classList.add('show');
 
+  // Record session stats (guard against double-counting on replay exit)
+  if (!showGameOver._lastRecordedGame || showGameOver._lastRecordedGame !== sessionGames) {
+    showGameOver._lastRecordedGame = sessionGames;
+    recordSessionResult(winner === 0, gameStats.turnsPlayed);
+  }
+
   // Fetch detailed post-game analysis.
   fetchPostAnalysis(analysisDiv);
 }
@@ -2925,12 +3026,58 @@ function updateSessionDisplay() {
       timerEl.textContent = '';
     }
   }
+  // Keep session stats bar duration up to date
+  if (sessionStats.games > 0) renderSessionStatsBar();
 }
 
 function startSessionTimer() {
   if (sessionTimerInterval) clearInterval(sessionTimerInterval);
   sessionTimerInterval = setInterval(updateSessionDisplay, 15000); // update every 15s
   updateSessionDisplay();
+}
+
+// ========== SESSION STATS BAR ==========
+function recordSessionResult(won, turns) {
+  sessionStats.games++;
+  if (won) {
+    sessionStats.wins++;
+    sessionStats.streak = sessionStats.streak > 0 ? sessionStats.streak + 1 : 1;
+  } else {
+    sessionStats.losses++;
+    sessionStats.streak = sessionStats.streak < 0 ? sessionStats.streak - 1 : -1;
+  }
+  sessionStats.totalTurns += (turns || 0);
+  try { sessionStorage.setItem('stratclub_session_stats', JSON.stringify(sessionStats)); } catch(e) {}
+  renderSessionStatsBar();
+}
+
+function renderSessionStatsBar() {
+  var bar = document.getElementById('session-stats-bar');
+  if (!bar || sessionStats.games === 0) return;
+  var w = sessionStats.wins;
+  var l = sessionStats.losses;
+  var pct = sessionStats.games > 0 ? Math.round((w / sessionStats.games) * 100) : 0;
+  var elapsed = Math.floor((Date.now() - sessionStats.startTime) / 60000);
+  var durStr = elapsed >= 60 ? Math.floor(elapsed/60) + 'h ' + (elapsed%60) + 'm' : elapsed + 'm';
+  var avgTurns = sessionStats.games > 0 ? Math.round(sessionStats.totalTurns / sessionStats.games) : 0;
+  var streakStr = '';
+  if (sessionStats.streak > 0) {
+    streakStr = '\uD83D\uDD25 ' + sessionStats.streak + 'W';
+  } else if (sessionStats.streak < 0) {
+    streakStr = '\u2744\uFE0F ' + Math.abs(sessionStats.streak) + 'L';
+  }
+  bar.innerHTML =
+    '<span>Games: <span class="ss-val">' + sessionStats.games + '</span></span>' +
+    '<span>W/L: <span class="ss-val">' + w + '-' + l + ' (' + pct + '%)</span></span>' +
+    '<span>Session: <span class="ss-val">' + durStr + '</span></span>' +
+    (streakStr ? '<span class="ss-streak">' + streakStr + '</span>' : '') +
+    '<span>Avg: <span class="ss-val">' + avgTurns + ' turns</span></span>';
+  bar.classList.add('visible');
+}
+
+// Render stats bar on load if there are prior session games
+if (sessionStats.games > 0) {
+  requestAnimationFrame(function() { renderSessionStatsBar(); });
 }
 
 // ========== CLICK DISPATCHER ==========
@@ -3161,6 +3308,7 @@ document.addEventListener('keydown', e => {
   // --- Game flow shortcuts ---
   if (keyLower === 'n') { newGame(); return; }
   if (keyLower === 'm') { toggleMute(); return; }
+  if (keyLower === 'l') { toggleTheme(); return; }
   if (keyLower === 't') { toggleThreats(); return; }
   if (keyLower === 'o') { toggleOverview(); return; }
   if (keyLower === 'r' && phase === 'finished') { enterReplayMode(); return; }
@@ -4408,7 +4556,9 @@ document.getElementById('set-fog').addEventListener('change', function() {
 });
 startSessionTimer();
 buildMap();
+if (isLightTheme()) applyThemeGradients();
 fetchState();
 </script>
+<div id="session-stats-bar"></div>
 </body>
 </html>
