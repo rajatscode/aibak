@@ -323,6 +323,13 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* UNDEPLOYED WARNING */
 .undeployed-warning{color:#f59e0b;font-size:12px;font-weight:600;text-align:center;padding:4px 0}
 
+/* UNDO/REDO */
+.undo-redo-bar{display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:11px;color:var(--text3)}
+.undo-redo-bar button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .15s,opacity .15s}
+.undo-redo-bar button:hover:not(:disabled){background:var(--border)}
+.undo-redo-bar button:disabled{opacity:.3;cursor:not-allowed}
+.undo-redo-bar .undo-hint{font-size:10px;color:var(--text3);margin-left:auto}
+
 /* THREAT HEATMAP */
 .territory-path.threat-overlay{transition:fill .3s ease}
 
@@ -700,6 +707,13 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       </div>
     </div>
     <div class="kb-section">
+      <h3>Undo / Redo</h3>
+      <div class="kb-grid">
+        <span class="kb-key">Ctrl+Z / Z</span><span class="kb-desc">Undo last action</span>
+        <span class="kb-key">Ctrl+Shift+Z / Y</span><span class="kb-desc">Redo last undone action</span>
+      </div>
+    </div>
+    <div class="kb-section">
       <h3>Game Flow</h3>
       <div class="kb-grid">
         <span class="kb-key">Escape</span><span class="kb-desc">Cancel selection / close popup</span>
@@ -749,6 +763,84 @@ let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
 let showTips = true; // strategic tips toggle
 let openingBook = []; // cached openings from server
+
+// ========== UNDO/REDO STATE ==========
+let actionStack = [];  // past actions
+let redoStack = [];    // undone actions
+
+function pushAction(action) {
+  actionStack.push(action);
+  redoStack = [];  // clear redo on new action
+}
+
+function clearUndoRedo() {
+  actionStack = [];
+  redoStack = [];
+}
+
+function undo() {
+  if (actionStack.length === 0) return;
+  const action = actionStack.pop();
+  redoStack.push(action);
+  reverseAction(action);
+  playSound('tick');
+  updateMap();
+  renderSidebar();
+}
+
+function redo() {
+  if (redoStack.length === 0) return;
+  const action = redoStack.pop();
+  actionStack.push(action);
+  reapplyAction(action);
+  playSound('tick');
+  updateMap();
+  renderSidebar();
+}
+
+function reverseAction(action) {
+  if (action.type === 'deploy') {
+    // Reverse: remove deployed armies
+    const id = action.territory;
+    const n = action.armies;
+    if (deploys[id]) {
+      deploys[id] -= n;
+      if (deploys[id] <= 0) delete deploys[id];
+    }
+    deployLeft += n;
+  } else if (action.type === 'order') {
+    // Reverse: remove the order at the stored index
+    const idx = orders.indexOf(action.order);
+    if (idx !== -1) {
+      orders.splice(idx, 1);
+      if (typeof editingOrderIdx === 'number') {
+        if (editingOrderIdx === idx) editingOrderIdx = null;
+        else if (editingOrderIdx > idx) editingOrderIdx--;
+      }
+    }
+  } else if (action.type === 'pick') {
+    // Reverse: remove the pick
+    picks = picks.filter(function(p) { return p !== action.territory; });
+  }
+}
+
+function reapplyAction(action) {
+  if (action.type === 'deploy') {
+    const id = action.territory;
+    const n = action.armies;
+    if (deployLeft >= n) {
+      if (!deploys[id]) deploys[id] = 0;
+      deploys[id] += n;
+      deployLeft -= n;
+    }
+  } else if (action.type === 'order') {
+    orders.push(action.order);
+  } else if (action.type === 'pick') {
+    if (!picks.includes(action.territory)) {
+      picks.push(action.territory);
+    }
+  }
+}
 
 // ========== SESSION & REMATCH STATE ==========
 let sessionGames = 0;
@@ -1882,7 +1974,17 @@ function renderPickingPanel(pp, cp) {
         '</div>';
       }).join('') +
     '</div>';
-  cp.innerHTML = '<button class="btn btn-gold" ' + (picks.length < totalOptions ? 'disabled' : '') + ' onclick="confirmPicks()">Confirm Picks</button>';
+  cp.innerHTML = renderUndoRedoBar() + '<button class="btn btn-gold" ' + (picks.length < totalOptions ? 'disabled' : '') + ' onclick="confirmPicks()">Confirm Picks</button>';
+}
+
+function renderUndoRedoBar() {
+  var undoDisabled = actionStack.length === 0 ? ' disabled' : '';
+  var redoDisabled = redoStack.length === 0 ? ' disabled' : '';
+  return '<div class="undo-redo-bar">' +
+    '<button onclick="undo()" title="Undo (Ctrl+Z or Z)"' + undoDisabled + '>\u21A9</button>' +
+    '<button onclick="redo()" title="Redo (Ctrl+Shift+Z or Y)"' + redoDisabled + '>\u21AA</button>' +
+    '<span class="undo-hint">Ctrl+Z to undo</span>' +
+  '</div>';
 }
 
 function renderOrdersPanel(pp, cp) {
@@ -1930,6 +2032,7 @@ function renderOrdersPanel(pp, cp) {
   }
 
   // Unified order list: deploys + attacks/transfers in creation order
+  html += renderUndoRedoBar();
   html += '<h3 style="margin-top:8px">Orders</h3>';
 
   const deployEntries = Object.entries(deploys).filter(function(kv) { return kv[1] > 0; });
@@ -2037,6 +2140,7 @@ function onPickClick(id) {
     if (!G.pick_options || !G.pick_options.includes(id)) return;
     if (picks.length >= G.pick_options.length) return;
     picks.push(id);
+    pushAction({type: 'pick', territory: id});
     playSound('tick');
   }
   updateMap();
@@ -2089,6 +2193,7 @@ function unpick(id) {
 async function confirmPicks() {
   const res = await api('POST', '/api/picks', {picks: picks});
   if (res) {
+    clearUndoRedo();
     if (res.events) showTurnEvents(res.events);
     await flash('Game begins!');
     // Reset turn tracking so applyState properly initializes deploy phase
@@ -2194,6 +2299,7 @@ function onDeployClick(id, e) {
   deploys[id] += actual;
   deployLeft -= actual;
 
+  pushAction({type: 'deploy', territory: id, armies: actual});
   floatText(id, '+' + actual);
   playSound('deploy');
   updateMap();
@@ -2226,12 +2332,14 @@ function adjustPending(delta) {
 
 function confirmPending() {
   if (pendingTarget === null) return;
-  orders.push({
+  const newOrder = {
     type: pendingType,
     from: selectedSource,
     to: pendingTarget,
     armies: pendingArmies
-  });
+  };
+  orders.push(newOrder);
+  pushAction({type: 'order', order: newOrder});
   if (pendingType === 'attack') playSound('attack');
   pendingTarget = null;
   selectedSource = null;
@@ -2290,12 +2398,14 @@ function popupAdjust(delta) {
 
 function popupConfirm() {
   if (pendingTarget === null || selectedSource === null) return;
-  orders.push({
+  const newOrder = {
     type: pendingType,
     from: selectedSource,
     to: pendingTarget,
     armies: pendingArmies
-  });
+  };
+  orders.push(newOrder);
+  pushAction({type: 'order', order: newOrder});
   if (pendingType === 'attack') playSound('attack');
   else playSound('tick');
   pendingTarget = null;
@@ -2402,6 +2512,7 @@ async function endTurn() {
   selectedSource = null;
   pendingTarget = null;
   editingOrderIdx = null;
+  clearUndoRedo();
   window._lastTurn = null; // Force orders re-init on next fetchState
   resolving = false;
 
@@ -2705,6 +2816,7 @@ async function newGame() {
   resolving = false;
   winProbHistory = [];
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+  clearUndoRedo();
   clearChat();
   showTemplateModal();
 }
@@ -2742,6 +2854,7 @@ async function rematch() {
   resolving = false;
   winProbHistory = [];
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+  clearUndoRedo();
   clearChat();
   playSound('tick');
   sessionGames++;
@@ -2782,6 +2895,7 @@ async function quickPlay() {
     resolving = false;
     winProbHistory = [];
     gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+    clearUndoRedo();
     clearChat();
     playSound('tick');
     sessionGames++;
@@ -2870,6 +2984,28 @@ document.addEventListener('keydown', e => {
   const key = e.key;
   const keyLower = key.toLowerCase();
 
+  // --- Undo/Redo shortcuts ---
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && keyLower === 'z') {
+    e.preventDefault();
+    undo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && keyLower === 'z') {
+    e.preventDefault();
+    redo();
+    return;
+  }
+  if (keyLower === 'z' && !e.ctrlKey && !e.metaKey && pendingTarget === null) {
+    e.preventDefault();
+    undo();
+    return;
+  }
+  if (keyLower === 'y' && !e.ctrlKey && !e.metaKey && pendingTarget === null) {
+    e.preventDefault();
+    redo();
+    return;
+  }
+
   // --- Army popup is showing (pendingTarget set) ---
   if (pendingTarget !== null) {
     if (key === 'Escape') { e.preventDefault(); cancelPending(); return; }
@@ -2920,6 +3056,7 @@ document.addEventListener('keydown', e => {
       if (!deploys[focusedId]) deploys[focusedId] = 0;
       deploys[focusedId]++;
       deployLeft--;
+      pushAction({type: 'deploy', territory: focusedId, armies: 1});
       floatText(focusedId, '+1');
       playSound('deploy');
       updateMap();
@@ -2993,9 +3130,11 @@ document.addEventListener('keydown', e => {
     const focusedId = getFocusedTerritoryId();
     if (focusedId !== null && isOwned(focusedId) && deployLeft > 0) {
       if (!deploys[focusedId]) deploys[focusedId] = 0;
-      deploys[focusedId] += deployLeft;
-      floatText(focusedId, '+' + deployLeft);
+      var qAmount = deployLeft;
+      deploys[focusedId] += qAmount;
+      floatText(focusedId, '+' + qAmount);
       deployLeft = 0;
+      pushAction({type: 'deploy', territory: focusedId, armies: qAmount});
       playSound('deploy');
       updateMap();
       renderSidebar();
@@ -3010,6 +3149,7 @@ document.addEventListener('keydown', e => {
       if (!deploys[focusedId]) deploys[focusedId] = 0;
       deploys[focusedId] += half;
       deployLeft -= half;
+      pushAction({type: 'deploy', territory: focusedId, armies: half});
       floatText(focusedId, '+' + half);
       playSound('deploy');
       updateMap();
@@ -3578,6 +3718,7 @@ function toggleMobileSidebar() {
         if (!deploys[terrId]) deploys[terrId] = 0;
         deploys[terrId] += amount;
         deployLeft -= amount;
+        pushAction({type: 'deploy', territory: terrId, armies: amount});
         floatText(terrId, '+' + amount);
         playSound('deploy');
         updateMap();
@@ -3928,6 +4069,7 @@ async function importGameData(data) {
     resolving = false;
     winProbHistory = [];
     gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+    clearUndoRedo();
     document.getElementById('game-over').classList.remove('show');
     document.getElementById('turn-log').innerHTML = '';
     await fetchState();
