@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use strat_engine::ai;
 use strat_engine::combat::resolve_attack;
@@ -9,14 +9,16 @@ use strat_engine::fog::{fog_filter, visible_territories};
 use strat_engine::map::{Map, MapSettings};
 use strat_engine::orders::Order;
 use strat_engine::picking;
-use strat_engine::state::{GameState, Phase, NEUTRAL};
+use strat_engine::state::{GameState, NEUTRAL, Phase};
 use strat_engine::turn::resolve_turn;
 
 fn maps_dir() -> PathBuf {
     // Navigate from crate root to workspace root
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap() // crates/
-        .parent().unwrap() // workspace root
+        .parent()
+        .unwrap() // crates/
+        .parent()
+        .unwrap() // workspace root
         .join("maps")
 }
 
@@ -187,7 +189,11 @@ fn test_random_warlords_one_per_bonus() {
         .collect();
     bonus_ids.sort();
     bonus_ids.dedup();
-    assert_eq!(bonus_ids.len(), expected, "picks must come from different bonuses");
+    assert_eq!(
+        bonus_ids.len(),
+        expected,
+        "picks must come from different bonuses"
+    );
 }
 
 #[test]
@@ -203,12 +209,25 @@ fn test_picking_resolves_to_play_phase() {
     let picks_a: Vec<usize> = options.clone();
     let picks_b: Vec<usize> = options.iter().rev().copied().collect();
 
-    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks_a, &picks_b],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     assert_eq!(state.phase, Phase::Play);
     assert_eq!(state.turn, 1);
-    assert_eq!(state.territory_count_for(0), 4, "Player 0 should get 4 territories");
-    assert_eq!(state.territory_count_for(1), 4, "Player 1 should get 4 territories");
+    assert_eq!(
+        state.territory_count_for(0),
+        4,
+        "Player 0 should get 4 territories"
+    );
+    assert_eq!(
+        state.territory_count_for(1),
+        4,
+        "Player 1 should get 4 territories"
+    );
 }
 
 #[test]
@@ -221,7 +240,12 @@ fn test_picked_territories_get_starting_armies() {
     let picks: Vec<usize> = options.iter().take(4).copied().collect();
     let ai_picks = ai::generate_picks(&state, &map);
 
-    picking::resolve_picks(&mut state, [&picks, &ai_picks], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks, &ai_picks],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     // All picked territories should have 5 armies
     for tid in 0..map.territory_count() {
@@ -321,9 +345,18 @@ fn test_successful_attack_captures_territory() {
     ];
 
     let result = resolve_turn(&state, orders, &map, &mut rng);
-    assert_eq!(result.state.territory_owners[1], 0, "Should capture NW Territory");
-    assert!(result.state.territory_armies[1] > 0, "Should have surviving attackers");
-    assert_eq!(result.state.territory_armies[0], 1, "Should leave 1 on Alaska");
+    assert_eq!(
+        result.state.territory_owners[1], 0,
+        "Should capture NW Territory"
+    );
+    assert!(
+        result.state.territory_armies[1] > 0,
+        "Should have surviving attackers"
+    );
+    assert_eq!(
+        result.state.territory_armies[0], 1,
+        "Should leave 1 on Alaska"
+    );
 }
 
 #[test]
@@ -343,10 +376,20 @@ fn test_elimination_triggers_victory() {
     let mut rng = StdRng::seed_from_u64(42);
     let orders = [
         vec![
-            Order::Deploy { territory: 0, armies: 5 },
-            Order::Attack { from: 0, to: 1, armies: 24 },
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 0,
+                to: 1,
+                armies: 24,
+            },
         ],
-        vec![Order::Deploy { territory: 1, armies: 5 }],
+        vec![Order::Deploy {
+            territory: 1,
+            armies: 5,
+        }],
     ];
 
     let result = resolve_turn(&state, orders, &map, &mut rng);
@@ -354,7 +397,10 @@ fn test_elimination_triggers_victory() {
     assert_eq!(result.state.winner, Some(0));
 
     // Should have elimination + victory events
-    let has_victory = result.events.iter().any(|e| matches!(e, strat_engine::turn::TurnEvent::Victory { player: 0 }));
+    let has_victory = result
+        .events
+        .iter()
+        .any(|e| matches!(e, strat_engine::turn::TurnEvent::Victory { player: 0 }));
     assert!(has_victory, "Should have victory event");
 }
 
@@ -370,11 +416,19 @@ fn test_ai_generates_valid_orders() {
     let options = picking::generate_pick_options(&map, &mut rng);
     let picks: Vec<usize> = options.iter().take(4).copied().collect();
     let ai_picks = ai::generate_picks(&state, &map);
-    picking::resolve_picks(&mut state, [&picks, &ai_picks], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks, &ai_picks],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     // AI should generate orders
     let orders = ai::generate_orders(&state, 1, &map);
-    assert!(!orders.is_empty(), "AI should generate at least deploy orders");
+    assert!(
+        !orders.is_empty(),
+        "AI should generate at least deploy orders"
+    );
 
     // First order should be a deploy
     assert!(
@@ -391,7 +445,10 @@ fn test_ai_generates_valid_orders() {
             _ => None,
         })
         .sum();
-    assert_eq!(total_deployed, income, "AI should deploy exactly its income");
+    assert_eq!(
+        total_deployed, income,
+        "AI should deploy exactly its income"
+    );
 }
 
 #[test]
@@ -403,7 +460,12 @@ fn test_ai_expands_over_multiple_turns() {
     let options = picking::generate_pick_options(&map, &mut rng);
     let picks: Vec<usize> = options.iter().take(4).copied().collect();
     let ai_picks = ai::generate_picks(&state, &map);
-    picking::resolve_picks(&mut state, [&picks, &ai_picks], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks, &ai_picks],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     let initial_ai_territories = state.territory_count_for(1);
 
@@ -438,7 +500,12 @@ fn test_full_game_terminates() {
     let options = picking::generate_pick_options(&map, &mut rng);
     let picks: Vec<usize> = options.iter().take(4).copied().collect();
     let ai_picks = ai::generate_picks(&state, &map);
-    picking::resolve_picks(&mut state, [&picks, &ai_picks], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks, &ai_picks],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     // Play up to 100 turns — game should end well before that
     for turn in 0..100 {
@@ -497,19 +564,37 @@ fn test_concurrent_attacks_same_territory() {
     let mut rng = StdRng::seed_from_u64(42);
     let orders = [
         vec![
-            Order::Deploy { territory: 0, armies: 5 },
-            Order::Attack { from: 0, to: 1, armies: 19 },
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 0,
+                to: 1,
+                armies: 19,
+            },
         ],
         vec![
-            Order::Deploy { territory: 3, armies: 5 },
-            Order::Attack { from: 3, to: 1, armies: 19 },
+            Order::Deploy {
+                territory: 3,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 3,
+                to: 1,
+                armies: 19,
+            },
         ],
     ];
 
     let result = resolve_turn(&state, orders, &map, &mut rng);
     // NW Territory (1) should be owned by exactly one player, not both.
     let owner = result.state.territory_owners[1];
-    assert!(owner == 0 || owner == 1, "Territory should be captured by one player, got {}", owner);
+    assert!(
+        owner == 0 || owner == 1,
+        "Territory should be captured by one player, got {}",
+        owner
+    );
     assert!(result.state.territory_armies[1] > 0);
 }
 
@@ -533,9 +618,20 @@ fn test_transfer_chain() {
     let mut rng = StdRng::seed_from_u64(42);
     let orders = [
         vec![
-            Order::Deploy { territory: 0, armies: 5 },
-            Order::Transfer { from: 0, to: 1, armies: 24 },
-            Order::Transfer { from: 1, to: 3, armies: 24 },
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Transfer {
+                from: 0,
+                to: 1,
+                armies: 24,
+            },
+            Order::Transfer {
+                from: 1,
+                to: 3,
+                armies: 24,
+            },
         ],
         vec![],
     ];
@@ -549,7 +645,11 @@ fn test_transfer_chain() {
     let total: u32 = result.state.territory_armies[0]
         + result.state.territory_armies[1]
         + result.state.territory_armies[3];
-    assert_eq!(total, 20 + 1 + 1 + 5, "Total armies should be preserved (original + deployed)");
+    assert_eq!(
+        total,
+        20 + 1 + 1 + 5,
+        "Total armies should be preserved (original + deployed)"
+    );
 }
 
 // ========== BONUS INCOME ==========
@@ -571,7 +671,11 @@ fn test_bonus_income_correct() {
                 income,
                 map.settings.base_income + bonus.value,
                 "Map '{}', bonus '{}': expected income {} + {}, got {}",
-                map.name, bonus.name, map.settings.base_income, bonus.value, income
+                map.name,
+                bonus.name,
+                map.settings.base_income,
+                bonus.value,
+                income
             );
         }
     }
@@ -588,11 +692,18 @@ fn test_fog_consistency() {
     let options = picking::generate_pick_options(&map, &mut rng);
     let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
     let picks_b = ai::generate_picks(&state, &map);
-    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks_a, &picks_b],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     // Run a few turns to create a realistic state.
     for _ in 0..3 {
-        if state.phase == Phase::Finished { break; }
+        if state.phase == Phase::Finished {
+            break;
+        }
         let p0 = ai::generate_orders(&state, 0, &map);
         let p1 = ai::generate_orders(&state, 1, &map);
         let result = resolve_turn(&state, [p0, p1], &map, &mut rng);
@@ -625,10 +736,17 @@ fn test_game_10_turns() {
     let options = picking::generate_pick_options(&map, &mut rng);
     let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
     let picks_b = ai::generate_picks(&state, &map);
-    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks_a, &picks_b],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     for _ in 0..10 {
-        if state.phase == Phase::Finished { break; }
+        if state.phase == Phase::Finished {
+            break;
+        }
         let p0 = ai::generate_orders(&state, 0, &map);
         let p1 = ai::generate_orders(&state, 1, &map);
         let result = resolve_turn(&state, [p0, p1], &map, &mut rng);
@@ -640,7 +758,9 @@ fn test_game_10_turns() {
                 state.territory_owners[tid] == 0
                     || state.territory_owners[tid] == 1
                     || state.territory_owners[tid] == NEUTRAL,
-                "Invalid owner {} at territory {}", state.territory_owners[tid], tid
+                "Invalid owner {} at territory {}",
+                state.territory_owners[tid],
+                tid
             );
             // Armies should never be zero for owned territories that are alive.
             // (unless captured this turn, but territory_armies should still be > 0 for owned)
@@ -649,7 +769,12 @@ fn test_game_10_turns() {
 
     // No territory should have negative armies (u32 so check for extreme values from overflow).
     for tid in 0..map.territory_count() {
-        assert!(state.territory_armies[tid] < 100_000, "Suspicious army count at territory {}: {}", tid, state.territory_armies[tid]);
+        assert!(
+            state.territory_armies[tid] < 100_000,
+            "Suspicious army count at territory {}: {}",
+            tid,
+            state.territory_armies[tid]
+        );
     }
 }
 
@@ -664,11 +789,19 @@ fn test_mme_full_game() {
     let options = picking::generate_pick_options(&map, &mut rng);
     let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
     let picks_b = ai::generate_picks(&state, &map);
-    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks_a, &picks_b],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     for turn in 0..200 {
         if state.phase == Phase::Finished {
-            println!("MME game ended on turn {}, winner: {:?}", turn, state.winner);
+            println!(
+                "MME game ended on turn {}, winner: {:?}",
+                turn, state.winner
+            );
             return;
         }
         let p0 = ai::generate_orders(&state, 0, &map);
@@ -693,7 +826,12 @@ fn test_picking_contested() {
     let options = picking::generate_pick_options(&map, &mut rng);
 
     // Both players submit identical pick lists.
-    picking::resolve_picks(&mut state, [&options, &options], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&options, &options],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     assert_eq!(state.territory_count_for(0), 4);
     assert_eq!(state.territory_count_for(1), 4);
@@ -715,17 +853,26 @@ fn test_income_never_negative() {
     let options = picking::generate_pick_options(&map, &mut rng);
     let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
     let picks_b = ai::generate_picks(&state, &map);
-    picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&picks_a, &picks_b],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
 
     for _ in 0..20 {
-        if state.phase == Phase::Finished { break; }
+        if state.phase == Phase::Finished {
+            break;
+        }
         for player in 0..2u8 {
             if state.alive[player as usize] {
                 let income = state.income(player, &map);
                 assert!(
                     income >= map.settings.base_income,
                     "Player {} income {} is below base income {}",
-                    player, income, map.settings.base_income
+                    player,
+                    income,
+                    map.settings.base_income
                 );
             }
         }
@@ -755,10 +902,20 @@ fn test_elimination_correct() {
     let mut rng = StdRng::seed_from_u64(42);
     let orders = [
         vec![
-            Order::Deploy { territory: 0, armies: 5 },
-            Order::Attack { from: 0, to: 1, armies: 54 },
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 0,
+                to: 1,
+                armies: 54,
+            },
         ],
-        vec![Order::Deploy { territory: 1, armies: 5 }],
+        vec![Order::Deploy {
+            territory: 1,
+            armies: 5,
+        }],
     ];
 
     let result = resolve_turn(&state, orders, &map, &mut rng);
@@ -780,10 +937,17 @@ fn test_random_games_invariants() {
         let _options = picking::generate_pick_options(&map, &mut rng);
         let picks_a = ai::generate_picks(&state, &map);
         let picks_b = ai::generate_picks(&state, &map);
-        picking::resolve_picks(&mut state, [&picks_a, &picks_b], &map, picking::DEFAULT_STARTING_ARMIES);
+        picking::resolve_picks(
+            &mut state,
+            [&picks_a, &picks_b],
+            &map,
+            picking::DEFAULT_STARTING_ARMIES,
+        );
 
         for turn in 0..200 {
-            if state.phase == Phase::Finished { break; }
+            if state.phase == Phase::Finished {
+                break;
+            }
 
             let p0 = ai::generate_orders(&state, 0, &map);
             let p1 = ai::generate_orders(&state, 1, &map);
@@ -795,7 +959,10 @@ fn test_random_games_invariants() {
                 assert!(
                     state.territory_armies[tid] < 100_000,
                     "Seed {}, turn {}: territory {} has suspicious army count {}",
-                    seed, turn, tid, state.territory_armies[tid]
+                    seed,
+                    turn,
+                    tid,
+                    state.territory_armies[tid]
                 );
             }
 
@@ -805,7 +972,10 @@ fn test_random_games_invariants() {
                 assert!(
                     o == 0 || o == 1 || o == NEUTRAL,
                     "Seed {}, turn {}: territory {} has invalid owner {}",
-                    seed, turn, tid, o
+                    seed,
+                    turn,
+                    tid,
+                    o
                 );
             }
 
@@ -817,7 +987,8 @@ fn test_random_games_invariants() {
                 p0_count + p1_count + neutral_count,
                 map.territory_count(),
                 "Seed {}, turn {}: territory count mismatch",
-                seed, turn
+                seed,
+                turn
             );
 
             // Invariant 4: Income is >= base_income for alive players.
@@ -827,7 +998,11 @@ fn test_random_games_invariants() {
                     assert!(
                         income >= map.settings.base_income,
                         "Seed {}, turn {}: player {} income {} below base {}",
-                        seed, turn, player, income, map.settings.base_income
+                        seed,
+                        turn,
+                        player,
+                        income,
+                        map.settings.base_income
                     );
                 }
             }
@@ -836,7 +1011,8 @@ fn test_random_games_invariants() {
         // Invariant 5: Game should terminate within 200 turns.
         assert!(
             state.phase == Phase::Finished || state.turn <= 201,
-            "Seed {}: game did not terminate within 200 turns", seed
+            "Seed {}: game did not terminate within 200 turns",
+            seed
         );
     }
 }

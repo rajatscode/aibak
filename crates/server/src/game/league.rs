@@ -11,13 +11,48 @@ pub struct RankTier {
 
 /// All rank tiers, ordered from lowest to highest.
 pub const TIERS: &[RankTier] = &[
-    RankTier { name: "bronze", min_rp: 0, max_rp: Some(99), color: "#cd7f32" },
-    RankTier { name: "silver", min_rp: 100, max_rp: Some(249), color: "#c0c0c0" },
-    RankTier { name: "gold", min_rp: 250, max_rp: Some(499), color: "#ffd700" },
-    RankTier { name: "platinum", min_rp: 500, max_rp: Some(999), color: "#e5e4e2" },
-    RankTier { name: "diamond", min_rp: 1000, max_rp: Some(1999), color: "#b9f2ff" },
-    RankTier { name: "master", min_rp: 2000, max_rp: Some(3999), color: "#9b59b6" },
-    RankTier { name: "grandmaster", min_rp: 4000, max_rp: None, color: "#e74c3c" },
+    RankTier {
+        name: "bronze",
+        min_rp: 0,
+        max_rp: Some(99),
+        color: "#cd7f32",
+    },
+    RankTier {
+        name: "silver",
+        min_rp: 100,
+        max_rp: Some(249),
+        color: "#c0c0c0",
+    },
+    RankTier {
+        name: "gold",
+        min_rp: 250,
+        max_rp: Some(499),
+        color: "#ffd700",
+    },
+    RankTier {
+        name: "platinum",
+        min_rp: 500,
+        max_rp: Some(999),
+        color: "#e5e4e2",
+    },
+    RankTier {
+        name: "diamond",
+        min_rp: 1000,
+        max_rp: Some(1999),
+        color: "#b9f2ff",
+    },
+    RankTier {
+        name: "master",
+        min_rp: 2000,
+        max_rp: Some(3999),
+        color: "#9b59b6",
+    },
+    RankTier {
+        name: "grandmaster",
+        min_rp: 4000,
+        max_rp: None,
+        color: "#e74c3c",
+    },
 ];
 
 /// Determine the rank tier for a given rank-point total.

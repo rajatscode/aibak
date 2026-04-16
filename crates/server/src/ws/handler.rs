@@ -1,7 +1,7 @@
 use axum::{
     extract::{
-        ws::{Message, WebSocket},
         State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     response::IntoResponse,
 };
@@ -9,8 +9,8 @@ use serde::Deserialize;
 use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::auth::AuthUser;
 use crate::AppState;
+use crate::auth::AuthUser;
 
 /// Client-to-server WebSocket messages.
 #[derive(Debug, Deserialize)]
@@ -51,10 +51,10 @@ async fn handle_socket(mut socket: WebSocket, auth: AuthUser, state: AppState) {
                                 let tx_clone = tx.clone();
                                 let handle = tokio::spawn(async move {
                                     while let Ok(event) = sub_receiver.recv().await {
-                                        if let Ok(json) = serde_json::to_string(&event) {
-                                            if tx_clone.send(json).await.is_err() {
-                                                break;
-                                            }
+                                        if let Ok(json) = serde_json::to_string(&event)
+                                            && tx_clone.send(json).await.is_err()
+                                        {
+                                            break;
                                         }
                                     }
                                 });

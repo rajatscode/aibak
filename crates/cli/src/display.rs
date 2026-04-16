@@ -51,7 +51,10 @@ pub fn print_state(state: &GameState, map: &Map, player: PlayerId) {
             format!("{}/{}", my_count, total)
         };
 
-        println!("{BOLD}{}{RESET} (bonus: {} | {})", bonus.name, bonus.value, bonus_status);
+        println!(
+            "{BOLD}{}{RESET} (bonus: {} | {})",
+            bonus.name, bonus.value, bonus_status
+        );
         for &tid in &bonus.territory_ids {
             let t = &map.territories[tid];
             if !visible.contains(&tid) {
@@ -84,7 +87,10 @@ pub fn print_help() {
 /// Print picking options.
 pub fn print_pick_options(options: &[usize], map: &Map) {
     println!("\n{BOLD}═══ Territory Picking ═══{RESET}");
-    println!("Pick {} territories (enter IDs one per line):\n", map.picking.num_picks);
+    println!(
+        "Pick {} territories (enter IDs one per line):\n",
+        map.picking.num_picks
+    );
     for &tid in options {
         let t = &map.territories[tid];
         let bonus = &map.bonuses[t.bonus_id];
@@ -101,7 +107,10 @@ pub fn print_pick_options(options: &[usize], map: &Map) {
 pub fn print_turn_summary(old: &GameState, new: &GameState, _map: &Map) {
     let gained = new.territory_count_for(0) as i32 - old.territory_count_for(0) as i32;
     if gained > 0 {
-        println!("{GREEN}You gained {} territory(ies) this turn.{RESET}", gained);
+        println!(
+            "{GREEN}You gained {} territory(ies) this turn.{RESET}",
+            gained
+        );
     } else if gained < 0 {
         println!("{RED}You lost {} territory(ies) this turn.{RESET}", -gained);
     }

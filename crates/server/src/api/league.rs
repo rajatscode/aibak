@@ -1,14 +1,14 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::AppState;
 use crate::db;
 use crate::game::league;
-use crate::AppState;
 
 // ── Response types ──
 
@@ -141,7 +141,9 @@ pub async fn list_seasons(
     let seasons = db::list_seasons(pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(seasons.into_iter().map(SeasonResponse::from).collect()))
+    Ok(Json(
+        seasons.into_iter().map(SeasonResponse::from).collect(),
+    ))
 }
 
 /// GET /api/seasons/current -- get the active season.
@@ -166,7 +168,9 @@ pub async fn season_standings(
     let entries = db::get_season_leaderboard(pool, season_id, limit)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(entries.into_iter().map(StandingResponse::from).collect()))
+    Ok(Json(
+        entries.into_iter().map(StandingResponse::from).collect(),
+    ))
 }
 
 /// GET /api/seasons/:season_id/standings/:user_id -- player's season stats.
@@ -220,5 +224,10 @@ pub async fn match_history(
     let matches = db::get_match_history(pool, query.user_id, query.season_id, limit, offset)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(matches.into_iter().map(MatchHistoryResponse::from).collect()))
+    Ok(Json(
+        matches
+            .into_iter()
+            .map(MatchHistoryResponse::from)
+            .collect(),
+    ))
 }

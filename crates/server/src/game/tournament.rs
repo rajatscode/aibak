@@ -31,8 +31,10 @@ pub struct ArenaParticipant {
 }
 
 /// Scoring constants for arena tournaments.
+#[allow(dead_code)]
 pub struct Scoring;
 
+#[allow(dead_code)]
 impl Scoring {
     /// Points awarded for a win.
     pub const WIN: i32 = 2;

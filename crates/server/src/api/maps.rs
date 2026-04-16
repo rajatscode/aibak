@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
+use axum::Json;
 use axum::extract::Path;
 use axum::http::StatusCode;
-use axum::Json;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use strat_engine::map::Map;
 
@@ -39,16 +39,17 @@ pub async fn list_maps() -> Json<MapListResponse> {
     if let Ok(entries) = std::fs::read_dir(builtin_maps_dir()) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json") && path.is_file() {
-                if let Ok(map) = Map::load(&path) {
-                    maps.push(MapInfo {
-                        id: map.id.clone(),
-                        name: map.name.clone(),
-                        territories: map.territory_count(),
-                        bonuses: map.bonuses.len(),
-                        is_custom: false,
-                    });
-                }
+            if path.extension().is_some_and(|e| e == "json")
+                && path.is_file()
+                && let Ok(map) = Map::load(&path)
+            {
+                maps.push(MapInfo {
+                    id: map.id.clone(),
+                    name: map.name.clone(),
+                    territories: map.territory_count(),
+                    bonuses: map.bonuses.len(),
+                    is_custom: false,
+                });
             }
         }
     }
@@ -57,16 +58,17 @@ pub async fn list_maps() -> Json<MapListResponse> {
     if let Ok(entries) = std::fs::read_dir(custom_maps_dir()) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json") && path.is_file() {
-                if let Ok(map) = Map::load(&path) {
-                    maps.push(MapInfo {
-                        id: format!("custom/{}", map.id),
-                        name: map.name.clone(),
-                        territories: map.territory_count(),
-                        bonuses: map.bonuses.len(),
-                        is_custom: true,
-                    });
-                }
+            if path.extension().is_some_and(|e| e == "json")
+                && path.is_file()
+                && let Ok(map) = Map::load(&path)
+            {
+                maps.push(MapInfo {
+                    id: format!("custom/{}", map.id),
+                    name: map.name.clone(),
+                    territories: map.territory_count(),
+                    bonuses: map.bonuses.len(),
+                    is_custom: true,
+                });
             }
         }
     }
@@ -75,9 +77,7 @@ pub async fn list_maps() -> Json<MapListResponse> {
 }
 
 /// Save a custom map. Body is the raw map JSON.
-pub async fn save_map(
-    Json(map): Json<Map>,
-) -> Result<Json<MapInfo>, (StatusCode, String)> {
+pub async fn save_map(Json(map): Json<Map>) -> Result<Json<MapInfo>, (StatusCode, String)> {
     // Validate the map.
     if map.territories.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "Map has no territories".into()));
@@ -102,14 +102,19 @@ pub async fn save_map(
             }
         }
     }
-    let unreachable: Vec<usize> = visited.iter().enumerate()
+    let unreachable: Vec<usize> = visited
+        .iter()
+        .enumerate()
         .filter(|&(_, v)| !v)
         .map(|(i, _)| i)
         .collect();
     if !unreachable.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!("Map is not fully connected. Unreachable territories: {:?}", unreachable),
+            format!(
+                "Map is not fully connected. Unreachable territories: {:?}",
+                unreachable
+            ),
         ));
     }
 
@@ -128,16 +133,25 @@ pub async fn save_map(
     // Save to disk.
     let dir = custom_maps_dir();
     std::fs::create_dir_all(&dir).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create maps directory: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create maps directory: {}", e),
+        )
     })?;
 
     let filename = format!("{}.json", map.id.replace(['/', '\\', '.'], "_"));
     let path = dir.join(&filename);
     let json = serde_json::to_string_pretty(&map).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize map: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize map: {}", e),
+        )
     })?;
     std::fs::write(&path, json).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write map file: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to write map file: {}", e),
+        )
     })?;
 
     Ok(Json(MapInfo {
@@ -161,7 +175,10 @@ pub async fn delete_map(
     }
 
     std::fs::remove_file(&path).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete map: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to delete map: {}", e),
+        )
     })?;
 
     Ok(Json(serde_json::json!({"deleted": true})))

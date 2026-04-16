@@ -1,3 +1,5 @@
+//! Deterministic combat resolution with configurable offense/defense kill rates.
+
 use crate::map::MapSettings;
 
 /// Result of a single attack.
@@ -20,11 +22,7 @@ pub struct CombatResult {
 /// Offense kill rate: each attacking army has a 60% chance to kill a defender.
 /// Defense kill rate: each defending army has a 70% chance to kill an attacker.
 /// At 0% luck these are deterministic: kills = round(armies * rate).
-pub fn resolve_attack(
-    attackers: u32,
-    defenders: u32,
-    settings: &MapSettings,
-) -> CombatResult {
+pub fn resolve_attack(attackers: u32, defenders: u32, settings: &MapSettings) -> CombatResult {
     assert!(attackers > 0, "must attack with at least 1 army");
     // Handle edge case where territory has been emptied by prior combat in the same turn.
     if defenders == 0 {

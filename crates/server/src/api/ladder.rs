@@ -1,13 +1,13 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::db;
 use crate::AppState;
+use crate::db;
 
 #[derive(Serialize)]
 pub struct PlayerProfile {

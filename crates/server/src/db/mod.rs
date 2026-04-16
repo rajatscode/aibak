@@ -290,13 +290,11 @@ pub async fn get_orders_for_turn(
     game_id: Uuid,
     turn: i32,
 ) -> Result<Vec<OrderRow>, sqlx::Error> {
-    sqlx::query_as::<_, OrderRow>(
-        "SELECT * FROM orders WHERE game_id = $1 AND turn = $2",
-    )
-    .bind(game_id)
-    .bind(turn)
-    .fetch_all(pool)
-    .await
+    sqlx::query_as::<_, OrderRow>("SELECT * FROM orders WHERE game_id = $1 AND turn = $2")
+        .bind(game_id)
+        .bind(turn)
+        .fetch_all(pool)
+        .await
 }
 
 // ── Turn deadline queries ──
@@ -322,9 +320,7 @@ pub async fn set_turn_deadline(
     Ok(())
 }
 
-pub async fn get_expired_deadlines(
-    pool: &PgPool,
-) -> Result<Vec<(Uuid, i32)>, sqlx::Error> {
+pub async fn get_expired_deadlines(pool: &PgPool) -> Result<Vec<(Uuid, i32)>, sqlx::Error> {
     let rows: Vec<(Uuid, i32)> = sqlx::query_as(
         r#"
         SELECT td.game_id, td.turn
@@ -454,7 +450,7 @@ pub async fn get_or_create_standing(
     .await
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 pub async fn update_standing(
     pool: &PgPool,
     season_id: i32,
@@ -532,7 +528,7 @@ pub async fn get_season_leaderboard(
     .await
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 pub async fn create_match_history(
     pool: &PgPool,
     game_id: Uuid,
@@ -735,11 +731,7 @@ pub async fn get_arena_participants(
 }
 
 /// Join an arena (idempotent — does nothing if already joined).
-pub async fn join_arena(
-    pool: &PgPool,
-    arena_id: Uuid,
-    user_id: Uuid,
-) -> Result<(), sqlx::Error> {
+pub async fn join_arena(pool: &PgPool, arena_id: Uuid, user_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
         INSERT INTO arena_participants (arena_id, user_id)

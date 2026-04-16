@@ -1,6 +1,8 @@
+//! Card system: reinforcement and blockade cards earned through territory captures.
+
 use serde::{Deserialize, Serialize};
 
-use crate::state::{GameState, PlayerId, NEUTRAL};
+use crate::state::{GameState, NEUTRAL, PlayerId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Card {
@@ -78,22 +80,43 @@ mod tests {
             name: "Test".into(),
             territories: vec![
                 Territory {
-                    id: 0, name: "A".into(), bonus_id: 0, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![1], visual: None,
+                    id: 0,
+                    name: "A".into(),
+                    bonus_id: 0,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![1],
+                    visual: None,
                 },
                 Territory {
-                    id: 1, name: "B".into(), bonus_id: 0, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![0], visual: None,
+                    id: 1,
+                    name: "B".into(),
+                    bonus_id: 0,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![0],
+                    visual: None,
                 },
             ],
-            bonuses: vec![
-                Bonus { id: 0, name: "X".into(), value: 2, territory_ids: vec![0, 1], visual: None },
-            ],
-            picking: PickingConfig { num_picks: 1, method: PickingMethod::RandomWarlords },
+            bonuses: vec![Bonus {
+                id: 0,
+                name: "X".into(),
+                value: 2,
+                territory_ids: vec![0, 1],
+                visual: None,
+            }],
+            picking: PickingConfig {
+                num_picks: 1,
+                method: PickingMethod::RandomWarlords,
+            },
             settings: MapSettings {
-                luck_pct: 0, base_income: 5, wasteland_armies: 10,
-                unpicked_neutral_armies: 4, fog_of_war: true,
-                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+                luck_pct: 0,
+                base_income: 5,
+                wasteland_armies: 10,
+                unpicked_neutral_armies: 4,
+                fog_of_war: true,
+                offense_kill_rate: 0.6,
+                defense_kill_rate: 0.7,
             },
         }
     }

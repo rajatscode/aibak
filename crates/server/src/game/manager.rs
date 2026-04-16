@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use serde_json;
 use sqlx::PgPool;
 use tokio::sync::Mutex;
@@ -48,9 +48,9 @@ impl From<GameError> for (axum::http::StatusCode, String) {
         use axum::http::StatusCode;
         match &err {
             GameError::NotFound => (StatusCode::NOT_FOUND, err.to_string()),
-            GameError::WrongStatus { .. } | GameError::InvalidPicks(_) | GameError::InvalidOrders(_) => {
-                (StatusCode::BAD_REQUEST, err.to_string())
-            }
+            GameError::WrongStatus { .. }
+            | GameError::InvalidPicks(_)
+            | GameError::InvalidOrders(_) => (StatusCode::BAD_REQUEST, err.to_string()),
             GameError::NotParticipant | GameError::CannotJoinOwnGame => {
                 (StatusCode::FORBIDDEN, err.to_string())
             }
@@ -92,18 +92,14 @@ impl GameManager {
         let game_state = GameState::new(&map);
         let state_json = serde_json::to_value(&game_state)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
-        let map_json = serde_json::to_value(&map)
-            .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let map_json =
+            serde_json::to_value(&map).map_err(|e| GameError::Serialization(e.to_string()))?;
         let row = db::create_game(&self.pool, template, user_id, &state_json, &map_json).await?;
         Ok(row)
     }
 
     /// Join an open game as the second player. Generates pick options and moves to "picking".
-    pub async fn join_game(
-        &self,
-        game_id: Uuid,
-        user_id: Uuid,
-    ) -> Result<db::GameRow, GameError> {
+    pub async fn join_game(&self, game_id: Uuid, user_id: Uuid) -> Result<db::GameRow, GameError> {
         let game = db::get_game(&self.pool, game_id)
             .await?
             .ok_or(GameError::NotFound)?;
@@ -124,10 +120,8 @@ impl GameManager {
         }
 
         // Parse map from stored JSON.
-        let map: Map = serde_json::from_value(
-            game.map_json.clone().ok_or(GameError::NotFound)?,
-        )
-        .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let map: Map = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+            .map_err(|e| GameError::Serialization(e.to_string()))?;
 
         // Generate pick options.
         let pick_options = {
@@ -139,12 +133,11 @@ impl GameManager {
 
         db::set_game_player_b(&self.pool, game_id, user_id).await?;
 
-        let state: GameState = serde_json::from_value(
-            game.state_json.clone().ok_or(GameError::NotFound)?,
-        )
-        .map_err(|e| GameError::Serialization(e.to_string()))?;
-        let state_json = serde_json::to_value(&state)
-            .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let state: GameState =
+            serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let state_json =
+            serde_json::to_value(&state).map_err(|e| GameError::Serialization(e.to_string()))?;
 
         db::update_game_state(
             &self.pool,
@@ -190,10 +183,8 @@ impl GameManager {
 
         let seat = self.player_seat(&game, user_id)?;
 
-        let map: Map = serde_json::from_value(
-            game.map_json.clone().ok_or(GameError::NotFound)?,
-        )
-        .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let map: Map = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+            .map_err(|e| GameError::Serialization(e.to_string()))?;
 
         if picks.len() != map.picking.num_picks {
             return Err(GameError::InvalidPicks(format!(
@@ -204,17 +195,12 @@ impl GameManager {
         }
 
         // Store picks as orders for turn 0.
-        let picks_json = serde_json::to_value(&picks)
-            .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let picks_json =
+            serde_json::to_value(&picks).map_err(|e| GameError::Serialization(e.to_string()))?;
         db::insert_orders(&self.pool, game_id, user_id, 0, &picks_json).await?;
 
-        self.hub.broadcast(
-            game_id,
-            ws::GameEvent::OpponentCommitted {
-                game_id,
-                seat,
-            },
-        );
+        self.hub
+            .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
 
         // Check if both players have submitted picks.
         let all_orders = db::get_orders_for_turn(&self.pool, game_id, 0).await?;
@@ -223,10 +209,9 @@ impl GameManager {
         }
 
         // Both picks in: resolve.
-        let mut state: GameState = serde_json::from_value(
-            game.state_json.clone().ok_or(GameError::NotFound)?,
-        )
-        .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let mut state: GameState =
+            serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
 
         let mut player_picks: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
         for order_row in &all_orders {
@@ -243,8 +228,8 @@ impl GameManager {
             picking::DEFAULT_STARTING_ARMIES,
         );
 
-        let state_json = serde_json::to_value(&state)
-            .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let state_json =
+            serde_json::to_value(&state).map_err(|e| GameError::Serialization(e.to_string()))?;
 
         db::update_game_state(&self.pool, game_id, "active", 1, &state_json, None).await?;
 
@@ -286,17 +271,12 @@ impl GameManager {
         let current_turn = game.turn;
 
         // Store orders.
-        let orders_json = serde_json::to_value(&orders)
-            .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let orders_json =
+            serde_json::to_value(&orders).map_err(|e| GameError::Serialization(e.to_string()))?;
         db::insert_orders(&self.pool, game_id, user_id, current_turn, &orders_json).await?;
 
-        self.hub.broadcast(
-            game_id,
-            ws::GameEvent::OpponentCommitted {
-                game_id,
-                seat,
-            },
-        );
+        self.hub
+            .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
 
         // Check if both players have submitted.
         let all_orders = db::get_orders_for_turn(&self.pool, game_id, current_turn).await?;
@@ -325,14 +305,12 @@ impl GameManager {
         // Submit empty orders for missing players.
         let players = [game.player_a, game.player_b];
         let submitted_users: Vec<Uuid> = existing.iter().map(|o| o.user_id).collect();
-        for player_opt in &players {
-            if let Some(pid) = player_opt {
-                if !submitted_users.contains(pid) {
-                    let empty: Vec<Order> = Vec::new();
-                    let empty_json = serde_json::to_value(&empty)
-                        .map_err(|e| GameError::Serialization(e.to_string()))?;
-                    db::insert_orders(&self.pool, game_id, *pid, turn, &empty_json).await?;
-                }
+        for pid in players.iter().flatten() {
+            if !submitted_users.contains(pid) {
+                let empty: Vec<Order> = Vec::new();
+                let empty_json = serde_json::to_value(&empty)
+                    .map_err(|e| GameError::Serialization(e.to_string()))?;
+                db::insert_orders(&self.pool, game_id, *pid, turn, &empty_json).await?;
             }
         }
 
@@ -355,15 +333,12 @@ impl GameManager {
         game: &db::GameRow,
         all_orders: &[db::OrderRow],
     ) -> Result<(), GameError> {
-        let map: Map = serde_json::from_value(
-            game.map_json.clone().ok_or(GameError::NotFound)?,
-        )
-        .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let map: Map = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+            .map_err(|e| GameError::Serialization(e.to_string()))?;
 
-        let state: GameState = serde_json::from_value(
-            game.state_json.clone().ok_or(GameError::NotFound)?,
-        )
-        .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let state: GameState =
+            serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
 
         let mut player_orders: [Vec<Order>; 2] = [Vec::new(), Vec::new()];
         for order_row in all_orders {
@@ -402,13 +377,8 @@ impl GameManager {
                 // Update ratings.
                 self.update_ratings(game_id, winner_id, loser_id).await?;
 
-                self.hub.broadcast(
-                    game_id,
-                    ws::GameEvent::GameFinished {
-                        game_id,
-                        winner_id,
-                    },
-                );
+                self.hub
+                    .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id });
             }
         } else {
             let state_json = serde_json::to_value(&new_state)

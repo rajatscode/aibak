@@ -1,7 +1,6 @@
 /// Glicko-2 rating calculation.
 ///
 /// Reference: Mark Glickman, "Example of the Glicko-2 system" (2013).
-
 use std::f64::consts::PI;
 
 /// System constant controlling volatility change speed.

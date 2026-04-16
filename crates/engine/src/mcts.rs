@@ -13,7 +13,7 @@ use crate::ai;
 use crate::combat::resolve_attack;
 use crate::map::Map;
 use crate::orders::Order;
-use crate::state::{GameState, Phase, PlayerId, NEUTRAL};
+use crate::state::{GameState, NEUTRAL, Phase, PlayerId};
 use crate::turn::resolve_turn;
 
 /// Configuration for the MCTS search.
@@ -151,11 +151,7 @@ pub fn mcts_generate_orders(
     }
 
     // Choose action with most visits (robust child selection).
-    let best_child = root
-        .children
-        .iter()
-        .max_by_key(|c| c.visits)
-        .unwrap();
+    let best_child = root.children.iter().max_by_key(|c| c.visits).unwrap();
 
     let _best_action = &actions[best_child.action_index];
     tracing_log(iterations, &actions, &root);
@@ -278,11 +274,9 @@ pub fn evaluate_position(state: &GameState, player: PlayerId, map: &Map) -> f64 
     let border_penalty = border_exposure_penalty(state, player, map);
 
     // Weighted combination.
-    let raw = territory_score * 0.20
-        + income_score * 0.35
-        + bonus_score_norm * 0.15
-        + army_score * 0.20
-        - border_penalty * 0.10;
+    let raw =
+        territory_score * 0.20 + income_score * 0.35 + bonus_score_norm * 0.15 + army_score * 0.20
+            - border_penalty * 0.10;
 
     raw.clamp(0.01, 0.99)
 }
@@ -339,8 +333,7 @@ fn border_exposure_penalty(state: &GameState, player: PlayerId, map: &Map) -> f6
                 .adjacent
                 .iter()
                 .filter(|&&adj| {
-                    state.territory_owners[adj] != player
-                        && state.territory_owners[adj] != NEUTRAL
+                    state.territory_owners[adj] != player && state.territory_owners[adj] != NEUTRAL
                 })
                 .map(|&adj| state.territory_armies[adj])
                 .sum();
@@ -399,7 +392,15 @@ fn generate_candidate_actions(
 
     // Generate several deployment variations with different attack plans.
     for variation in 0..6 {
-        let orders = generate_variation(state, player, map, &border_territories, income, variation, rng);
+        let orders = generate_variation(
+            state,
+            player,
+            map,
+            &border_territories,
+            income,
+            variation,
+            rng,
+        );
         if !orders.is_empty() {
             let label = format!("var_{}", variation);
             // Avoid duplicates (same deploy target).
@@ -411,13 +412,14 @@ fn generate_candidate_actions(
     }
 
     // Defensive variation: deploy to the most threatened border.
-    if let Some(orders) = generate_defensive_variation(state, player, map, &border_territories, income) {
-        if !actions.iter().any(|a| a.orders == orders) {
-            actions.push(MctsAction {
-                orders,
-                label: "defensive".into(),
-            });
-        }
+    if let Some(orders) =
+        generate_defensive_variation(state, player, map, &border_territories, income)
+        && !actions.iter().any(|a| a.orders == orders)
+    {
+        actions.push(MctsAction {
+            orders,
+            label: "defensive".into(),
+        });
     }
 
     actions
@@ -440,18 +442,15 @@ fn generate_variation(
     let deploy_target = match variation {
         0 => {
             // Deploy to border territory adjacent to weakest enemy.
-            border_territories
-                .iter()
-                .copied()
-                .min_by_key(|&tid| {
-                    map.territories[tid]
-                        .adjacent
-                        .iter()
-                        .filter(|&&adj| state.territory_owners[adj] != player)
-                        .map(|&adj| state.territory_armies[adj])
-                        .min()
-                        .unwrap_or(u32::MAX)
-                })
+            border_territories.iter().copied().min_by_key(|&tid| {
+                map.territories[tid]
+                    .adjacent
+                    .iter()
+                    .filter(|&&adj| state.territory_owners[adj] != player)
+                    .map(|&adj| state.territory_armies[adj])
+                    .min()
+                    .unwrap_or(u32::MAX)
+            })
         }
         1 => {
             // Deploy to territory adjacent to highest-value uncompleted bonus.
@@ -459,30 +458,24 @@ fn generate_variation(
         }
         2 => {
             // Deploy to most threatened border.
-            border_territories
-                .iter()
-                .copied()
-                .max_by_key(|&tid| {
-                    map.territories[tid]
-                        .adjacent
-                        .iter()
-                        .filter(|&&adj| state.territory_owners[adj] == opponent)
-                        .map(|&adj| state.territory_armies[adj])
-                        .sum::<u32>()
-                })
+            border_territories.iter().copied().max_by_key(|&tid| {
+                map.territories[tid]
+                    .adjacent
+                    .iter()
+                    .filter(|&&adj| state.territory_owners[adj] == opponent)
+                    .map(|&adj| state.territory_armies[adj])
+                    .sum::<u32>()
+            })
         }
         3 => {
             // Deploy to border with most enemy neighbors (maximize attack options).
-            border_territories
-                .iter()
-                .copied()
-                .max_by_key(|&tid| {
-                    map.territories[tid]
-                        .adjacent
-                        .iter()
-                        .filter(|&&adj| state.territory_owners[adj] != player)
-                        .count()
-                })
+            border_territories.iter().copied().max_by_key(|&tid| {
+                map.territories[tid]
+                    .adjacent
+                    .iter()
+                    .filter(|&&adj| state.territory_owners[adj] != player)
+                    .count()
+            })
         }
         4 => {
             // Deploy to territory with most existing armies (stack).
@@ -527,7 +520,14 @@ fn generate_variation(
         if tid == deploy_target {
             continue;
         }
-        generate_attacks_from(tid, player, map, &mut sim_armies, &mut sim_owners, &mut orders);
+        generate_attacks_from(
+            tid,
+            player,
+            map,
+            &mut sim_armies,
+            &mut sim_owners,
+            &mut orders,
+        );
     }
 
     // Generate transfers for interior armies.
@@ -541,8 +541,8 @@ fn generate_attacks_from(
     from: usize,
     player: PlayerId,
     map: &Map,
-    sim_armies: &mut Vec<u32>,
-    sim_owners: &mut Vec<PlayerId>,
+    sim_armies: &mut [u32],
+    sim_owners: &mut [PlayerId],
     orders: &mut Vec<Order>,
 ) {
     if sim_owners[from] != player || sim_armies[from] <= 1 {
@@ -586,7 +586,7 @@ fn generate_attacks_from(
 fn generate_transfers(
     player: PlayerId,
     map: &Map,
-    sim_armies: &mut Vec<u32>,
+    sim_armies: &mut [u32],
     sim_owners: &[PlayerId],
     orders: &mut Vec<Order>,
 ) {
@@ -603,17 +603,13 @@ fn generate_transfers(
         }
 
         // Transfer toward the neighbor closest to the front.
-        if let Some(&toward) = map.territories[tid]
-            .adjacent
-            .iter()
-            .max_by_key(|&&adj| {
-                map.territories[adj]
-                    .adjacent
-                    .iter()
-                    .filter(|&&a2| sim_owners[a2] != player)
-                    .count()
-            })
-        {
+        if let Some(&toward) = map.territories[tid].adjacent.iter().max_by_key(|&&adj| {
+            map.territories[adj]
+                .adjacent
+                .iter()
+                .filter(|&&a2| sim_owners[a2] != player)
+                .count()
+        }) {
             let amount = sim_armies[tid] - 1;
             if amount > 0 {
                 orders.push(Order::Transfer {
@@ -631,10 +627,9 @@ fn generate_transfers(
 fn best_bonus_border(
     state: &GameState,
     player: PlayerId,
-    _map: &Map,
+    map: &Map,
     border_territories: &[usize],
 ) -> Option<usize> {
-    let map = _map;
     let mut best_tid = None;
     let mut best_score = -1.0f64;
 
@@ -687,17 +682,14 @@ fn generate_defensive_variation(
     let opponent = 1 - player;
 
     // Find the most threatened border territory.
-    let deploy_target = border_territories
-        .iter()
-        .copied()
-        .max_by_key(|&tid| {
-            map.territories[tid]
-                .adjacent
-                .iter()
-                .filter(|&&adj| state.territory_owners[adj] == opponent)
-                .map(|&adj| state.territory_armies[adj])
-                .sum::<u32>()
-        })?;
+    let deploy_target = border_territories.iter().copied().max_by_key(|&tid| {
+        map.territories[tid]
+            .adjacent
+            .iter()
+            .filter(|&&adj| state.territory_owners[adj] == opponent)
+            .map(|&adj| state.territory_armies[adj])
+            .sum::<u32>()
+    })?;
 
     let mut orders = vec![Order::Deploy {
         territory: deploy_target,
@@ -888,7 +880,11 @@ mod tests {
         state.territory_armies = vec![5, 5, 5, 1];
 
         let score = evaluate_position(&state, 0, &map);
-        assert!(score > 0.5, "winning position should score > 0.5, got {}", score);
+        assert!(
+            score > 0.5,
+            "winning position should score > 0.5, got {}",
+            score
+        );
     }
 
     #[test]
@@ -899,7 +895,11 @@ mod tests {
         state.territory_armies = vec![1, 5, 5, 5];
 
         let score = evaluate_position(&state, 0, &map);
-        assert!(score < 0.5, "losing position should score < 0.5, got {}", score);
+        assert!(
+            score < 0.5,
+            "losing position should score < 0.5, got {}",
+            score
+        );
     }
 
     #[test]

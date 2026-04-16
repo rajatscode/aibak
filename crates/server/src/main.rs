@@ -13,8 +13,8 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tracing::info;
@@ -27,8 +27,8 @@ use strat_engine::map::Map;
 use strat_engine::orders::Order;
 use strat_engine::picking;
 use strat_engine::puzzle;
-use strat_engine::state::{GameState, Phase, PlayerId, NEUTRAL};
-use strat_engine::turn::{resolve_turn, TurnEvent};
+use strat_engine::state::{GameState, NEUTRAL, Phase, PlayerId};
+use strat_engine::turn::{TurnEvent, resolve_turn};
 
 use crate::config::Config;
 use crate::game::achievements::{self, EarnedAchievement};
@@ -363,7 +363,12 @@ async fn submit_local_picks(
     let map = app.map.clone();
 
     let starting_armies = app.starting_armies;
-    picking::resolve_picks(&mut app.game, [&body.picks, &ai_picks], &map, starting_armies);
+    picking::resolve_picks(
+        &mut app.game,
+        [&body.picks, &ai_picks],
+        &map,
+        starting_armies,
+    );
 
     // Record starting territories for flawless victory tracking.
     app.starting_territories = (0..app.game.territory_owners.len())
@@ -394,7 +399,8 @@ async fn submit_local_orders(
     let state_snapshot = app.game.clone();
     app.state_history.push(state_snapshot);
 
-    let ai_orders = ai::generate_orders_for_strength(&app.game, AI_PLAYER, &app.map, app.ai_strength);
+    let ai_orders =
+        ai::generate_orders_for_strength(&app.game, AI_PLAYER, &app.map, app.ai_strength);
     let game_clone = app.game.clone();
     let map = app.map.clone();
 
@@ -412,8 +418,15 @@ async fn submit_local_orders(
     app.game = result.state;
 
     // Track max simultaneous bonuses owned by the player this turn.
-    let bonuses_owned_now = app.map.bonuses.iter()
-        .filter(|b| b.territory_ids.iter().all(|&tid| app.game.territory_owners[tid] == PLAYER))
+    let bonuses_owned_now = app
+        .map
+        .bonuses
+        .iter()
+        .filter(|b| {
+            b.territory_ids
+                .iter()
+                .all(|&tid| app.game.territory_owners[tid] == PLAYER)
+        })
         .count() as u32;
     if bonuses_owned_now > app.max_simultaneous_bonuses {
         app.max_simultaneous_bonuses = bonuses_owned_now;
@@ -457,13 +470,26 @@ async fn submit_local_orders(
         app.local_stats.game_results.push(won);
         app.local_stats.start_win_probs.push(start_wp);
         // Track bonus captures: bonuses fully owned by the player at game end.
-        let bonus_data: Vec<(String, bool)> = app.map.bonuses.iter().map(|b| {
-            let owns_all = b.territory_ids.iter().all(|&tid| app.game.territory_owners[tid] == PLAYER);
-            (b.name.clone(), owns_all)
-        }).collect();
+        let bonus_data: Vec<(String, bool)> = app
+            .map
+            .bonuses
+            .iter()
+            .map(|b| {
+                let owns_all = b
+                    .territory_ids
+                    .iter()
+                    .all(|&tid| app.game.territory_owners[tid] == PLAYER);
+                (b.name.clone(), owns_all)
+            })
+            .collect();
         for (name, owns_all) in bonus_data {
             if owns_all {
-                if let Some(entry) = app.local_stats.bonus_captures.iter_mut().find(|(n, _)| n == &name) {
+                if let Some(entry) = app
+                    .local_stats
+                    .bonus_captures
+                    .iter_mut()
+                    .find(|(n, _)| n == &name)
+                {
                     entry.1 += 1;
                 } else {
                     app.local_stats.bonus_captures.push((name, 1));
@@ -472,17 +498,25 @@ async fn submit_local_orders(
         }
 
         // Check achievements.
-        let kept_all = app.starting_territories.iter().all(|&tid| app.game.territory_owners[tid] == PLAYER);
+        let kept_all = app
+            .starting_territories
+            .iter()
+            .all(|&tid| app.game.territory_owners[tid] == PLAYER);
         // Count distinct maps played.
         let mut distinct_maps: Vec<String> = app.local_stats.game_maps.clone();
         distinct_maps.sort();
         distinct_maps.dedup();
         // Count available built-in maps.
         let total_maps = std::fs::read_dir("maps")
-            .map(|entries| entries.flatten().filter(|e| {
-                let p = e.path();
-                p.is_file() && p.extension().is_some_and(|ext| ext == "json")
-            }).count() as u32)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .filter(|e| {
+                        let p = e.path();
+                        p.is_file() && p.extension().is_some_and(|ext| ext == "json")
+                    })
+                    .count() as u32
+            })
             .unwrap_or(0);
 
         let ctx = achievements::GameContext {
@@ -498,11 +532,8 @@ async fn submit_local_orders(
             total_maps_available: total_maps,
         };
 
-        newly_earned_achievements = achievements::check_achievements(
-            &app.achievements,
-            &ctx,
-            app.local_stats.games_played,
-        );
+        newly_earned_achievements =
+            achievements::check_achievements(&app.achievements, &ctx, app.local_stats.games_played);
         app.achievements.extend(newly_earned_achievements.clone());
 
         if won {
@@ -691,7 +722,10 @@ async fn favicon() -> impl IntoResponse {
     // Shield icon with crossed swords — strategy game favicon
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs><path d="M16 2 L28 8 L28 16 Q28 26 16 30 Q4 26 4 16 L4 8Z" fill="url(#sg)" stroke="#e3b341" stroke-width="1.2"/><path d="M16 6 L24 10 L24 16 Q24 23 16 26 Q8 23 8 16 L8 10Z" fill="#1e40af" stroke="none"/><line x1="11" y1="22" x2="21" y2="10" stroke="#e3b341" stroke-width="1.8" stroke-linecap="round"/><line x1="21" y1="22" x2="11" y2="10" stroke="#e3b341" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="16" r="3" fill="#e3b341"/><text x="16" y="18" text-anchor="middle" font-size="5" fill="#1e3a5f" font-weight="900" font-family="sans-serif">S</text></svg>"##;
     (
-        [(header::CONTENT_TYPE, "image/svg+xml"), (header::CACHE_CONTROL, "public, max-age=86400")],
+        [
+            (header::CONTENT_TYPE, "image/svg+xml"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
         svg,
     )
 }
@@ -701,16 +735,14 @@ async fn favicon() -> impl IntoResponse {
 async fn auth_discord_redirect(
     State(state): State<AppState>,
 ) -> Result<Redirect, (StatusCode, String)> {
-    let client_id = state
-        .config
-        .discord_client_id
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
-    let redirect_uri = state
-        .config
-        .discord_redirect_uri
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
+    let client_id = state.config.discord_client_id.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Discord OAuth not configured".to_string(),
+    ))?;
+    let redirect_uri = state.config.discord_redirect_uri.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Discord OAuth not configured".to_string(),
+    ))?;
     let url = auth::discord::build_auth_url(client_id, redirect_uri);
     Ok(Redirect::temporary(&url))
 }
@@ -724,37 +756,66 @@ async fn auth_discord_callback(
     State(state): State<AppState>,
     axum::extract::Query(query): axum::extract::Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let client_id = state.config.discord_client_id.as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
-    let client_secret = state.config.discord_client_secret.as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
-    let redirect_uri = state.config.discord_redirect_uri.as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Discord OAuth not configured".to_string()))?;
+    let client_id = state.config.discord_client_id.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Discord OAuth not configured".to_string(),
+    ))?;
+    let client_secret = state.config.discord_client_secret.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Discord OAuth not configured".to_string(),
+    ))?;
+    let redirect_uri = state.config.discord_redirect_uri.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Discord OAuth not configured".to_string(),
+    ))?;
     let pool = state.require_db()?;
 
     // Exchange code for access token.
     let access_token =
         auth::discord::exchange_code(client_id, client_secret, redirect_uri, &query.code)
             .await
-            .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Discord token exchange failed: {}", e)))?;
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    format!("Discord token exchange failed: {}", e),
+                )
+            })?;
 
     // Fetch Discord user info.
     let discord_user = auth::discord::fetch_user(&access_token)
         .await
-        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Discord user fetch failed: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::BAD_GATEWAY,
+                format!("Discord user fetch failed: {}", e),
+            )
+        })?;
 
-    let discord_id = discord_user
-        .discord_id_i64()
-        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("invalid Discord ID: {}", e)))?;
+    let discord_id = discord_user.discord_id_i64().map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            format!("invalid Discord ID: {}", e),
+        )
+    })?;
 
     // Upsert user in database.
-    let user = db::upsert_user(pool, discord_id, &discord_user.username, discord_user.avatar_url().as_deref())
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let user = db::upsert_user(
+        pool,
+        discord_id,
+        &discord_user.username,
+        discord_user.avatar_url().as_deref(),
+    )
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Create JWT.
     let token = auth::session::create_token(user.id, &user.username, &state.config.jwt_secret)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT creation failed: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("JWT creation failed: {}", e),
+            )
+        })?;
 
     // Set cookie and redirect to app.
     let cookie = format!(
@@ -779,20 +840,19 @@ async fn auth_me(
     auth: auth::AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    if let Some(pool) = &state.db_pool {
-        if let Some(user) = db::get_user(pool, auth.user_id)
+    if let Some(pool) = &state.db_pool
+        && let Some(user) = db::get_user(pool, auth.user_id)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        {
-            return Ok(Json(serde_json::json!({
-                "id": user.id,
-                "username": user.username,
-                "avatar_url": user.avatar_url,
-                "rating": user.rating,
-                "games_played": user.games_played,
-                "games_won": user.games_won,
-            })));
-        }
+    {
+        return Ok(Json(serde_json::json!({
+            "id": user.id,
+            "username": user.username,
+            "avatar_url": user.avatar_url,
+            "rating": user.rating,
+            "games_played": user.games_played,
+            "games_won": user.games_won,
+        })));
     }
     Ok(Json(serde_json::json!({
         "id": auth.user_id,
@@ -1020,9 +1080,7 @@ struct PuzzleSubmission {
     day_seed: u32,
 }
 
-async fn submit_puzzle(
-    Json(body): Json<PuzzleSubmission>,
-) -> Json<serde_json::Value> {
+async fn submit_puzzle(Json(body): Json<PuzzleSubmission>) -> Json<serde_json::Value> {
     let p = puzzle::daily_puzzle(body.day_seed);
     let result = puzzle::check_solution(&p, &body.orders);
     Json(serde_json::json!({
@@ -1110,7 +1168,10 @@ async fn main() {
 
     // Set up game manager if DB is available.
     let game_manager = db_pool.as_ref().map(|pool| {
-        Arc::new(game::manager::GameManager::new(pool.clone(), ws_hub.clone()))
+        Arc::new(game::manager::GameManager::new(
+            pool.clone(),
+            ws_hub.clone(),
+        ))
     });
 
     // Start boot timer background task if DB is available.
@@ -1176,7 +1237,10 @@ async fn main() {
         .route("/games", get(games_page))
         .route("/api/games/active", get(api::spectate::active_games))
         .route("/api/games/recent", get(api::spectate::recent_games))
-        .route("/api/games/{id}/spectate", get(api::spectate::spectate_game))
+        .route(
+            "/api/games/{id}/spectate",
+            get(api::spectate::spectate_game),
+        )
         // Multiplayer app placeholder.
         .route("/app", get(app_placeholder))
         // Auth routes.
@@ -1198,8 +1262,14 @@ async fn main() {
         // League / seasons.
         .route("/api/seasons", get(api::league::list_seasons))
         .route("/api/seasons/current", get(api::league::current_season))
-        .route("/api/seasons/{id}/standings", get(api::league::season_standings))
-        .route("/api/seasons/{season_id}/standings/{user_id}", get(api::league::player_season_stats))
+        .route(
+            "/api/seasons/{id}/standings",
+            get(api::league::season_standings),
+        )
+        .route(
+            "/api/seasons/{season_id}/standings/{user_id}",
+            get(api::league::player_season_stats),
+        )
         .route("/api/match-history", get(api::league::match_history))
         // Matchmaking queue.
         .route("/api/queue/join", post(api::queue::join_queue))
@@ -1210,11 +1280,17 @@ async fn main() {
         .route("/api/arenas", get(api::tournament::list_arenas))
         .route("/api/arenas/{id}", get(api::tournament::get_arena))
         .route("/api/arenas/{id}/join", post(api::tournament::join_arena))
-        .route("/api/arenas/{id}/leaderboard", get(api::tournament::arena_leaderboard))
+        .route(
+            "/api/arenas/{id}/leaderboard",
+            get(api::tournament::arena_leaderboard),
+        )
         // Map management.
         .route("/api/maps", get(api::maps::list_maps))
         .route("/api/maps", post(api::maps::save_map))
-        .route("/api/maps/{id}", axum::routing::delete(api::maps::delete_map))
+        .route(
+            "/api/maps/{id}",
+            axum::routing::delete(api::maps::delete_map),
+        )
         // WebSocket.
         .route("/ws", get(ws::handler::ws_upgrade))
         .layer(CorsLayer::permissive())

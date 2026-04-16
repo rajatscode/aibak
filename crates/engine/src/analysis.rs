@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::ai;
 use crate::map::Map;
 use crate::orders::Order;
-use crate::state::{GameState, Phase, PlayerId, NEUTRAL};
+use crate::state::{GameState, NEUTRAL, Phase, PlayerId};
 use crate::turn::resolve_turn;
 
 // ── Public types ──
@@ -225,8 +225,7 @@ fn border_exposure(state: &GameState, player: PlayerId, map: &Map) -> f64 {
                 .adjacent
                 .iter()
                 .filter(|&&adj| {
-                    state.territory_owners[adj] != player
-                        && state.territory_owners[adj] != NEUTRAL
+                    state.territory_owners[adj] != player && state.territory_owners[adj] != NEUTRAL
                 })
                 .map(|&adj| state.territory_armies[adj])
                 .sum();
@@ -304,19 +303,11 @@ impl rand::RngCore for FixedOrderRng {
         // gen::<f64>() uses next_u64, takes top 52 bits, divides by 2^52.
         // So if next_u64 returns 0, gen::<f64>() = 0.0 < 0.5 => true.
         // If next_u64 returns u64::MAX, gen::<f64>() ~ 1.0 >= 0.5 => false.
-        if self.first_player == 0 {
-            0
-        } else {
-            u32::MAX
-        }
+        if self.first_player == 0 { 0 } else { u32::MAX }
     }
 
     fn next_u64(&mut self) -> u64 {
-        if self.first_player == 0 {
-            0
-        } else {
-            u64::MAX
-        }
+        if self.first_player == 0 { 0 } else { u64::MAX }
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
@@ -365,12 +356,7 @@ pub fn full_win_probability(state: &GameState, map: &Map, num_sims: u32) -> WinP
 
 /// Simulate a single game to completion, returning the material evaluation
 /// of the final position (not just 1.0/0.0).
-fn simulate_game_material(
-    state: &GameState,
-    map: &Map,
-    max_turns: u32,
-    rng: &mut impl Rng,
-) -> f64 {
+fn simulate_game_material(state: &GameState, map: &Map, max_turns: u32, rng: &mut impl Rng) -> f64 {
     let mut current = state.clone();
 
     for _ in 0..max_turns {
@@ -521,11 +507,7 @@ pub fn calibrate_evaluation(map: &Map, num_games: u32) -> EvalCalibration {
 
         // Determine outcome.
         let outcome = if state.phase == Phase::Finished {
-            if state.winner == Some(0) {
-                1.0
-            } else {
-                0.0
-            }
+            if state.winner == Some(0) { 1.0 } else { 0.0 }
         } else {
             material_evaluation(&state, map)
         };
@@ -604,12 +586,7 @@ pub fn estimate_win_probability(
 }
 
 /// Simulate a single game (legacy method using mcts::evaluate_position).
-fn simulate_game_legacy(
-    state: &GameState,
-    map: &Map,
-    max_turns: u32,
-    rng: &mut impl Rng,
-) -> f64 {
+fn simulate_game_legacy(state: &GameState, map: &Map, max_turns: u32, rng: &mut impl Rng) -> f64 {
     let mut current = state.clone();
 
     for _ in 0..max_turns {
@@ -968,7 +945,11 @@ mod tests {
         let map = test_map();
         let cal = calibrate_evaluation(&map, 5);
         for &v in &cal.buckets {
-            assert!(v >= 0.0 && v <= 1.0, "calibration bucket out of range: {}", v);
+            assert!(
+                v >= 0.0 && v <= 1.0,
+                "calibration bucket out of range: {}",
+                v
+            );
         }
         assert_eq!(cal.total_games, 5);
     }

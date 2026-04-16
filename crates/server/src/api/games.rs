@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -10,9 +10,9 @@ use strat_engine::fog;
 use strat_engine::map::Map;
 use strat_engine::state::GameState;
 
+use crate::AppState;
 use crate::auth::AuthUser;
 use crate::db;
-use crate::AppState;
 
 #[derive(Deserialize)]
 pub struct CreateGameRequest {
@@ -74,7 +74,7 @@ pub async fn create_game(
     let row = manager
         .create_game(auth.user_id, &body.template)
         .await
-        .map_err(|e| <_ as Into<(StatusCode, String)>>::into(e))?;
+        .map_err(<_ as Into<(StatusCode, String)>>::into)?;
 
     Ok(Json(GameResponse::from(row)))
 }
@@ -159,6 +159,6 @@ pub async fn join_game(
     let row = manager
         .join_game(game_id, auth.user_id)
         .await
-        .map_err(|e| <_ as Into<(StatusCode, String)>>::into(e))?;
+        .map_err(<_ as Into<(StatusCode, String)>>::into)?;
     Ok(Json(GameResponse::from(row)))
 }

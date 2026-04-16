@@ -3,7 +3,7 @@ pub mod handler;
 use std::collections::HashMap;
 
 use serde::Serialize;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
 
 /// Maximum number of pending messages per game channel.

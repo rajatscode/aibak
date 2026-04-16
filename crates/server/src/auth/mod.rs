@@ -3,7 +3,7 @@ pub mod session;
 
 use axum::{
     extract::{FromRequestParts, Query},
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
 };
 use serde::Deserialize;
 use uuid::Uuid;
@@ -33,40 +33,26 @@ impl FromRequestParts<AppState> for AuthUser {
         let jwt_secret = &state.config.jwt_secret;
 
         // Try Authorization header first.
-        if let Some(auth_header) = parts.headers.get("authorization") {
-            if let Ok(header_str) = auth_header.to_str() {
-                if let Some(token) = header_str.strip_prefix("Bearer ") {
-                    if let Ok(claims) = session::verify_token(token, jwt_secret) {
-                        return Ok(AuthUser {
-                            user_id: claims.sub,
-                            username: claims.username,
-                        });
-                    }
-                }
-            }
+        if let Some(auth_header) = parts.headers.get("authorization")
+            && let Ok(header_str) = auth_header.to_str()
+            && let Some(token) = header_str.strip_prefix("Bearer ")
+            && let Ok(claims) = session::verify_token(token, jwt_secret)
+        {
+            return Ok(AuthUser {
+                user_id: claims.sub,
+                username: claims.username,
+            });
         }
 
         // Try cookie.
-        if let Some(cookie_header) = parts.headers.get("cookie") {
-            if let Ok(cookie_str) = cookie_header.to_str() {
-                for cookie in cookie_str.split(';') {
-                    let cookie = cookie.trim();
-                    if let Some(token) = cookie.strip_prefix("token=") {
-                        if let Ok(claims) = session::verify_token(token, jwt_secret) {
-                            return Ok(AuthUser {
-                                user_id: claims.sub,
-                                username: claims.username,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        // Try query parameter (used for WebSocket connections).
-        if let Ok(Query(q)) = Query::<TokenQuery>::try_from_uri(&parts.uri) {
-            if let Some(token) = q.token {
-                if let Ok(claims) = session::verify_token(&token, jwt_secret) {
+        if let Some(cookie_header) = parts.headers.get("cookie")
+            && let Ok(cookie_str) = cookie_header.to_str()
+        {
+            for cookie in cookie_str.split(';') {
+                let cookie = cookie.trim();
+                if let Some(token) = cookie.strip_prefix("token=")
+                    && let Ok(claims) = session::verify_token(token, jwt_secret)
+                {
                     return Ok(AuthUser {
                         user_id: claims.sub,
                         username: claims.username,
@@ -75,7 +61,21 @@ impl FromRequestParts<AppState> for AuthUser {
             }
         }
 
-        Err((StatusCode::UNAUTHORIZED, "missing or invalid authentication"))
+        // Try query parameter (used for WebSocket connections).
+        if let Ok(Query(q)) = Query::<TokenQuery>::try_from_uri(&parts.uri)
+            && let Some(token) = q.token
+            && let Ok(claims) = session::verify_token(&token, jwt_secret)
+        {
+            return Ok(AuthUser {
+                user_id: claims.sub,
+                username: claims.username,
+            });
+        }
+
+        Err((
+            StatusCode::UNAUTHORIZED,
+            "missing or invalid authentication",
+        ))
     }
 }
 

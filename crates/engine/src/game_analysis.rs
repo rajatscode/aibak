@@ -197,11 +197,7 @@ fn find_key_moments(
             };
             moments.push(KeyMoment {
                 turn,
-                description: format!(
-                    "{} ({:+.0}% win probability)",
-                    direction,
-                    change * 100.0
-                ),
+                description: format!("{} ({:+.0}% win probability)", direction, change * 100.0),
                 win_prob_change: change,
                 moment_type: MomentType::BigSwing,
             });
@@ -242,10 +238,7 @@ fn find_key_moments(
                 };
                 moments.push(KeyMoment {
                     turn,
-                    description: format!(
-                        "Lost {} bonus (-{} income)",
-                        bonus_name, bonus_value
-                    ),
+                    description: format!("Lost {} bonus (-{} income)", bonus_name, bonus_value),
                     win_prob_change: wp_change,
                     moment_type: MomentType::BonusLost,
                 });
@@ -280,31 +273,24 @@ fn find_key_moments(
                 .collect();
 
             // If player owns all but 1 territory in this bonus...
-            if enemy_in_bonus.len() == 1
-                && player_owned.len() + 1 == bonus.territory_ids.len()
-            {
+            if enemy_in_bonus.len() == 1 && player_owned.len() + 1 == bonus.territory_ids.len() {
                 let target = enemy_in_bonus[0];
                 // Check if player had an adjacent territory with enough armies.
-                let can_attack = map.territories[target]
-                    .adjacent
-                    .iter()
-                    .any(|&adj| {
-                        state.territory_owners[adj] == 0
-                            && state.territory_armies[adj] > state.territory_armies[target]
-                    });
+                let can_attack = map.territories[target].adjacent.iter().any(|&adj| {
+                    state.territory_owners[adj] == 0
+                        && state.territory_armies[adj] > state.territory_armies[target]
+                });
 
                 if can_attack {
                     // Check if the next state still doesn't have the bonus.
                     if let Some(next_state) = state_history.get(turn_idx + 1) {
                         let still_missing = next_state.territory_owners[target] != 0;
                         if still_missing {
-                            let wp_change =
-                                if turn_idx < win_prob_history.len() && turn_idx > 0 {
-                                    win_prob_history[turn_idx]
-                                        - win_prob_history[turn_idx - 1]
-                                } else {
-                                    0.0
-                                };
+                            let wp_change = if turn_idx < win_prob_history.len() && turn_idx > 0 {
+                                win_prob_history[turn_idx] - win_prob_history[turn_idx - 1]
+                            } else {
+                                0.0
+                            };
                             moments.push(KeyMoment {
                                 turn,
                                 description: format!(
@@ -323,14 +309,12 @@ fn find_key_moments(
 
     // Sort by turn number, then by absolute win_prob_change descending.
     moments.sort_by(|a, b| {
-        a.turn
-            .cmp(&b.turn)
-            .then_with(|| {
-                b.win_prob_change
-                    .abs()
-                    .partial_cmp(&a.win_prob_change.abs())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+        a.turn.cmp(&b.turn).then_with(|| {
+            b.win_prob_change
+                .abs()
+                .partial_cmp(&a.win_prob_change.abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     });
 
     moments
@@ -376,7 +360,7 @@ fn find_biggest_attack(turn_events: &[Vec<TurnEvent>], map: &Map) -> Option<Atta
                 ..
             } = event
             {
-                let dominated = biggest.as_ref().map_or(true, |b| *armies > b.armies);
+                let dominated = biggest.as_ref().is_none_or(|b| *armies > b.armies);
                 if dominated {
                     biggest = Some(AttackSummary {
                         turn: turn_idx as u32 + 1,

@@ -1,8 +1,10 @@
-use rand::seq::SliceRandom;
+//! Territory picking phase with Random Warlords selection and ABBA snake draft.
+
 use rand::Rng;
+use rand::seq::SliceRandom;
 
 use crate::map::Map;
-use crate::state::{GameState, Phase, NEUTRAL};
+use crate::state::{GameState, NEUTRAL, Phase};
 
 /// Generate Random Warlords pick options.
 /// Selects exactly one random territory from each bonus that has value > 0.
@@ -43,12 +45,7 @@ pub const DEFAULT_STARTING_ARMIES: u32 = 5;
 /// they receive a random unclaimed pickable territory.
 ///
 /// `starting_armies` controls how many armies are placed on each picked territory.
-pub fn resolve_picks(
-    state: &mut GameState,
-    picks: [&Picks; 2],
-    map: &Map,
-    starting_armies: u32,
-) {
+pub fn resolve_picks(state: &mut GameState, picks: [&Picks; 2], map: &Map, starting_armies: u32) {
     let num_picks = map.picking.num_picks;
     let mut claimed: Vec<bool> = vec![false; map.territory_count()];
     let mut player_assigned: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
@@ -186,21 +183,44 @@ mod tests {
                     bonus_id: i / 3,
                     is_wasteland: false,
                     default_armies: 2,
-                    adjacent: if i == 0 { vec![1] }
-                        else if i == 5 { vec![4] }
-                        else { vec![i - 1, i + 1] },
+                    adjacent: if i == 0 {
+                        vec![1]
+                    } else if i == 5 {
+                        vec![4]
+                    } else {
+                        vec![i - 1, i + 1]
+                    },
                     visual: None,
                 })
                 .collect(),
             bonuses: vec![
-                Bonus { id: 0, name: "A".into(), value: 3, territory_ids: vec![0, 1, 2], visual: None },
-                Bonus { id: 1, name: "B".into(), value: 3, territory_ids: vec![3, 4, 5], visual: None },
+                Bonus {
+                    id: 0,
+                    name: "A".into(),
+                    value: 3,
+                    territory_ids: vec![0, 1, 2],
+                    visual: None,
+                },
+                Bonus {
+                    id: 1,
+                    name: "B".into(),
+                    value: 3,
+                    territory_ids: vec![3, 4, 5],
+                    visual: None,
+                },
             ],
-            picking: PickingConfig { num_picks: 2, method: PickingMethod::RandomWarlords },
+            picking: PickingConfig {
+                num_picks: 2,
+                method: PickingMethod::RandomWarlords,
+            },
             settings: MapSettings {
-                luck_pct: 0, base_income: 5, wasteland_armies: 10,
-                unpicked_neutral_armies: 4, fog_of_war: true,
-                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+                luck_pct: 0,
+                base_income: 5,
+                wasteland_armies: 10,
+                unpicked_neutral_armies: 4,
+                fog_of_war: true,
+                offense_kill_rate: 0.6,
+                defense_kill_rate: 0.7,
             },
         };
 
@@ -234,36 +254,68 @@ mod tests {
                     bonus_id: i / 4,
                     is_wasteland: false,
                     default_armies: 2,
-                    adjacent: if i == 0 { vec![1] }
-                        else if i == 7 { vec![6] }
-                        else { vec![i - 1, i + 1] },
+                    adjacent: if i == 0 {
+                        vec![1]
+                    } else if i == 7 {
+                        vec![6]
+                    } else {
+                        vec![i - 1, i + 1]
+                    },
                     visual: None,
                 })
                 .collect(),
             bonuses: vec![
-                Bonus { id: 0, name: "A".into(), value: 3, territory_ids: vec![0, 1, 2, 3], visual: None },
-                Bonus { id: 1, name: "B".into(), value: 3, territory_ids: vec![4, 5, 6, 7], visual: None },
+                Bonus {
+                    id: 0,
+                    name: "A".into(),
+                    value: 3,
+                    territory_ids: vec![0, 1, 2, 3],
+                    visual: None,
+                },
+                Bonus {
+                    id: 1,
+                    name: "B".into(),
+                    value: 3,
+                    territory_ids: vec![4, 5, 6, 7],
+                    visual: None,
+                },
             ],
-            picking: PickingConfig { num_picks: 3, method: PickingMethod::RandomWarlords },
+            picking: PickingConfig {
+                num_picks: 3,
+                method: PickingMethod::RandomWarlords,
+            },
             settings: MapSettings {
-                luck_pct: 0, base_income: 5, wasteland_armies: 10,
-                unpicked_neutral_armies: 4, fog_of_war: true,
-                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+                luck_pct: 0,
+                base_income: 5,
+                wasteland_armies: 10,
+                unpicked_neutral_armies: 4,
+                fog_of_war: true,
+                offense_kill_rate: 0.6,
+                defense_kill_rate: 0.7,
             },
         };
 
         let mut state = GameState::new(&map);
         let picks_a = vec![0, 1, 2];
         let picks_b = vec![4, 5, 6];
-        resolve_picks(&mut state, [&picks_a, &picks_b], &map, DEFAULT_STARTING_ARMIES);
+        resolve_picks(
+            &mut state,
+            [&picks_a, &picks_b],
+            &map,
+            DEFAULT_STARTING_ARMIES,
+        );
 
         // Every assigned territory should have exactly DEFAULT_STARTING_ARMIES (5).
         for tid in 0..8 {
             if state.territory_owners[tid] != NEUTRAL {
                 assert_eq!(
-                    state.territory_armies[tid], DEFAULT_STARTING_ARMIES,
+                    state.territory_armies[tid],
+                    DEFAULT_STARTING_ARMIES,
                     "Territory {} owned by {} should have {} armies, got {}",
-                    tid, state.territory_owners[tid], DEFAULT_STARTING_ARMIES, state.territory_armies[tid]
+                    tid,
+                    state.territory_owners[tid],
+                    DEFAULT_STARTING_ARMIES,
+                    state.territory_armies[tid]
                 );
             }
         }
@@ -282,21 +334,44 @@ mod tests {
                     bonus_id: i / 3,
                     is_wasteland: false,
                     default_armies: 2,
-                    adjacent: if i == 0 { vec![1] }
-                        else if i == 5 { vec![4] }
-                        else { vec![i - 1, i + 1] },
+                    adjacent: if i == 0 {
+                        vec![1]
+                    } else if i == 5 {
+                        vec![4]
+                    } else {
+                        vec![i - 1, i + 1]
+                    },
                     visual: None,
                 })
                 .collect(),
             bonuses: vec![
-                Bonus { id: 0, name: "A".into(), value: 3, territory_ids: vec![0, 1, 2], visual: None },
-                Bonus { id: 1, name: "B".into(), value: 3, territory_ids: vec![3, 4, 5], visual: None },
+                Bonus {
+                    id: 0,
+                    name: "A".into(),
+                    value: 3,
+                    territory_ids: vec![0, 1, 2],
+                    visual: None,
+                },
+                Bonus {
+                    id: 1,
+                    name: "B".into(),
+                    value: 3,
+                    territory_ids: vec![3, 4, 5],
+                    visual: None,
+                },
             ],
-            picking: PickingConfig { num_picks: 2, method: PickingMethod::RandomWarlords },
+            picking: PickingConfig {
+                num_picks: 2,
+                method: PickingMethod::RandomWarlords,
+            },
             settings: MapSettings {
-                luck_pct: 0, base_income: 5, wasteland_armies: 10,
-                unpicked_neutral_armies: 4, fog_of_war: true,
-                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+                luck_pct: 0,
+                base_income: 5,
+                wasteland_armies: 10,
+                unpicked_neutral_armies: 4,
+                fog_of_war: true,
+                offense_kill_rate: 0.6,
+                defense_kill_rate: 0.7,
             },
         };
 
@@ -304,7 +379,12 @@ mod tests {
         // Player A submits only 1 pick, player B submits 0 picks.
         let picks_a: Vec<usize> = vec![0];
         let picks_b: Vec<usize> = vec![];
-        resolve_picks(&mut state, [&picks_a, &picks_b], &map, DEFAULT_STARTING_ARMIES);
+        resolve_picks(
+            &mut state,
+            [&picks_a, &picks_b],
+            &map,
+            DEFAULT_STARTING_ARMIES,
+        );
 
         // Both players should still get their quota via random fallback.
         assert_eq!(state.territory_count_for(0), 2);

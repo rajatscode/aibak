@@ -1,13 +1,9 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 
+use crate::AppState;
 use crate::auth::AuthUser;
 use crate::db;
-use crate::AppState;
 
 #[derive(Deserialize)]
 pub struct JoinQueueRequest {
@@ -65,10 +61,7 @@ pub async fn join_queue(
 }
 
 /// POST /api/queue/leave -- Leave the matchmaking queue.
-pub async fn leave_queue(
-    auth: AuthUser,
-    State(state): State<AppState>,
-) -> Json<QueueResponse> {
+pub async fn leave_queue(auth: AuthUser, State(state): State<AppState>) -> Json<QueueResponse> {
     let removed = state.matchmaking.dequeue(auth.user_id).await;
 
     Json(QueueResponse {

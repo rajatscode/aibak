@@ -1,4 +1,4 @@
-# Aibak (strat.club)
+# strat.club
 
 Competitive territory strategy game. 1v1, Glicko-rated ladder with seasons, Discord auth.
 

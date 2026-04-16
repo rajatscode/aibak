@@ -1,15 +1,15 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use strat_engine::orders::Order;
 
-use crate::auth::AuthUser;
 use crate::AppState;
+use crate::auth::AuthUser;
 
 #[derive(Deserialize)]
 pub struct SubmitPicksRequest {
@@ -38,7 +38,7 @@ pub async fn submit_picks(
     manager
         .submit_picks(game_id, auth.user_id, body.picks)
         .await
-        .map_err(|e| <_ as Into<(StatusCode, String)>>::into(e))?;
+        .map_err(<_ as Into<(StatusCode, String)>>::into)?;
 
     Ok(Json(ActionResponse {
         success: true,
@@ -57,7 +57,7 @@ pub async fn submit_orders(
     manager
         .submit_orders(game_id, auth.user_id, body.orders)
         .await
-        .map_err(|e| <_ as Into<(StatusCode, String)>>::into(e))?;
+        .map_err(<_ as Into<(StatusCode, String)>>::into)?;
 
     Ok(Json(ActionResponse {
         success: true,

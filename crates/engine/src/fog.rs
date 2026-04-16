@@ -1,7 +1,9 @@
+//! Fog of war: visibility computation and state filtering per player.
+
 use std::collections::HashSet;
 
 use crate::map::Map;
-use crate::state::{GameState, PlayerId, NEUTRAL};
+use crate::state::{GameState, NEUTRAL, PlayerId};
 
 /// Compute the set of territory IDs visible to a player.
 /// A territory is visible if:
@@ -60,31 +62,70 @@ mod tests {
             name: "Test".into(),
             territories: vec![
                 Territory {
-                    id: 0, name: "A".into(), bonus_id: 0, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![1], visual: None,
+                    id: 0,
+                    name: "A".into(),
+                    bonus_id: 0,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![1],
+                    visual: None,
                 },
                 Territory {
-                    id: 1, name: "B".into(), bonus_id: 0, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![0, 2], visual: None,
+                    id: 1,
+                    name: "B".into(),
+                    bonus_id: 0,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![0, 2],
+                    visual: None,
                 },
                 Territory {
-                    id: 2, name: "C".into(), bonus_id: 1, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![1, 3], visual: None,
+                    id: 2,
+                    name: "C".into(),
+                    bonus_id: 1,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![1, 3],
+                    visual: None,
                 },
                 Territory {
-                    id: 3, name: "D".into(), bonus_id: 1, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![2], visual: None,
+                    id: 3,
+                    name: "D".into(),
+                    bonus_id: 1,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![2],
+                    visual: None,
                 },
             ],
             bonuses: vec![
-                Bonus { id: 0, name: "Left".into(), value: 2, territory_ids: vec![0, 1], visual: None },
-                Bonus { id: 1, name: "Right".into(), value: 2, territory_ids: vec![2, 3], visual: None },
+                Bonus {
+                    id: 0,
+                    name: "Left".into(),
+                    value: 2,
+                    territory_ids: vec![0, 1],
+                    visual: None,
+                },
+                Bonus {
+                    id: 1,
+                    name: "Right".into(),
+                    value: 2,
+                    territory_ids: vec![2, 3],
+                    visual: None,
+                },
             ],
-            picking: PickingConfig { num_picks: 1, method: PickingMethod::RandomWarlords },
+            picking: PickingConfig {
+                num_picks: 1,
+                method: PickingMethod::RandomWarlords,
+            },
             settings: MapSettings {
-                luck_pct: 0, base_income: 5, wasteland_armies: 10,
-                unpicked_neutral_armies: 4, fog_of_war: true,
-                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+                luck_pct: 0,
+                base_income: 5,
+                wasteland_armies: 10,
+                unpicked_neutral_armies: 4,
+                fog_of_war: true,
+                offense_kill_rate: 0.6,
+                defense_kill_rate: 0.7,
             },
         }
     }
@@ -169,8 +210,10 @@ mod tests {
     fn test_visibility_on_small_earth() {
         use std::path::PathBuf;
         let maps_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent().unwrap()
-            .parent().unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
             .join("maps");
         let map = Map::load(&maps_dir.join("small_earth.json")).expect("load map");
 
@@ -186,7 +229,12 @@ mod tests {
         // Should see all neighbors of both.
         for &owned in &[0, 1] {
             for &adj in &map.territories[owned].adjacent {
-                assert!(vis.contains(&adj), "should see neighbor {} of territory {}", adj, owned);
+                assert!(
+                    vis.contains(&adj),
+                    "should see neighbor {} of territory {}",
+                    adj,
+                    owned
+                );
             }
         }
         // Should NOT see distant territories like Argentina (12).

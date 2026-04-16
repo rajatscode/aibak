@@ -1,3 +1,5 @@
+//! Core game state: territory ownership, armies, turn tracking, and elimination logic.
+
 use serde::{Deserialize, Serialize};
 
 use crate::cards::Card;

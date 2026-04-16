@@ -1,3 +1,5 @@
+//! Player order types (deploy, attack, transfer, play card) and validation.
+
 use serde::{Deserialize, Serialize};
 
 use crate::cards::Card;
@@ -6,24 +8,10 @@ use crate::state::{GameState, PlayerId};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Order {
-    Deploy {
-        territory: usize,
-        armies: u32,
-    },
-    Attack {
-        from: usize,
-        to: usize,
-        armies: u32,
-    },
-    Transfer {
-        from: usize,
-        to: usize,
-        armies: u32,
-    },
-    PlayCard {
-        card: Card,
-        target: usize,
-    },
+    Deploy { territory: usize, armies: u32 },
+    Attack { from: usize, to: usize, armies: u32 },
+    Transfer { from: usize, to: usize, armies: u32 },
+    PlayCard { card: Card, target: usize },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -142,31 +130,70 @@ mod tests {
             name: "Test".into(),
             territories: vec![
                 Territory {
-                    id: 0, name: "A".into(), bonus_id: 0, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![1], visual: None,
+                    id: 0,
+                    name: "A".into(),
+                    bonus_id: 0,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![1],
+                    visual: None,
                 },
                 Territory {
-                    id: 1, name: "B".into(), bonus_id: 0, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![0, 2], visual: None,
+                    id: 1,
+                    name: "B".into(),
+                    bonus_id: 0,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![0, 2],
+                    visual: None,
                 },
                 Territory {
-                    id: 2, name: "C".into(), bonus_id: 1, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![1, 3], visual: None,
+                    id: 2,
+                    name: "C".into(),
+                    bonus_id: 1,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![1, 3],
+                    visual: None,
                 },
                 Territory {
-                    id: 3, name: "D".into(), bonus_id: 1, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![2], visual: None,
+                    id: 3,
+                    name: "D".into(),
+                    bonus_id: 1,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![2],
+                    visual: None,
                 },
             ],
             bonuses: vec![
-                Bonus { id: 0, name: "Left".into(), value: 2, territory_ids: vec![0, 1], visual: None },
-                Bonus { id: 1, name: "Right".into(), value: 2, territory_ids: vec![2, 3], visual: None },
+                Bonus {
+                    id: 0,
+                    name: "Left".into(),
+                    value: 2,
+                    territory_ids: vec![0, 1],
+                    visual: None,
+                },
+                Bonus {
+                    id: 1,
+                    name: "Right".into(),
+                    value: 2,
+                    territory_ids: vec![2, 3],
+                    visual: None,
+                },
             ],
-            picking: PickingConfig { num_picks: 1, method: PickingMethod::RandomWarlords },
+            picking: PickingConfig {
+                num_picks: 1,
+                method: PickingMethod::RandomWarlords,
+            },
             settings: MapSettings {
-                luck_pct: 0, base_income: 5, wasteland_armies: 10,
-                unpicked_neutral_armies: 4, fog_of_war: true,
-                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+                luck_pct: 0,
+                base_income: 5,
+                wasteland_armies: 10,
+                unpicked_neutral_armies: 4,
+                fog_of_war: true,
+                offense_kill_rate: 0.6,
+                defense_kill_rate: 0.7,
             },
         }
     }
@@ -185,7 +212,10 @@ mod tests {
         let map = test_map();
         let state = setup_state(&map);
         let income = state.income(0, &map); // base 5 + bonus 2 = 7
-        let orders = vec![Order::Deploy { territory: 0, armies: income + 1 }];
+        let orders = vec![Order::Deploy {
+            territory: 0,
+            armies: income + 1,
+        }];
         let result = validate_orders(&orders, 0, &state, &map);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), OrderError::OverDeploy { .. }));
@@ -195,7 +225,10 @@ mod tests {
     fn test_validate_catches_out_of_bounds() {
         let map = test_map();
         let state = setup_state(&map);
-        let orders = vec![Order::Deploy { territory: 999, armies: 1 }];
+        let orders = vec![Order::Deploy {
+            territory: 999,
+            armies: 1,
+        }];
         let result = validate_orders(&orders, 0, &state, &map);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), OrderError::OutOfBounds(999)));
@@ -207,8 +240,15 @@ mod tests {
         let state = setup_state(&map);
         let income = state.income(0, &map);
         let orders = vec![
-            Order::Deploy { territory: 0, armies: income },
-            Order::Attack { from: 1, to: 2, armies: 4 },
+            Order::Deploy {
+                territory: 0,
+                armies: income,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 4,
+            },
         ];
         let result = validate_orders(&orders, 0, &state, &map);
         assert!(result.is_ok());
@@ -219,12 +259,22 @@ mod tests {
         let map = test_map();
         let state = setup_state(&map);
         let orders = vec![
-            Order::Deploy { territory: 0, armies: 5 },
-            Order::Attack { from: 0, to: 1, armies: 3 }, // 0 and 1 both owned by player 0
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 0,
+                to: 1,
+                armies: 3,
+            }, // 0 and 1 both owned by player 0
         ];
         let result = validate_orders(&orders, 0, &state, &map);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), OrderError::AttackOwnTerritory(1)));
+        assert!(matches!(
+            result.unwrap_err(),
+            OrderError::AttackOwnTerritory(1)
+        ));
     }
 
     #[test]
@@ -232,11 +282,21 @@ mod tests {
         let map = test_map();
         let state = setup_state(&map);
         let orders = vec![
-            Order::Deploy { territory: 1, armies: 5 },
-            Order::Transfer { from: 1, to: 2, armies: 3 }, // 2 is owned by player 1
+            Order::Deploy {
+                territory: 1,
+                armies: 5,
+            },
+            Order::Transfer {
+                from: 1,
+                to: 2,
+                armies: 3,
+            }, // 2 is owned by player 1
         ];
         let result = validate_orders(&orders, 0, &state, &map);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), OrderError::TransferToEnemy(2)));
+        assert!(matches!(
+            result.unwrap_err(),
+            OrderError::TransferToEnemy(2)
+        ));
     }
 }

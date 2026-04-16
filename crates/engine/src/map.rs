@@ -1,3 +1,5 @@
+//! Map data model: territories, bonuses, adjacency, and game settings.
+
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

@@ -1,16 +1,16 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::AppState;
 use crate::auth::AuthUser;
 use crate::db;
 use crate::game::tournament::{Arena, ArenaParticipant, ArenaStatus};
-use crate::AppState;
 
 // ── Request / response types ──
 

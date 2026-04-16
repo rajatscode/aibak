@@ -1,3 +1,5 @@
+//! Daily puzzle generation and solution checking (capture-the-bonus, defend-or-die, multi-front).
+
 use serde::{Deserialize, Serialize};
 
 use crate::combat::resolve_attack;
@@ -61,12 +63,17 @@ struct SimpleRng {
 impl SimpleRng {
     fn new(seed: u32) -> Self {
         // Mix the seed to avoid correlated sequences for adjacent day numbers.
-        let s = (seed as u64).wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let s = (seed as u64)
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         Self { state: s }
     }
 
     fn next_u32(&mut self) -> u32 {
-        self.state = self.state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.state = self
+            .state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         ((self.state >> 33) ^ (self.state >> 17)) as u32
     }
 
@@ -122,6 +129,7 @@ fn default_settings() -> MapSettings {
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 /// Generate a "Capture the Bonus" puzzle.
 ///
 /// Layout: Player owns some territories of a bonus but not all.
@@ -140,9 +148,18 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
     let names: Vec<String> = (0..total)
         .map(|i| {
             let region_names = [
-                "Northwall", "Ironvale", "Dustmere", "Thornkeep", "Greymoor",
-                "Ashford", "Stonehelm", "Blackrun", "Frostpeak", "Willowgate",
-                "Ravencrest", "Dawnhollow",
+                "Northwall",
+                "Ironvale",
+                "Dustmere",
+                "Thornkeep",
+                "Greymoor",
+                "Ashford",
+                "Stonehelm",
+                "Blackrun",
+                "Frostpeak",
+                "Willowgate",
+                "Ravencrest",
+                "Dawnhollow",
             ];
             let idx = ((id as usize).wrapping_mul(7).wrapping_add(i)) % region_names.len();
             region_names[idx].to_string()
@@ -307,10 +324,7 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
 
     let description = format!(
         "Capture {} to complete the {} bonus (+{} income). You have {} armies to deploy.",
-        map.territories[target_territory].name,
-        map.bonuses[0].name,
-        bonus_value,
-        income
+        map.territories[target_territory].name, map.bonuses[0].name, bonus_value, income
     );
 
     let hint = format!(
@@ -337,6 +351,7 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
 }
 
 /// Generate a "Defend or Die" puzzle.
+#[allow(clippy::needless_range_loop)]
 ///
 /// The opponent has a large army threatening the player's key territory.
 /// Player must deploy optimally to survive the attack.
@@ -350,9 +365,18 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
     let names: Vec<String> = (0..total)
         .map(|i| {
             let region_names = [
-                "Ember Keep", "Shadowfen", "Crystalridge", "Duskwood", "Galehaven",
-                "Ironmarch", "Ravenspire", "Sunhollow", "Mistfall", "Boneyard",
-                "Goldcrest", "Dragonmaw",
+                "Ember Keep",
+                "Shadowfen",
+                "Crystalridge",
+                "Duskwood",
+                "Galehaven",
+                "Ironmarch",
+                "Ravenspire",
+                "Sunhollow",
+                "Mistfall",
+                "Boneyard",
+                "Goldcrest",
+                "Dragonmaw",
             ];
             let idx = ((id as usize).wrapping_mul(11).wrapping_add(i * 3)) % region_names.len();
             region_names[idx].to_string()
@@ -362,7 +386,6 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
     // Build a map: player's 3 territories on left, opponent's territories on right.
     // The key territory (id=2) is the border territory that the opponent will attack.
     let player_count = 3;
-    let _enemy_count = total - player_count;
 
     let mut territories = Vec::new();
     for i in 0..total {
@@ -533,6 +556,7 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
     }
 }
 
+#[allow(clippy::needless_range_loop, clippy::vec_init_then_push)]
 /// Generate a "Multi-Front" puzzle.
 ///
 /// Player must split armies across 2 attacks to capture 2 key territories.
@@ -546,9 +570,18 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
     let names: Vec<String> = (0..total)
         .map(|i| {
             let region_names = [
-                "Fort Valor", "The Crossing", "Eagle's Perch", "Wolf Den",
-                "Dragon Gate", "Iron Bridge", "Storm Pass", "Hawk Ridge",
-                "Bear Hollow", "Lion's Mane", "Viper Pit", "Falcon's Rest",
+                "Fort Valor",
+                "The Crossing",
+                "Eagle's Perch",
+                "Wolf Den",
+                "Dragon Gate",
+                "Iron Bridge",
+                "Storm Pass",
+                "Hawk Ridge",
+                "Bear Hollow",
+                "Lion's Mane",
+                "Viper Pit",
+                "Falcon's Rest",
             ];
             let idx = ((id as usize).wrapping_mul(13).wrapping_add(i * 5)) % region_names.len();
             region_names[idx].to_string()
@@ -563,28 +596,53 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
 
     // Territory 0: center hub.
     territories.push(Territory {
-        id: 0, name: names[0].clone(), bonus_id: 0, is_wasteland: false,
-        default_armies: 2, adjacent: vec![1, 2], visual: None,
+        id: 0,
+        name: names[0].clone(),
+        bonus_id: 0,
+        is_wasteland: false,
+        default_armies: 2,
+        adjacent: vec![1, 2],
+        visual: None,
     });
     // Territory 1: left arm.
     territories.push(Territory {
-        id: 1, name: names[1].clone(), bonus_id: 0, is_wasteland: false,
-        default_armies: 2, adjacent: vec![0, 3], visual: None,
+        id: 1,
+        name: names[1].clone(),
+        bonus_id: 0,
+        is_wasteland: false,
+        default_armies: 2,
+        adjacent: vec![0, 3],
+        visual: None,
     });
     // Territory 2: right arm.
     territories.push(Territory {
-        id: 2, name: names[2].clone(), bonus_id: 0, is_wasteland: false,
-        default_armies: 2, adjacent: vec![0, 4], visual: None,
+        id: 2,
+        name: names[2].clone(),
+        bonus_id: 0,
+        is_wasteland: false,
+        default_armies: 2,
+        adjacent: vec![0, 4],
+        visual: None,
     });
     // Territory 3: left target (enemy).
     territories.push(Territory {
-        id: 3, name: names[3].clone(), bonus_id: 1, is_wasteland: false,
-        default_armies: 2, adjacent: vec![1, 5], visual: None,
+        id: 3,
+        name: names[3].clone(),
+        bonus_id: 1,
+        is_wasteland: false,
+        default_armies: 2,
+        adjacent: vec![1, 5],
+        visual: None,
     });
     // Territory 4: right target (enemy).
     territories.push(Territory {
-        id: 4, name: names[4].clone(), bonus_id: 2, is_wasteland: false,
-        default_armies: 2, adjacent: vec![2, 5], visual: None,
+        id: 4,
+        name: names[4].clone(),
+        bonus_id: 2,
+        is_wasteland: false,
+        default_armies: 2,
+        adjacent: vec![2, 5],
+        visual: None,
     });
 
     // Extra enemy territories.
@@ -601,8 +659,13 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
             adj.push(i + 1);
         }
         territories.push(Territory {
-            id: i, name: names[i].clone(), bonus_id: 2, is_wasteland: false,
-            default_armies: 2, adjacent: adj, visual: None,
+            id: i,
+            name: names[i].clone(),
+            bonus_id: 2,
+            is_wasteland: false,
+            default_armies: 2,
+            adjacent: adj,
+            visual: None,
         });
     }
 
@@ -702,17 +765,9 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
     // Deploy armies to make both attacks work.
     // Left arm (territory 1) needs: left_min + 1 - current_armies
     let left_existing = state.territory_armies[1];
-    let left_need = if left_min + 1 > left_existing {
-        left_min + 1 - left_existing
-    } else {
-        0
-    };
+    let left_need = (left_min + 1).saturating_sub(left_existing);
     let right_existing = state.territory_armies[2];
-    let right_need = if right_min + 1 > right_existing {
-        right_min + 1 - right_existing
-    } else {
-        0
-    };
+    let right_need = (right_min + 1).saturating_sub(right_existing);
 
     // If we can't afford both, reduce defenders.
     let total_needed = left_need + right_need;
@@ -730,11 +785,7 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
 
     let left_existing = state.territory_armies[1];
     let right_existing = state.territory_armies[2];
-    let left_deploy = if left_min + 1 > left_existing {
-        left_min + 1 - left_existing
-    } else {
-        0
-    };
+    let left_deploy = (left_min + 1).saturating_sub(left_existing);
     let right_deploy = income.saturating_sub(left_deploy);
 
     let mut optimal_orders = Vec::new();
@@ -788,9 +839,7 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
     let hint = format!(
         "Split your {} deploy armies between {} and {}. \
          Each attack needs enough force to overwhelm the defenders.",
-        income,
-        map.territories[1].name,
-        map.territories[2].name,
+        income, map.territories[1].name, map.territories[2].name,
     );
 
     Puzzle {
@@ -821,7 +870,7 @@ fn min_attackers_to_capture(defenders: u32, settings: &MapSettings) -> u32 {
     100
 }
 
-/// Check whether a player's submitted orders achieve the puzzle objective.
+/// Check whether a player's submitted orders achieve the puzzle objective and match the optimal solution.
 pub fn check_solution(puzzle: &Puzzle, submitted_orders: &[Order]) -> PuzzleResult {
     // Simulate the submitted orders to see the outcome.
     let settings = &puzzle.map.settings;
@@ -850,20 +899,18 @@ pub fn check_solution(puzzle: &Puzzle, submitted_orders: &[Order]) -> PuzzleResu
 
     // Apply deployments.
     for order in submitted_orders {
-        if let Order::Deploy { territory, armies } = order {
-            if *territory < sim_state.territory_armies.len()
-                && sim_state.territory_owners[*territory] == puzzle.player
-            {
-                sim_state.territory_armies[*territory] += armies;
-            }
+        if let Order::Deploy { territory, armies } = order
+            && *territory < sim_state.territory_armies.len()
+            && sim_state.territory_owners[*territory] == puzzle.player
+        {
+            sim_state.territory_armies[*territory] += armies;
         }
     }
 
     // Apply attacks in order.
     for order in submitted_orders {
         if let Order::Attack { from, to, armies } = order {
-            if *from >= sim_state.territory_armies.len()
-                || *to >= sim_state.territory_armies.len()
+            if *from >= sim_state.territory_armies.len() || *to >= sim_state.territory_armies.len()
             {
                 continue;
             }
@@ -892,8 +939,7 @@ pub fn check_solution(puzzle: &Puzzle, submitted_orders: &[Order]) -> PuzzleResu
     // Apply transfers.
     for order in submitted_orders {
         if let Order::Transfer { from, to, armies } = order {
-            if *from >= sim_state.territory_armies.len()
-                || *to >= sim_state.territory_armies.len()
+            if *from >= sim_state.territory_armies.len() || *to >= sim_state.territory_armies.len()
             {
                 continue;
             }
@@ -957,7 +1003,8 @@ pub fn check_solution(puzzle: &Puzzle, submitted_orders: &[Order]) -> PuzzleResu
     } else if objective_met {
         PuzzleResult {
             correct: true,
-            message: "You completed the objective! Though there may be a more efficient solution.".into(),
+            message: "You completed the objective! Though there may be a more efficient solution."
+                .into(),
             optimal_orders: puzzle.optimal_orders.clone(),
             objective_met: true,
         }

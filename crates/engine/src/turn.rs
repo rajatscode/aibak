@@ -1,7 +1,9 @@
+//! Turn resolution: deploys, card plays, interleaved attacks/transfers, and elimination checks.
+
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::cards::{apply_blockade, award_card_pieces, Card};
+use crate::cards::{Card, apply_blockade, award_card_pieces};
 use crate::combat::resolve_attack;
 use crate::map::Map;
 use crate::orders::Order;
@@ -180,8 +182,7 @@ pub fn resolve_turn(
                             });
                         } else {
                             let defenders = new_state.territory_armies[*to];
-                            let result =
-                                resolve_attack(actual_armies, defenders, &map.settings);
+                            let result = resolve_attack(actual_armies, defenders, &map.settings);
 
                             new_state.territory_armies[*from] -= actual_armies;
 
@@ -259,7 +260,11 @@ pub fn resolve_turn(
 
     // Award card pieces.
     for player in 0..2u8 {
-        award_card_pieces(&mut new_state, player, territories_captured[player as usize]);
+        award_card_pieces(
+            &mut new_state,
+            player,
+            territories_captured[player as usize],
+        );
     }
 
     // Check for elimination.
@@ -291,31 +296,70 @@ mod tests {
             name: "Test".into(),
             territories: vec![
                 Territory {
-                    id: 0, name: "A".into(), bonus_id: 0, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![1], visual: None,
+                    id: 0,
+                    name: "A".into(),
+                    bonus_id: 0,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![1],
+                    visual: None,
                 },
                 Territory {
-                    id: 1, name: "B".into(), bonus_id: 0, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![0, 2], visual: None,
+                    id: 1,
+                    name: "B".into(),
+                    bonus_id: 0,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![0, 2],
+                    visual: None,
                 },
                 Territory {
-                    id: 2, name: "C".into(), bonus_id: 1, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![1, 3], visual: None,
+                    id: 2,
+                    name: "C".into(),
+                    bonus_id: 1,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![1, 3],
+                    visual: None,
                 },
                 Territory {
-                    id: 3, name: "D".into(), bonus_id: 1, is_wasteland: false,
-                    default_armies: 2, adjacent: vec![2], visual: None,
+                    id: 3,
+                    name: "D".into(),
+                    bonus_id: 1,
+                    is_wasteland: false,
+                    default_armies: 2,
+                    adjacent: vec![2],
+                    visual: None,
                 },
             ],
             bonuses: vec![
-                Bonus { id: 0, name: "Left".into(), value: 2, territory_ids: vec![0, 1], visual: None },
-                Bonus { id: 1, name: "Right".into(), value: 2, territory_ids: vec![2, 3], visual: None },
+                Bonus {
+                    id: 0,
+                    name: "Left".into(),
+                    value: 2,
+                    territory_ids: vec![0, 1],
+                    visual: None,
+                },
+                Bonus {
+                    id: 1,
+                    name: "Right".into(),
+                    value: 2,
+                    territory_ids: vec![2, 3],
+                    visual: None,
+                },
             ],
-            picking: PickingConfig { num_picks: 1, method: PickingMethod::RandomWarlords },
+            picking: PickingConfig {
+                num_picks: 1,
+                method: PickingMethod::RandomWarlords,
+            },
             settings: MapSettings {
-                luck_pct: 0, base_income: 5, wasteland_armies: 10,
-                unpicked_neutral_armies: 4, fog_of_war: true,
-                offense_kill_rate: 0.6, defense_kill_rate: 0.7,
+                luck_pct: 0,
+                base_income: 5,
+                wasteland_armies: 10,
+                unpicked_neutral_armies: 4,
+                fog_of_war: true,
+                offense_kill_rate: 0.6,
+                defense_kill_rate: 0.7,
             },
         }
     }
@@ -331,12 +375,20 @@ mod tests {
 
         let mut rng = StdRng::seed_from_u64(42);
         let p0_orders = vec![
-            Order::Deploy { territory: 1, armies: 5 },
-            Order::Attack { from: 1, to: 2, armies: 5 },
+            Order::Deploy {
+                territory: 1,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 5,
+            },
         ];
-        let p1_orders = vec![
-            Order::Deploy { territory: 2, armies: 5 },
-        ];
+        let p1_orders = vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }];
 
         let result = resolve_turn(&state, [p0_orders, p1_orders], &map, &mut rng);
         let new_state = &result.state;
@@ -357,12 +409,20 @@ mod tests {
 
         let mut rng = StdRng::seed_from_u64(42);
         let p0_orders = vec![
-            Order::Deploy { territory: 0, armies: 5 },
-            Order::Transfer { from: 0, to: 1, armies: 9 },
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Transfer {
+                from: 0,
+                to: 1,
+                armies: 9,
+            },
         ];
-        let p1_orders = vec![
-            Order::Deploy { territory: 2, armies: 5 },
-        ];
+        let p1_orders = vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }];
 
         let result = resolve_turn(&state, [p0_orders, p1_orders], &map, &mut rng);
         let new_state = &result.state;

@@ -135,7 +135,11 @@ impl MatchmakingQueue {
         let mut matched_indices = Vec::new();
 
         // Sort by rating for efficient nearest-neighbor matching.
-        entries.sort_by(|a, b| a.rating.partial_cmp(&b.rating).unwrap_or(std::cmp::Ordering::Equal));
+        entries.sort_by(|a, b| {
+            a.rating
+                .partial_cmp(&b.rating)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         let len = entries.len();
         let mut used = vec![false; len];

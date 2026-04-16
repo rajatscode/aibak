@@ -1,8 +1,8 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{Json, extract::State, http::StatusCode};
 
+use crate::AppState;
 use crate::api::games::GameResponse;
 use crate::db;
-use crate::AppState;
 
 /// GET /api/lobby -- open games waiting for an opponent.
 pub async fn open_games(

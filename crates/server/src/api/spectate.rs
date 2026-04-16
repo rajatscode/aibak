@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -10,9 +10,9 @@ use strat_engine::analysis;
 use strat_engine::map::Map;
 use strat_engine::state::GameState;
 
+use crate::AppState;
 use crate::auth::MaybeAuthUser;
 use crate::db;
-use crate::AppState;
 
 // ── Response types ──
 

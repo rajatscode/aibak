@@ -1,3 +1,5 @@
+//! strat.club game engine: pure game logic with no IO dependencies.
+
 pub mod ai;
 pub mod analysis;
 pub mod cards;

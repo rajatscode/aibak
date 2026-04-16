@@ -4,8 +4,8 @@ mod display;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use strat_engine::map::Map;
 use strat_engine::orders::Order;
@@ -28,10 +28,15 @@ fn main() {
     let seed: u64 = std::env::args()
         .nth(2)
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| rand::random());
+        .unwrap_or_else(rand::random);
 
     println!("\x1b[1mStrat Club — Local Test Game\x1b[0m");
-    println!("Map: {} ({} territories, {} bonuses)", map.name, map.territory_count(), map.bonuses.len());
+    println!(
+        "Map: {} ({} territories, {} bonuses)",
+        map.name,
+        map.territory_count(),
+        map.bonuses.len()
+    );
     println!("Seed: {}\n", seed);
 
     let mut rng = StdRng::seed_from_u64(seed);
@@ -44,7 +49,12 @@ fn main() {
     let player_picks = read_picks(&map, &options);
     let ai_picks = ai::generate_picks(&state, &map);
 
-    picking::resolve_picks(&mut state, [&player_picks, &ai_picks], &map, picking::DEFAULT_STARTING_ARMIES);
+    picking::resolve_picks(
+        &mut state,
+        [&player_picks, &ai_picks],
+        &map,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
     println!("\n\x1b[1mPicking complete! Game begins.\x1b[0m");
 
     // Main game loop.
@@ -96,7 +106,10 @@ fn read_picks(map: &Map, _options: &[usize]) -> Vec<usize> {
                     picks.push(tid);
                 }
             }
-            _ => println!("Invalid territory ID. Enter a number 0-{}.", map.territory_count() - 1),
+            _ => println!(
+                "Invalid territory ID. Enter a number 0-{}.",
+                map.territory_count() - 1
+            ),
         }
     }
     picks
@@ -107,10 +120,7 @@ fn read_orders(state: &GameState, map: &Map) -> Vec<Order> {
     let income = state.income(PLAYER, map);
     let mut deployed = 0u32;
 
-    println!(
-        "\x1b[33mYou have {} armies to deploy.\x1b[0m",
-        income
-    );
+    println!("\x1b[33mYou have {} armies to deploy.\x1b[0m", income);
 
     loop {
         let line = prompt("> ");
@@ -157,11 +167,17 @@ fn read_orders(state: &GameState, map: &Map) -> Vec<Order> {
                 }
                 let tid: usize = match parts[1].parse() {
                     Ok(v) => v,
-                    Err(_) => { println!("Invalid territory ID."); continue; }
+                    Err(_) => {
+                        println!("Invalid territory ID.");
+                        continue;
+                    }
                 };
                 let armies: u32 = match parts[2].parse() {
                     Ok(v) if v > 0 => v,
-                    _ => { println!("Invalid army count."); continue; }
+                    _ => {
+                        println!("Invalid army count.");
+                        continue;
+                    }
                 };
                 if tid >= map.territory_count() || state.territory_owners[tid] != PLAYER {
                     println!("You don't own territory {}.", tid);
@@ -195,15 +211,24 @@ fn read_orders(state: &GameState, map: &Map) -> Vec<Order> {
                 }
                 let from: usize = match parts[1].parse() {
                     Ok(v) => v,
-                    Err(_) => { println!("Invalid territory ID."); continue; }
+                    Err(_) => {
+                        println!("Invalid territory ID.");
+                        continue;
+                    }
                 };
                 let to: usize = match parts[2].parse() {
                     Ok(v) => v,
-                    Err(_) => { println!("Invalid territory ID."); continue; }
+                    Err(_) => {
+                        println!("Invalid territory ID.");
+                        continue;
+                    }
                 };
                 let armies: u32 = match parts[3].parse() {
                     Ok(v) if v > 0 => v,
-                    _ => { println!("Invalid army count."); continue; }
+                    _ => {
+                        println!("Invalid army count.");
+                        continue;
+                    }
                 };
                 if from >= map.territory_count() || state.territory_owners[from] != PLAYER {
                     println!("You don't own territory {}.", from);
@@ -234,15 +259,24 @@ fn read_orders(state: &GameState, map: &Map) -> Vec<Order> {
                 }
                 let from: usize = match parts[1].parse() {
                     Ok(v) => v,
-                    Err(_) => { println!("Invalid territory ID."); continue; }
+                    Err(_) => {
+                        println!("Invalid territory ID.");
+                        continue;
+                    }
                 };
                 let to: usize = match parts[2].parse() {
                     Ok(v) => v,
-                    Err(_) => { println!("Invalid territory ID."); continue; }
+                    Err(_) => {
+                        println!("Invalid territory ID.");
+                        continue;
+                    }
                 };
                 let armies: u32 = match parts[3].parse() {
                     Ok(v) if v > 0 => v,
-                    _ => { println!("Invalid army count."); continue; }
+                    _ => {
+                        println!("Invalid army count.");
+                        continue;
+                    }
                 };
                 if from >= map.territory_count() || state.territory_owners[from] != PLAYER {
                     println!("You don't own territory {}.", from);
