@@ -321,6 +321,10 @@ async fn submit_local_orders(
 
     let visible_before = fog::visible_territories(&app.game, PLAYER, &app.map);
 
+    // Snapshot the current state before resolving orders (for replay).
+    let state_snapshot = app.game.clone();
+    app.state_history.push(state_snapshot);
+
     let ai_orders = ai::generate_orders_for_strength(&app.game, AI_PLAYER, &app.map, app.ai_strength);
     let game_clone = app.game.clone();
     let map = app.map.clone();
@@ -337,6 +341,10 @@ async fn submit_local_orders(
     });
 
     app.game = result.state;
+
+    // Record win probability after the turn resolves.
+    let wp = analysis::estimate_win_probability(&app.game, &app.map, 50, 30);
+    app.win_prob_history.push(wp.player_0);
 
     let msg = if app.game.phase == Phase::Finished {
         if app.game.winner == Some(PLAYER) {
@@ -391,11 +399,83 @@ async fn new_local_game(
     app.rng = StdRng::from_entropy();
     app.pick_options = picking::generate_pick_options(&map, &mut app.rng);
     app.turn_history.clear();
+    app.state_history.clear();
+    app.win_prob_history.clear();
     Json(ActionResult {
         success: true,
         message: format!("New game on {}", map.name),
         events: Vec::new(),
     })
+}
+
+async fn get_replay_turn(
+    State(state): State<AppState>,
+    axum::extract::Path(turn): axum::extract::Path<u32>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let app = state.local.lock().unwrap();
+
+    let idx = turn as usize;
+    if idx >= app.state_history.len() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            format!(
+                "Turn {} not found in replay history (available: 0..{})",
+                turn,
+                app.state_history.len().saturating_sub(1)
+            ),
+        ));
+    }
+
+    let historical_state = &app.state_history[idx];
+    let visible = fog::visible_territories(historical_state, PLAYER, &app.map);
+    let is_picking = historical_state.phase == Phase::Picking;
+
+    let territories: Vec<TerritoryView> = app
+        .map
+        .territories
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let is_visible = is_picking || visible.contains(&i) || !app.map.settings.fog_of_war;
+            let (lx, ly) = t
+                .visual
+                .as_ref()
+                .map(|v| (v.label_pos[0], v.label_pos[1]))
+                .unwrap_or((0.0, 0.0));
+            TerritoryView {
+                id: i,
+                name: t.name.clone(),
+                bonus_id: t.bonus_id,
+                adjacent: t.adjacent.clone(),
+                owner: if is_visible {
+                    historical_state.territory_owners[i]
+                } else {
+                    NEUTRAL
+                },
+                armies: if is_visible {
+                    historical_state.territory_armies[i]
+                } else {
+                    0
+                },
+                visible: is_visible,
+                path: t.visual.as_ref().map(|v| v.path.clone()),
+                label_x: lx,
+                label_y: ly,
+            }
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "turn": turn,
+        "phase": match historical_state.phase {
+            Phase::Picking => "picking",
+            Phase::Play => "play",
+            Phase::Finished => "finished",
+        },
+        "territories": territories,
+        "events": app.turn_history.get(idx).map(|tl| &tl.events),
+        "win_probability": app.win_prob_history.get(idx),
+    })))
 }
 
 async fn index() -> Html<&'static str> {
@@ -594,6 +674,8 @@ async fn main() {
         pick_options,
         turn_history: Vec::new(),
         ai_strength: AiStrength::Hard,
+        state_history: Vec::new(),
+        win_prob_history: Vec::new(),
     };
 
     // Set up WebSocket hub.
@@ -654,6 +736,7 @@ async fn main() {
         .route("/api/picks", post(submit_local_picks))
         .route("/api/orders", post(submit_local_orders))
         .route("/api/new", post(new_local_game))
+        .route("/api/game/replay/{turn}", get(get_replay_turn))
         .route("/api/game/analysis", get(get_analysis))
         .route("/api/difficulty", post(set_difficulty))
         // Map editor.
