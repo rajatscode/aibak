@@ -521,16 +521,14 @@ async fn get_replay_turn(
     }
 
     let historical_state = &app.state_history[idx];
-    let visible = fog::visible_territories(historical_state, PLAYER, &app.map);
-    let is_picking = historical_state.phase == Phase::Picking;
 
+    // Replay is fog-free — show the full board state for both players.
     let territories: Vec<TerritoryView> = app
         .map
         .territories
         .iter()
         .enumerate()
         .map(|(i, t)| {
-            let is_visible = is_picking || visible.contains(&i) || !app.map.settings.fog_of_war;
             let (lx, ly) = t
                 .visual
                 .as_ref()
@@ -541,17 +539,9 @@ async fn get_replay_turn(
                 name: t.name.clone(),
                 bonus_id: t.bonus_id,
                 adjacent: t.adjacent.clone(),
-                owner: if is_visible {
-                    historical_state.territory_owners[i]
-                } else {
-                    NEUTRAL
-                },
-                armies: if is_visible {
-                    historical_state.territory_armies[i]
-                } else {
-                    0
-                },
-                visible: is_visible,
+                owner: historical_state.territory_owners[i],
+                armies: historical_state.territory_armies[i],
+                visible: true,
                 path: t.visual.as_ref().map(|v| v.path.clone()),
                 label_x: lx,
                 label_y: ly,
