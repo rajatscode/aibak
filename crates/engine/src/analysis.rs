@@ -107,8 +107,6 @@ pub fn material_evaluation(state: &GameState, map: &Map) -> f64 {
 
     let p0_territories = state.territory_count_for(0) as f64;
     let p1_territories = state.territory_count_for(1) as f64;
-    let total_territories = map.territory_count() as f64;
-
     // Elimination.
     if p0_territories == 0.0 {
         return 0.0;

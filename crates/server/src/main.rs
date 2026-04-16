@@ -218,8 +218,8 @@ fn build_game_view(app: &LocalState) -> GameView {
         })
         .collect();
 
-    // Compute win probability (small simulation count for responsiveness).
-    let wp = analysis::estimate_win_probability(&app.game, &app.map, 100, 30);
+    // Compute win probability using fast material evaluation (< 1ms).
+    let wp = analysis::quick_win_probability(&app.game, &app.map);
 
     GameView {
         phase: match app.game.phase {
@@ -342,8 +342,8 @@ async fn submit_local_orders(
 
     app.game = result.state;
 
-    // Record win probability after the turn resolves.
-    let wp = analysis::estimate_win_probability(&app.game, &app.map, 50, 30);
+    // Record win probability after the turn resolves (1-ply lookahead for history).
+    let wp = analysis::win_probability_with_lookahead(&app.game, &app.map);
     app.win_prob_history.push(wp.player_0);
 
     let msg = if app.game.phase == Phase::Finished {
@@ -603,7 +603,7 @@ async fn auth_me(
 
 async fn get_analysis(State(state): State<AppState>) -> Json<serde_json::Value> {
     let app = state.local.lock().unwrap();
-    let wp = analysis::estimate_win_probability(&app.game, &app.map, 200, 50);
+    let wp = analysis::full_win_probability(&app.game, &app.map, 200);
     Json(serde_json::json!({
         "win_probability": {
             "player_0": wp.player_0,
