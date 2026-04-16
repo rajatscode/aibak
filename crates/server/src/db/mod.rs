@@ -340,6 +340,313 @@ pub async fn get_expired_deadlines(
 
 // ── Rating history queries ──
 
+// ── Season queries ──
+
+/// A season row from the database.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct SeasonRow {
+    pub id: i32,
+    pub name: String,
+    pub starts_at: DateTime<Utc>,
+    pub ends_at: DateTime<Utc>,
+    pub is_active: bool,
+    pub config: serde_json::Value,
+}
+
+/// A season standing row from the database.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct SeasonStandingRow {
+    pub season_id: i32,
+    pub user_id: Uuid,
+    pub rank_tier: String,
+    pub rank_points: i32,
+    pub wins: i32,
+    pub losses: i32,
+    pub streak: i32,
+    pub peak_rank_points: i32,
+}
+
+/// A match history row from the database.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct MatchHistoryRow {
+    pub id: Uuid,
+    pub game_id: Uuid,
+    pub season_id: Option<i32>,
+    pub player_a: Uuid,
+    pub player_b: Uuid,
+    pub winner_id: Option<Uuid>,
+    pub player_a_rating_change: Option<f64>,
+    pub player_b_rating_change: Option<f64>,
+    pub player_a_rp_change: Option<i32>,
+    pub player_b_rp_change: Option<i32>,
+    pub turns_played: Option<i32>,
+    pub template: Option<String>,
+    pub played_at: DateTime<Utc>,
+}
+
+#[allow(dead_code)]
+pub async fn create_season(
+    pool: &PgPool,
+    name: &str,
+    starts_at: DateTime<Utc>,
+    ends_at: DateTime<Utc>,
+    config: &serde_json::Value,
+) -> Result<SeasonRow, sqlx::Error> {
+    sqlx::query_as::<_, SeasonRow>(
+        r#"
+        INSERT INTO seasons (name, starts_at, ends_at, config)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+        "#,
+    )
+    .bind(name)
+    .bind(starts_at)
+    .bind(ends_at)
+    .bind(config)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn get_active_season(pool: &PgPool) -> Result<Option<SeasonRow>, sqlx::Error> {
+    sqlx::query_as::<_, SeasonRow>("SELECT * FROM seasons WHERE is_active = true LIMIT 1")
+        .fetch_optional(pool)
+        .await
+}
+
+pub async fn list_seasons(pool: &PgPool) -> Result<Vec<SeasonRow>, sqlx::Error> {
+    sqlx::query_as::<_, SeasonRow>("SELECT * FROM seasons ORDER BY starts_at DESC")
+        .fetch_all(pool)
+        .await
+}
+
+pub async fn get_season(pool: &PgPool, season_id: i32) -> Result<Option<SeasonRow>, sqlx::Error> {
+    sqlx::query_as::<_, SeasonRow>("SELECT * FROM seasons WHERE id = $1")
+        .bind(season_id)
+        .fetch_optional(pool)
+        .await
+}
+
+pub async fn get_or_create_standing(
+    pool: &PgPool,
+    season_id: i32,
+    user_id: Uuid,
+) -> Result<SeasonStandingRow, sqlx::Error> {
+    sqlx::query_as::<_, SeasonStandingRow>(
+        r#"
+        INSERT INTO season_standings (season_id, user_id)
+        VALUES ($1, $2)
+        ON CONFLICT (season_id, user_id) DO NOTHING
+        RETURNING *
+        "#,
+    )
+    .bind(season_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    // Always fetch to ensure we get the row (whether just inserted or pre-existing).
+    sqlx::query_as::<_, SeasonStandingRow>(
+        "SELECT * FROM season_standings WHERE season_id = $1 AND user_id = $2",
+    )
+    .bind(season_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+}
+
+#[allow(dead_code)]
+pub async fn update_standing(
+    pool: &PgPool,
+    season_id: i32,
+    user_id: Uuid,
+    rank_tier: &str,
+    rank_points: i32,
+    won: bool,
+    streak: i32,
+    peak_rank_points: i32,
+) -> Result<(), sqlx::Error> {
+    if won {
+        sqlx::query(
+            r#"
+            UPDATE season_standings
+            SET rank_tier = $3, rank_points = $4, wins = wins + 1,
+                streak = $5, peak_rank_points = $6
+            WHERE season_id = $1 AND user_id = $2
+            "#,
+        )
+    } else {
+        sqlx::query(
+            r#"
+            UPDATE season_standings
+            SET rank_tier = $3, rank_points = $4, losses = losses + 1,
+                streak = $5, peak_rank_points = $6
+            WHERE season_id = $1 AND user_id = $2
+            "#,
+        )
+    }
+    .bind(season_id)
+    .bind(user_id)
+    .bind(rank_tier)
+    .bind(rank_points)
+    .bind(streak)
+    .bind(peak_rank_points)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Standing row joined with user info for leaderboard display.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct LeaderboardEntry {
+    pub user_id: Uuid,
+    pub username: String,
+    pub avatar_url: Option<String>,
+    pub rank_tier: String,
+    pub rank_points: i32,
+    pub wins: i32,
+    pub losses: i32,
+    pub streak: i32,
+    pub peak_rank_points: i32,
+}
+
+pub async fn get_season_leaderboard(
+    pool: &PgPool,
+    season_id: i32,
+    limit: i64,
+) -> Result<Vec<LeaderboardEntry>, sqlx::Error> {
+    sqlx::query_as::<_, LeaderboardEntry>(
+        r#"
+        SELECT s.user_id, u.username, u.avatar_url,
+               s.rank_tier, s.rank_points, s.wins, s.losses,
+               s.streak, s.peak_rank_points
+        FROM season_standings s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.season_id = $1
+        ORDER BY s.rank_points DESC
+        LIMIT $2
+        "#,
+    )
+    .bind(season_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
+#[allow(dead_code)]
+pub async fn create_match_history(
+    pool: &PgPool,
+    game_id: Uuid,
+    season_id: Option<i32>,
+    player_a: Uuid,
+    player_b: Uuid,
+    winner_id: Option<Uuid>,
+    player_a_rating_change: Option<f64>,
+    player_b_rating_change: Option<f64>,
+    player_a_rp_change: Option<i32>,
+    player_b_rp_change: Option<i32>,
+    turns_played: Option<i32>,
+    template: Option<&str>,
+) -> Result<MatchHistoryRow, sqlx::Error> {
+    sqlx::query_as::<_, MatchHistoryRow>(
+        r#"
+        INSERT INTO match_history (
+            game_id, season_id, player_a, player_b, winner_id,
+            player_a_rating_change, player_b_rating_change,
+            player_a_rp_change, player_b_rp_change,
+            turns_played, template
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+        "#,
+    )
+    .bind(game_id)
+    .bind(season_id)
+    .bind(player_a)
+    .bind(player_b)
+    .bind(winner_id)
+    .bind(player_a_rating_change)
+    .bind(player_b_rating_change)
+    .bind(player_a_rp_change)
+    .bind(player_b_rp_change)
+    .bind(turns_played)
+    .bind(template)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn get_match_history(
+    pool: &PgPool,
+    user_id: Option<Uuid>,
+    season_id: Option<i32>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<MatchHistoryRow>, sqlx::Error> {
+    // Build query dynamically based on filters.
+    match (user_id, season_id) {
+        (Some(uid), Some(sid)) => {
+            sqlx::query_as::<_, MatchHistoryRow>(
+                r#"
+                SELECT * FROM match_history
+                WHERE (player_a = $1 OR player_b = $1) AND season_id = $2
+                ORDER BY played_at DESC
+                LIMIT $3 OFFSET $4
+                "#,
+            )
+            .bind(uid)
+            .bind(sid)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await
+        }
+        (Some(uid), None) => {
+            sqlx::query_as::<_, MatchHistoryRow>(
+                r#"
+                SELECT * FROM match_history
+                WHERE player_a = $1 OR player_b = $1
+                ORDER BY played_at DESC
+                LIMIT $2 OFFSET $3
+                "#,
+            )
+            .bind(uid)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await
+        }
+        (None, Some(sid)) => {
+            sqlx::query_as::<_, MatchHistoryRow>(
+                r#"
+                SELECT * FROM match_history
+                WHERE season_id = $1
+                ORDER BY played_at DESC
+                LIMIT $2 OFFSET $3
+                "#,
+            )
+            .bind(sid)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await
+        }
+        (None, None) => {
+            sqlx::query_as::<_, MatchHistoryRow>(
+                r#"
+                SELECT * FROM match_history
+                ORDER BY played_at DESC
+                LIMIT $1 OFFSET $2
+                "#,
+            )
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await
+        }
+    }
+}
+
+// ── Rating history queries ──
+
 pub async fn insert_rating_history(
     pool: &PgPool,
     user_id: Uuid,

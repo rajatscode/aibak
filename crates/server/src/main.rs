@@ -488,7 +488,8 @@ async fn editor() -> Html<&'static str> {
 
 async fn favicon() -> impl IntoResponse {
     use axum::http::header;
-    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#0d1117" stroke="#e3b341" stroke-width="1.5"/><path d="M8 10 L14 8 L18 12 L24 10 L26 14 L22 18 L24 24 L18 22 L14 24 L8 22 L6 16Z" fill="#2563eb" stroke="#0d1117" stroke-width="0.5"/><path d="M14 8 L18 12 L14 14 L10 12Z" fill="#3b82f6" stroke="#0d1117" stroke-width="0.3"/><path d="M18 12 L24 10 L26 14 L22 14Z" fill="#dc2626" stroke="#0d1117" stroke-width="0.3"/><path d="M22 18 L24 24 L18 22 L20 18Z" fill="#4b5563" stroke="#0d1117" stroke-width="0.3"/><circle cx="12" cy="11" r="2.5" fill="rgba(0,0,0,0.5)"/><text x="12" y="12.5" text-anchor="middle" font-size="4" fill="white" font-weight="bold" font-family="sans-serif">5</text><circle cx="22" cy="12" r="2.5" fill="rgba(0,0,0,0.5)"/><text x="22" y="13.5" text-anchor="middle" font-size="4" fill="white" font-weight="bold" font-family="sans-serif">3</text></svg>"##;
+    // Shield icon with crossed swords — strategy game favicon
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs><path d="M16 2 L28 8 L28 16 Q28 26 16 30 Q4 26 4 16 L4 8Z" fill="url(#sg)" stroke="#e3b341" stroke-width="1.2"/><path d="M16 6 L24 10 L24 16 Q24 23 16 26 Q8 23 8 16 L8 10Z" fill="#1e40af" stroke="none"/><line x1="11" y1="22" x2="21" y2="10" stroke="#e3b341" stroke-width="1.8" stroke-linecap="round"/><line x1="21" y1="22" x2="11" y2="10" stroke="#e3b341" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="16" r="3" fill="#e3b341"/><text x="16" y="18" text-anchor="middle" font-size="5" fill="#1e3a5f" font-weight="900" font-family="sans-serif">S</text></svg>"##;
     (
         [(header::CONTENT_TYPE, "image/svg+xml"), (header::CACHE_CONTROL, "public, max-age=86400")],
         svg,
@@ -759,6 +760,12 @@ async fn main() {
         .route("/api/ladder", get(api::ladder::leaderboard))
         .route("/api/users/{id}", get(api::ladder::player_profile))
         .route("/api/lobby", get(api::lobby::open_games))
+        // League / seasons.
+        .route("/api/seasons", get(api::league::list_seasons))
+        .route("/api/seasons/current", get(api::league::current_season))
+        .route("/api/seasons/{id}/standings", get(api::league::season_standings))
+        .route("/api/seasons/{season_id}/standings/{user_id}", get(api::league::player_season_stats))
+        .route("/api/match-history", get(api::league::match_history))
         // Map management.
         .route("/api/maps", get(api::maps::list_maps))
         .route("/api/maps", post(api::maps::save_map))
