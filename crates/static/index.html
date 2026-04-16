@@ -442,13 +442,17 @@ function toggleThreats() {
 function updateThreatOverlay() {
   if (!G || !G.territories) return;
   G.territories.forEach(t => {
-    const pathEl = document.getElementById('terr-' + t.id);
-    if (!pathEl) return;
+    const highlightEl = document.getElementById('highlight-' + t.id);
+    if (!highlightEl) return;
     if (!threatsEnabled || t.owner !== 0) {
-      pathEl.style.removeProperty('fill');
+      // Clear threat outline
+      if (!selectedSource || selectedSource !== t.id) {
+        highlightEl.setAttribute('stroke', 'none');
+        highlightEl.setAttribute('stroke-width', '0');
+      }
       return;
     }
-    // Calculate threat level for player territories
+    // Calculate threat level — only change the OUTLINE, keep territory fill unchanged
     let myArmies = t.armies || 0;
     let enemyAdjacentArmies = 0;
     let hasEnemyAdj = false;
@@ -462,19 +466,18 @@ function updateThreatOverlay() {
       });
     }
     if (!hasEnemyAdj) {
-      // Interior territory - gray tint
-      pathEl.style.fill = '#6b7280';
+      // Interior territory — no threat outline
+      highlightEl.setAttribute('stroke', 'none');
+      highlightEl.setAttribute('stroke-width', '0');
     } else {
       const ratio = myArmies / Math.max(1, enemyAdjacentArmies);
-      if (ratio >= 1.5) {
-        pathEl.style.fill = '#22c55e'; // safe green
-      } else if (ratio >= 1) {
-        pathEl.style.fill = '#84cc16'; // cautious yellow-green
-      } else if (ratio >= 0.5) {
-        pathEl.style.fill = '#f59e0b'; // warning orange
-      } else {
-        pathEl.style.fill = '#ef4444'; // danger red
-      }
+      let color;
+      if (ratio >= 1.5) color = '#22c55e';      // safe green
+      else if (ratio >= 1) color = '#84cc16';    // cautious
+      else if (ratio >= 0.5) color = '#f59e0b';  // warning orange
+      else color = '#ef4444';                     // danger red
+      highlightEl.setAttribute('stroke', color);
+      highlightEl.setAttribute('stroke-width', '3');
     }
   });
 }
