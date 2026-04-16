@@ -1509,6 +1509,19 @@ function buildSparklineSVG(data) {
 
 // ========== NEW GAME ==========
 async function newGame() {
+  // Clean up replay mode if active
+  if (replayMode) {
+    replayMode = false;
+    replayStopAutoPlay();
+    replayCache = {};
+    document.getElementById('replay-stepper').style.display = 'none';
+    document.getElementById('replay-sparkline').style.display = 'none';
+    document.getElementById('replay-log').style.display = 'none';
+    document.getElementById('phase-panel').style.display = '';
+    document.getElementById('control-panel').style.display = '';
+    document.getElementById('turn-log').style.display = '';
+    document.getElementById('history-panel').style.display = '';
+  }
   document.getElementById('game-over').classList.remove('show');
   document.getElementById('turn-log').innerHTML = '';
   phase = 'loading';
@@ -1526,6 +1539,7 @@ async function newGame() {
 
 // ========== CLICK DISPATCHER ==========
 function onTerritoryClick(id, e) {
+  if (replayMode) return;
   if (resolving) return;
   if (phase === 'picking') {
     onPickClick(id);
@@ -1535,6 +1549,7 @@ function onTerritoryClick(id, e) {
 }
 
 function onTerritoryRightClick(id) {
+  if (replayMode) return;
   if (resolving) return;
   if (phase === 'orders') {
     onDeployRightClick(id);
@@ -1543,6 +1558,15 @@ function onTerritoryRightClick(id) {
 
 // ========== KEYBOARD ==========
 document.addEventListener('keydown', e => {
+  // Replay mode keyboard controls
+  if (replayMode) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); replayStep(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); replayStep(1); return; }
+    if (e.key === ' ') { e.preventDefault(); replayToggleAutoPlay(); return; }
+    if (e.key === 'Escape') { exitReplayMode(); return; }
+    return;
+  }
+
   if (resolving) return;
   const key = e.key.toLowerCase();
 
@@ -1565,6 +1589,280 @@ document.addEventListener('keydown', e => {
 
 // ========== UTIL ==========
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ========== REPLAY MODE ==========
+let replayMode = false;
+let replayTurn = 0;
+let replayMaxTurn = 0;
+let replayAutoPlay = false;
+let replayAutoTimer = null;
+let replayCache = {}; // turn -> fetched state
+
+async function enterReplayMode() {
+  // Hide game over overlay
+  document.getElementById('game-over').classList.remove('show');
+
+  replayMode = true;
+  replayTurn = 0;
+  replayMaxTurn = Math.max(0, (G.win_prob_history || winProbHistory).length - 1);
+  replayAutoPlay = false;
+  replayCache = {};
+
+  // Show replay UI elements
+  document.getElementById('replay-stepper').style.display = 'block';
+  document.getElementById('replay-sparkline').style.display = 'block';
+  document.getElementById('replay-log').style.display = 'block';
+
+  // Hide normal sidebar panels
+  document.getElementById('phase-panel').style.display = 'none';
+  document.getElementById('control-panel').style.display = 'none';
+  document.getElementById('turn-log').style.display = 'none';
+  document.getElementById('history-panel').style.display = 'none';
+
+  // Setup slider
+  const slider = document.getElementById('rs-slider');
+  slider.min = 0;
+  slider.max = replayMaxTurn;
+  slider.value = 0;
+
+  // Render the sparkline
+  renderReplaySparkline(0);
+
+  // Fetch and display turn 0
+  await fetchReplayState(0);
+}
+
+function exitReplayMode() {
+  replayMode = false;
+  replayStopAutoPlay();
+  replayCache = {};
+
+  // Hide replay UI
+  document.getElementById('replay-stepper').style.display = 'none';
+  document.getElementById('replay-sparkline').style.display = 'none';
+  document.getElementById('replay-log').style.display = 'none';
+
+  // Restore normal sidebar panels
+  document.getElementById('phase-panel').style.display = '';
+  document.getElementById('control-panel').style.display = '';
+  document.getElementById('turn-log').style.display = '';
+  document.getElementById('history-panel').style.display = '';
+
+  // Show game over again
+  if (G && G.phase === 'finished' && G.winner !== null && G.winner !== undefined) {
+    showGameOver(G.winner);
+  }
+
+  // Restore the live game state map
+  buildMap();
+  updateMap();
+  renderSidebar();
+  renderHistory();
+}
+
+async function fetchReplayState(turn) {
+  replayTurn = turn;
+  updateReplayControls();
+
+  // Check cache
+  if (!replayCache[turn]) {
+    const res = await api('GET', '/api/game/replay/' + turn);
+    if (!res) return;
+    replayCache[turn] = res;
+  }
+
+  const state = replayCache[turn];
+  applyReplayState(state);
+  renderReplaySparkline(turn);
+  renderReplayLog(state);
+}
+
+function applyReplayState(state) {
+  if (!state || !state.territories) return;
+
+  // Update territory colors and armies on the existing map
+  state.territories.forEach(function(t) {
+    const pathEl = document.getElementById('terr-' + t.id);
+    const armyEl = document.getElementById('army-' + t.id);
+    const armyBg = document.getElementById('army-bg-' + t.id);
+    const badgeEl = document.getElementById('deploy-badge-' + t.id);
+    const highlightEl = document.getElementById('highlight-' + t.id);
+
+    if (!pathEl) return;
+
+    // Color
+    let fill = FOG_COLOR;
+    if (t.visible !== false) {
+      if (t.owner === 0) fill = PLAYER_COLOR;
+      else if (t.owner === 1) fill = ENEMY_COLOR;
+      else fill = NEUTRAL_COLOR;
+    }
+    pathEl.style.transition = 'fill 0.3s ease';
+    pathEl.setAttribute('fill', fill);
+
+    // Armies
+    if (t.visible !== false && t.armies > 0) {
+      armyEl.textContent = t.armies;
+      if (armyBg) armyBg.style.display = '';
+    } else {
+      armyEl.textContent = '';
+      if (armyBg) armyBg.style.display = 'none';
+    }
+
+    // Clear deploy badges and highlights in replay
+    if (badgeEl) badgeEl.textContent = '';
+    if (highlightEl) {
+      highlightEl.setAttribute('stroke', 'none');
+      highlightEl.setAttribute('stroke-dasharray', 'none');
+    }
+  });
+
+  // Update bonus progress if we have bonus data from the main game state
+  if (G && G.bonuses && state.territories) {
+    G.bonuses.forEach(function(b) {
+      const progEl = document.getElementById('bonus-prog-' + b.id);
+      if (!progEl) return;
+      // Count player territories in this bonus from replay state
+      let playerCount = 0;
+      if (b.territories) {
+        b.territories.forEach(function(tid) {
+          const rt = state.territories.find(function(tt) { return tt.id === tid; });
+          if (rt && rt.owner === 0) playerCount++;
+        });
+      }
+      const complete = playerCount === b.total;
+      progEl.textContent = complete ? '\u2713 +' + b.value + '/turn' : playerCount + '/' + b.total + ' (+' + b.value + ')';
+      progEl.setAttribute('fill', complete ? '#4ade80' : '#fff');
+    });
+  }
+
+  // Clear order lines
+  const orderLines = document.getElementById('order-lines');
+  if (orderLines) orderLines.innerHTML = '';
+
+  // Update topbar turn number
+  document.getElementById('turn-num').textContent = (state.turn || 0) + 1;
+}
+
+function updateReplayControls() {
+  document.getElementById('rs-turn-display').textContent = 'Turn ' + (replayTurn + 1) + ' of ' + (replayMaxTurn + 1);
+  document.getElementById('rs-prev').disabled = replayTurn <= 0;
+  document.getElementById('rs-next').disabled = replayTurn >= replayMaxTurn;
+  document.getElementById('rs-slider').value = replayTurn;
+
+  const playBtn = document.getElementById('rs-play');
+  if (replayAutoPlay) {
+    playBtn.textContent = '\u23F8';
+    playBtn.classList.add('active');
+  } else {
+    playBtn.textContent = '\u25B6\uFE0E';
+    playBtn.classList.remove('active');
+  }
+}
+
+async function replayStep(dir) {
+  replayStopAutoPlay();
+  const newTurn = Math.max(0, Math.min(replayMaxTurn, replayTurn + dir));
+  if (newTurn !== replayTurn) {
+    await fetchReplayState(newTurn);
+  }
+}
+
+async function replaySliderChange(value) {
+  replayStopAutoPlay();
+  const turn = parseInt(value);
+  if (turn !== replayTurn) {
+    await fetchReplayState(turn);
+  }
+}
+
+function replayToggleAutoPlay() {
+  if (replayAutoPlay) {
+    replayStopAutoPlay();
+  } else {
+    replayAutoPlay = true;
+    updateReplayControls();
+    replayAutoTimer = setInterval(async function() {
+      if (replayTurn >= replayMaxTurn) {
+        replayStopAutoPlay();
+        return;
+      }
+      await fetchReplayState(replayTurn + 1);
+    }, 1000);
+  }
+}
+
+function replayStopAutoPlay() {
+  replayAutoPlay = false;
+  if (replayAutoTimer) {
+    clearInterval(replayAutoTimer);
+    replayAutoTimer = null;
+  }
+  updateReplayControls();
+}
+
+function renderReplaySparkline(currentTurn) {
+  const container = document.getElementById('replay-sparkline-svg');
+  const data = G.win_prob_history || winProbHistory;
+  if (!data || data.length < 2) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--text3)">Not enough data</div>';
+    return;
+  }
+
+  const w = 300, h = 70, pad = 6;
+  const usableW = w - pad * 2;
+  const usableH = h - pad * 2;
+
+  let points = data.map(function(v, i) {
+    var x = pad + (i / Math.max(1, data.length - 1)) * usableW;
+    var y = pad + (1 - v) * usableH;
+    return x + ',' + y;
+  }).join(' ');
+
+  // Area fill
+  var areaPath = 'M ' + pad + ',' + (pad + usableH);
+  data.forEach(function(v, i) {
+    var x = pad + (i / Math.max(1, data.length - 1)) * usableW;
+    var y = pad + (1 - v) * usableH;
+    areaPath += ' L ' + x + ',' + y;
+  });
+  areaPath += ' L ' + (pad + usableW) + ',' + (pad + usableH) + ' Z';
+
+  // Current turn indicator line
+  var cx = pad + (currentTurn / Math.max(1, data.length - 1)) * usableW;
+
+  var svg = '<svg width="' + w + '" height="' + h + '" style="background:var(--bg);border-radius:6px;border:1px solid var(--border)">';
+  // 50% line
+  svg += '<line x1="' + pad + '" y1="' + (pad + usableH/2) + '" x2="' + (w-pad) + '" y2="' + (pad + usableH/2) + '" stroke="var(--border)" stroke-dasharray="4,4"/>';
+  // Area
+  svg += '<path d="' + areaPath + '" fill="rgba(37,99,235,0.15)"/>';
+  // Line
+  svg += '<polyline points="' + points + '" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round"/>';
+  // Current turn vertical indicator
+  svg += '<line x1="' + cx + '" y1="' + pad + '" x2="' + cx + '" y2="' + (pad + usableH) + '" stroke="var(--gold)" stroke-width="2" opacity="0.8"/>';
+  // Current turn dot
+  if (currentTurn < data.length) {
+    var cy = pad + (1 - data[currentTurn]) * usableH;
+    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="4" fill="var(--gold)" stroke="var(--bg)" stroke-width="1.5"/>';
+    // Win prob text
+    svg += '<text x="' + cx + '" y="' + (cy - 8) + '" text-anchor="middle" font-size="9" font-weight="700" fill="var(--gold)">' + Math.round(data[currentTurn] * 100) + '%</text>';
+  }
+  // Labels
+  svg += '<text x="' + (w-pad) + '" y="' + (pad+6) + '" text-anchor="end" font-size="8" fill="var(--text3)">100%</text>';
+  svg += '<text x="' + (w-pad) + '" y="' + (pad+usableH) + '" text-anchor="end" font-size="8" fill="var(--text3)">0%</text>';
+  svg += '</svg>';
+
+  container.innerHTML = svg;
+}
+
+function renderReplayLog(state) {
+  const logEl = document.getElementById('replay-log');
+  if (!state || !state.events || state.events.length === 0) {
+    logEl.innerHTML = '<h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:0 0 6px">Turn Events</h3><div style="font-size:11px;color:var(--text3)">No events this turn</div>';
+    return;
+  }
+  logEl.innerHTML = '<h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:0 0 6px">Turn ' + (state.turn + 1) + ' Events</h3>' + formatEvents(state.events);
+}
 
 // ========== INIT ==========
 buildMap();
