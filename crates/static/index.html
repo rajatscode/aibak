@@ -460,7 +460,8 @@ async function selectTemplate(tmpl) {
 // ========== WIN PROBABILITY ==========
 function updateWinProbBar() {
   const bar = document.getElementById('win-prob-bar');
-  if (!G || !G.win_probability || phase === 'picking' || phase === 'loading') {
+  // Only show win probability after the game ends (post-game review).
+  if (!G || !G.win_probability || G.phase !== 'finished') {
     bar.style.display = 'none';
     return;
   }
