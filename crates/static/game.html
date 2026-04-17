@@ -143,12 +143,40 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
 
-/* MOBILE */
+/* MOBILE: TABLET */
 @media (max-width: 768px) {
+  nav{padding:3px 10px !important;gap:10px !important;font-size:11px !important;flex-wrap:wrap}
   #main{flex-direction:column}
   #sidebar{width:100%;min-width:unset;max-height:40vh;border-left:none;border-top:1px solid var(--border);overflow-y:auto}
   #map-container{flex:1;min-height:50vh}
   .player-bar{flex-wrap:wrap;gap:8px}
+  #topbar{padding:6px 10px;gap:8px;flex-wrap:wrap}
+  #topbar .stats{font-size:11px;gap:8px}
+  #game-over .card{padding:24px 20px;max-width:90vw}
+  #game-over .card h2{font-size:24px}
+  .tooltip{font-size:10px;max-width:200px}
+  #map-army-popup{transform:scale(1.1);transform-origin:top left}
+}
+
+/* MOBILE: PHONE */
+@media (max-width: 480px) {
+  #topbar{padding:4px 8px;gap:6px}
+  #topbar .stats{font-size:10px;gap:6px}
+  #topbar .stats .dot{width:6px;height:6px}
+  #map-container{min-height:55vh}
+  #sidebar{max-height:35vh}
+  .sb-section{padding:8px}
+  .sb-phase{font-size:15px}
+  .sb-sub{font-size:11px}
+  .deploy-counter{font-size:22px;padding:4px 0}
+  .deploy-hint{font-size:10px}
+  .order-item{padding:4px 6px;font-size:11px}
+  .btn{padding:8px;font-size:13px}
+  .player-bar{font-size:11px;padding:4px 10px}
+  #game-over .card{padding:20px 16px}
+  #game-over .card h2{font-size:20px}
+  #game-over .card p{font-size:13px}
+  #waiting-overlay .card{padding:24px 20px}
 }
 </style>
 </head>
@@ -156,7 +184,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 <nav style="background:#0f1419;border-bottom:1px solid #21293a;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
   <a href="/" style="color:#fbbf24;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
   <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
-  <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
+  <a href="/games" style="color:#fff;text-decoration:none;">Games</a>
   <a href="/ladder" style="color:#8b949e;text-decoration:none;">Ladder</a>
   <a href="/feedback" style="color:#8b949e;text-decoration:none;">Feedback</a>
   <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;margin-left:auto;font-weight:600;">Discord</a>
@@ -808,7 +836,8 @@ function renderSidebar() {
 
 function renderPickingSidebar(pp, cp) {
   var totalOptions = pickOptions.length;
-  pp.innerHTML = '<div class="sb-phase">Pick Phase</div>' +
+  var howToPlay = '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;line-height:1.4">Pick territories \u2192 Deploy armies \u2192 Attack neighbors \u2192 Conquer the map</div>';
+  pp.innerHTML = howToPlay + '<div class="sb-phase">Pick Phase</div>' +
     '<div class="sb-sub">Rank all territories by priority</div>' +
     '<div style="margin-top:8px;font-size:13px;color:var(--gold)">'+picks.length+' / '+totalOptions+' ranked</div>';
 
@@ -844,7 +873,9 @@ function renderOrdersSidebar(pp, cp) {
     subText = 'Click territory, then target to attack/move';
   }
 
-  var headerHtml = '<div class="sb-phase">Orders</div><div class="sb-sub">'+subText+'</div>';
+  var turn = STATE ? STATE.turn : 0;
+  var howToPlay = (turn || 1) <= 1 ? '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;line-height:1.4">Pick territories \u2192 Deploy armies \u2192 Attack neighbors \u2192 Conquer the map</div>' : '';
+  var headerHtml = howToPlay + '<div class="sb-phase">Orders</div><div class="sb-sub">'+subText+'</div>';
   if (deployLeft > 0) {
     headerHtml += '<div class="deploy-counter">'+deployLeft+'</div>' +
       '<div class="deploy-hint">'+deployLeft+' armies to deploy - Click +1, Shift +5, Right-click -1</div>';
