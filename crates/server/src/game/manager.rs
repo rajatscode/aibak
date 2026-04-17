@@ -395,6 +395,17 @@ impl GameManager {
         // Store orders.
         db::insert_orders_tx(&mut tx, game_id, user_id, current_turn, &orders_json).await?;
 
+        // Auto-submit empty orders for eliminated opponent.
+        let opponent_seat: u8 = 1 - seat;
+        if state.territory_count_for(opponent_seat) == 0 {
+            let opponent_id = if opponent_seat == 0 { game.player_a } else { game.player_b };
+            if let Some(opp_id) = opponent_id {
+                let empty_json = serde_json::to_value::<Vec<Order>>(& Vec::new())
+                    .map_err(|e| GameError::Serialization(e.to_string()))?;
+                db::insert_orders_tx(&mut tx, game_id, opp_id, current_turn, &empty_json).await?;
+            }
+        }
+
         // Check if both players have submitted.
         let all_orders = db::get_orders_for_turn_tx(&mut tx, game_id, current_turn).await?;
         if all_orders.len() < 2 {
@@ -571,8 +582,11 @@ impl GameManager {
             let seat = self.player_seat_by_id(game, order_row.user_id)?;
             let orders: Vec<Order> = serde_json::from_value(order_row.orders_json.clone())
                 .map_err(|e| GameError::Serialization(e.to_string()))?;
-            if let Err(e) = validate_orders(&orders, seat, &state, &board) {
-                return Err(GameError::InvalidOrders(e.to_string()));
+            // Skip validation for eliminated players (they submit empty orders).
+            if state.territory_count_for(seat) > 0 {
+                if let Err(e) = validate_orders(&orders, seat, &state, &board) {
+                    return Err(GameError::InvalidOrders(e.to_string()));
+                }
             }
             player_orders[seat as usize] = orders;
         }
