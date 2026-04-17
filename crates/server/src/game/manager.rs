@@ -722,6 +722,53 @@ impl GameManager {
         Ok(())
     }
 
+    /// Resign: forfeit the game, opponent wins.
+    pub async fn resign(&self, game_id: Uuid, user_id: Uuid) -> Result<(), GameError> {
+        let game = db::get_game(&self.pool, game_id)
+            .await?
+            .ok_or(GameError::NotFound)?;
+
+        if game.status != "active" && game.status != "picking" {
+            return Err(GameError::WrongStatus {
+                expected: "active".to_string(),
+                actual: game.status,
+            });
+        }
+
+        let seat = self.player_seat(&game, user_id)?;
+        let winner_seat: u8 = 1 - seat;
+        let winner_id = if winner_seat == 0 {
+            game.player_a.ok_or(GameError::NotFound)?
+        } else {
+            game.player_b.ok_or(GameError::NotFound)?
+        };
+
+        let state: GameState = serde_json::from_value(
+            game.state_json.clone().ok_or(GameError::NotFound)?
+        ).map_err(|e| GameError::Serialization(e.to_string()))?;
+
+        let mut final_state = state;
+        final_state.phase = Phase::Finished;
+        final_state.winner = Some(winner_seat);
+        final_state.alive[seat as usize] = false;
+
+        let state_json = serde_json::to_value(&final_state)
+            .map_err(|e| GameError::Serialization(e.to_string()))?;
+
+        db::finish_game(&self.pool, game_id, winner_id, &state_json).await?;
+
+        if let Err(e) = self.update_ratings(game_id, winner_id, user_id).await {
+            tracing::error!("Rating update failed after resign: {e}");
+        }
+
+        self.hub.broadcast(game_id, ws::GameEvent::GameFinished {
+            game_id,
+            winner_id,
+        }).await;
+
+        Ok(())
+    }
+
     /// Determine which seat (0 or 1) a user occupies in a game.
     fn player_seat(&self, game: &db::GameRow, user_id: Uuid) -> Result<u8, GameError> {
         self.player_seat_by_id(game, user_id)

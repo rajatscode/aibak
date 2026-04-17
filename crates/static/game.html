@@ -1257,9 +1257,20 @@ function hideGameOver() {
 }
 
 async function resignGame() {
-  if (submitted || phase === 'finished') return;
+  if (phase === 'finished') return;
   if (!confirm('Resign this game? This counts as a loss.')) return;
-  await submitOrders([]);
+  try {
+    var r = await fetch('/api/games/' + GAME_ID + '/resign', { method: 'POST' });
+    if (r.ok) {
+      toast('Resigned', 'success');
+      fetchGameState();
+    } else {
+      var err = await r.text();
+      toast(err || 'Could not resign', 'error');
+    }
+  } catch (e) {
+    toast('Network error: ' + e.message, 'error');
+  }
 }
 
 // ========== UI HELPERS ==========

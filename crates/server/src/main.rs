@@ -1693,6 +1693,7 @@ async fn main() {
         .route("/api/games/{id}/join", post(api::games::join_game))
         .route("/api/games/{id}/picks", post(api::orders::submit_picks))
         .route("/api/games/{id}/orders", post(api::orders::submit_orders))
+        .route("/api/games/{id}/resign", post(api::orders::resign))
         // Ladder and lobby.
         .route("/api/ladder", get(api::ladder::leaderboard))
         .route("/api/users/{id}", get(api::ladder::player_profile))

@@ -97,3 +97,25 @@ pub async fn submit_orders(
         message: "orders submitted".to_string(),
     }))
 }
+
+/// POST /api/games/:id/resign -- forfeit the game.
+pub async fn resign(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(game_id): Path<Uuid>,
+) -> Result<Json<ActionResponse>, JsonError> {
+    let manager = state.require_game_manager()
+        .map_err(|(status, msg)| JsonError(status, msg))?;
+    manager
+        .resign(game_id, auth.user_id)
+        .await
+        .map_err(|err| {
+            let (status, msg) = <_ as Into<(StatusCode, String)>>::into(err);
+            JsonError(status, msg)
+        })?;
+
+    Ok(Json(ActionResponse {
+        success: true,
+        message: "resigned".to_string(),
+    }))
+}
