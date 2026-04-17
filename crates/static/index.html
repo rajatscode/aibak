@@ -75,7 +75,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 
 /* MAIN LAYOUT */
 #main{display:flex;flex:1;overflow:hidden}
-#map-container{flex:1;position:relative;overflow:hidden;background:#0d1117}
+#map-container{flex:1;position:relative;overflow:hidden;background:#0d1117;touch-action:manipulation}
 #sidebar{width:340px;min-width:340px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 #sidebar-content{flex:1;overflow-y:auto;min-height:0}
 #sidebar-actions{padding:12px;border-top:1px solid var(--border);background:var(--bg2)}
@@ -472,6 +472,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   .tooltip{font-size:10px;max-width:200px}
   /* Map army popup */
   #map-army-popup{transform:scale(1.1);transform-origin:top left}
+  #map-army-popup button{width:40px;height:40px;font-size:20px}
+  #map-army-popup .popup-go{padding:8px 18px;font-size:15px}
+  #map-army-popup .popup-max{padding:0 10px}
+  #map-army-popup .popup-count{font-size:22px;min-width:40px}
 }
 
 /* ========== RESPONSIVE: PHONE (480px) ========== */
@@ -2132,9 +2136,9 @@ function renderPickingPanel(pp, cp) {
   const totalOptions = (G.pick_options || []).length;
   var howToPlay = (G.turn || 1) <= 1 ? '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;line-height:1.4">Pick territories \u2192 Deploy armies \u2192 Attack neighbors \u2192 Conquer the map</div>' : '';
   pp.innerHTML = howToPlay + '<div class="sb-phase">Picking Phase</div>' +
-    '<div class="sb-sub">Rank all territories by priority (you\'ll receive ' + needed + ')</div>' +
-    '<div style="margin-top:6px;font-size:12px;color:#6b7280;line-height:1.4">Click territories on the map to rank them. You\'ll get ' + needed + ' picks in ABBA draft order. Territories in smaller bonuses with fewer neighbors are usually stronger picks.</div>' +
-    '<div style="margin-top:8px;font-size:13px;color:var(--gold)">' + picks.length + ' / ' + totalOptions + ' ranked</div>' +
+    '<div class="sb-sub">Rank at least ' + needed + ' territories (you\'ll receive ' + needed + ')</div>' +
+    '<div style="margin-top:6px;font-size:12px;color:#6b7280;line-height:1.4">Click territories on the map to rank them. You\'ll get ' + needed + ' picks in ABBA draft order. Rank more for better fallbacks if picks are contested.</div>' +
+    '<div style="margin-top:8px;font-size:13px;color:var(--gold)">' + picks.length + ' / ' + needed + ' ranked' + (picks.length >= needed ? ' ✓' : '') + '</div>' +
     '<div style="margin-top:8px" id="pick-list-container">' +
       picks.map(function(id, idx) {
         var t = terr(id);
@@ -2155,7 +2159,7 @@ function renderPickingPanel(pp, cp) {
   cp.innerHTML = renderUndoRedoBar();
   const sa = document.getElementById('sidebar-actions');
   if (sa) {
-    sa.innerHTML = '<button class="btn btn-gold" ' + (picks.length < totalOptions ? 'disabled' : '') + ' onclick="confirmPicks()">Confirm Picks</button>';
+    sa.innerHTML = '<button class="btn btn-gold" ' + (picks.length < needed ? 'disabled' : '') + ' onclick="confirmPicks()">Confirm Picks</button>';
   }
 }
 
@@ -2361,7 +2365,6 @@ function onPickClick(id) {
     picks = picks.filter(p => p !== id);
   } else {
     if (!G.pick_options || !G.pick_options.includes(id)) return;
-    if (picks.length >= G.pick_options.length) return;
     picks.push(id);
     pushAction({type: 'pick', territory: id});
     playSound('tick');
@@ -2758,7 +2761,9 @@ function showMapArmyPopup(territoryId) {
       let top = screenPt.y - containerRect.top - 30;
       // Keep popup on screen
       if (left + 200 > containerRect.width) left = screenPt.x - containerRect.left - 215;
+      if (left < 5) left = 5;
       if (top < 0) top = screenPt.y - containerRect.top + 15;
+      if (top + 80 > containerRect.height) top = containerRect.height - 85;
       popup.style.left = left + 'px';
       popup.style.top = top + 'px';
     }
@@ -3598,9 +3603,9 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     const focusedId = getFocusedTerritoryId();
     if (phase === 'picking') {
-      // In picking phase, Enter confirms picks if all are selected
-      const totalOptions = (G.pick_options || []).length;
-      if (picks.length >= totalOptions) {
+      // In picking phase, Enter confirms picks if enough are selected
+      const needed = G.picks_needed || 4;
+      if (picks.length >= needed) {
         confirmPicks();
       }
       return;
