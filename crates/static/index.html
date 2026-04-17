@@ -81,27 +81,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .annotation-note{pointer-events:none;font-size:8px;font-style:italic;fill:#e3b341;text-anchor:middle;dominant-baseline:central;opacity:0.9}
 .annotation-marker{pointer-events:none;font-size:11px;text-anchor:middle;dominant-baseline:central}
 
-/* ANNOTATION CONTEXT MENU */
-#annotation-ctx-menu{display:none;position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px 0;min-width:170px}
-#annotation-ctx-menu .ctx-item{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:12px;color:var(--text);cursor:pointer;transition:background .1s}
-#annotation-ctx-menu .ctx-item:hover{background:var(--bg3)}
-#annotation-ctx-menu .ctx-item .ctx-icon{width:18px;text-align:center}
-#annotation-ctx-menu .ctx-sep{height:1px;background:var(--border);margin:4px 0}
-
-/* ANNOTATION NOTE INPUT */
-#annotation-note-input{display:none;position:fixed;z-index:10000;background:var(--bg2);border:1px solid var(--gold);border-radius:8px;padding:8px}
-#annotation-note-input input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;width:180px;outline:none}
-#annotation-note-input input:focus{border-color:var(--gold)}
-#annotation-note-input .note-hint{font-size:10px;color:var(--text3);margin-top:4px}
-
-/* MARKER TOOLBAR */
-#marker-toolbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:5px 10px;z-index:80}
-#marker-toolbar .marker-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid transparent;background:transparent;cursor:pointer;font-size:16px;transition:background .15s,border-color .15s}
-#marker-toolbar .marker-btn:hover{background:var(--bg3)}
-#marker-toolbar .marker-btn.active{border-color:var(--gold);background:var(--bg3)}
-#marker-toolbar .marker-btn .btn-label{font-size:9px;color:var(--text3);position:absolute;bottom:-1px}
-#marker-toolbar .marker-sep{width:1px;background:var(--border);margin:2px 4px}
-#marker-toolbar .marker-btn.clear-markers{font-size:12px;color:var(--text2);padding:0 8px;width:auto}
 .name-text{pointer-events:none;font-size:9px;fill:var(--text2);text-anchor:middle;opacity:0;transition:opacity .15s}
 .territory-group:hover .name-text{opacity:1}
 .bonus-tint{pointer-events:none;opacity:0.08;transition:opacity .3s ease}
@@ -166,18 +145,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 @keyframes flash-capture{0%{filter:brightness(2.5) saturate(2)}50%{filter:brightness(1.5)}100%{filter:none}}
 .flash-fail{animation:flash-fail .3s ease-out}
 @keyframes flash-fail{0%{filter:brightness(0.5) saturate(0.3)}100%{filter:none}}
-
-/* CONNECTION LINES */
-.connection-line{stroke:var(--bg3);stroke-width:1;opacity:.3}
-
-/* HOVER CONNECTION LINES */
-.hover-conn-line{stroke-width:3.5;fill:none;opacity:0.7;stroke-linecap:round}
-.hover-conn-friendly{stroke:#60a5fa}
-.hover-conn-enemy{stroke:#ef4444}
-.hover-conn-neutral{stroke:#6b7280}
-.hover-conn-anim{stroke-dasharray:10,5;animation:hover-dash-flow 0.8s linear infinite}
-@keyframes hover-dash-flow{to{stroke-dashoffset:-15}}
-.hover-army-label{pointer-events:none;font-size:10px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
 
 /* ATTACK ROUTE PREVIEW */
 .route-attack{stroke-width:3;fill:none;stroke-linecap:round;stroke-dasharray:12,6;animation:dash-flow .6s linear infinite}
@@ -387,10 +354,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 [data-theme="light"] #game-over{background:rgba(255,255,255,.75)}
 [data-theme="light"] #replay-stepper{background:#f6f8fa}
 [data-theme="light"] .army-text{fill:#1f2328}
-[data-theme="light"] .connection-line{stroke:var(--border)}
-[data-theme="light"] .hover-conn-friendly{stroke:#2563eb}
-[data-theme="light"] .hover-conn-enemy{stroke:#dc2626}
-[data-theme="light"] .hover-conn-neutral{stroke:#9ca3af}
 [data-theme="light"] .bonus-boundary{opacity:0.35}
 [data-theme="light"] #sidebar{background:var(--bg2)}
 [data-theme="light"] .phase-flash{background:rgba(255,255,255,.6)}
@@ -421,28 +384,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 
 /* THREAT HEATMAP */
 
-/* CHAT PANEL */
-#chat-panel{border-top:1px solid var(--border);display:flex;flex-direction:column;max-height:280px;min-height:0;transition:max-height .3s ease}
-#chat-panel.collapsed{max-height:32px;min-height:32px}
-#chat-panel.collapsed #chat-messages,#chat-panel.collapsed #chat-emoji-bar,#chat-panel.collapsed #chat-input-row{display:none}
-#chat-toggle{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;background:var(--bg2);user-select:none}
-#chat-toggle:hover{color:var(--text)}
-#chat-toggle .chat-arrow{transition:transform .2s}
-#chat-panel.collapsed #chat-toggle .chat-arrow{transform:rotate(180deg)}
-#chat-messages{flex:1;overflow-y:auto;padding:6px 10px;font-size:12px;line-height:1.5;min-height:60px;max-height:180px;scroll-behavior:smooth}
-.chat-msg{padding:2px 0;animation:slide-in .2s ease-out forwards;opacity:0;transform:translateX(-6px)}
-.chat-msg.player-msg{color:#60a5fa}
-.chat-msg.ai-msg{color:#f87171}
-.chat-msg.system-msg{color:var(--gold);font-style:italic;font-size:11px}
-.chat-msg .chat-sender{font-weight:700;margin-right:4px}
-#chat-emoji-bar{display:flex;gap:4px;padding:4px 10px}
-#chat-emoji-bar button{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:14px;transition:background .15s,transform .1s}
-#chat-emoji-bar button:hover{background:var(--bg3);transform:scale(1.15)}
-#chat-input-row{display:flex;gap:4px;padding:4px 10px 8px}
-#chat-input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:12px;outline:none}
-#chat-input:focus{border-color:var(--blue)}
-#chat-send-btn{background:var(--blue);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:600;transition:background .15s}
-#chat-send-btn:hover{background:#3b82f6}
 
 /* ========== RESPONSIVE: TABLET (768px) ========== */
 @media (max-width: 768px) {
@@ -545,13 +486,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #income-breakdown .ib-line .ib-label{color:var(--text3)}
 #income-breakdown .ib-line .ib-val{font-weight:600;color:var(--text)}
 
-/* Strategic tips */
-#strat-tips{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);line-height:1.5;flex-shrink:0;position:relative}
-#strat-tips .tip-label{font-weight:600;color:var(--text2);margin-right:4px}
-#strat-tips .tip-dismiss{position:absolute;top:4px;right:8px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1;padding:2px}
-#strat-tips .tip-dismiss:hover{color:var(--text)}
-#strat-tips.hidden{display:none}
-#strat-tips .tip-toggle{font-size:10px;color:var(--text3);cursor:pointer;text-decoration:underline;margin-top:4px;display:inline-block}
 
 /* SESSION STATS BAR */
 #session-stats-bar{position:fixed;bottom:0;left:0;right:0;height:24px;background:#0d1117;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:20px;font-size:11px;color:var(--text3);z-index:900;transform:translateY(100%);transition:transform .3s ease}
@@ -637,18 +571,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <button id="replay-exit-btn" onclick="exitReplayMode()">Exit Review</button>
         </div>
       </div>
-      <div id="marker-toolbar">
-        <button class="marker-btn" data-marker="attack" onclick="toggleMarkerMode('attack')" title="Mark: Plan to attack">&#x2694;&#xFE0F;</button>
-        <button class="marker-btn" data-marker="defend" onclick="toggleMarkerMode('defend')" title="Mark: Defend this">&#x1F6E1;</button>
-        <button class="marker-btn" data-marker="danger" onclick="toggleMarkerMode('danger')" title="Mark: Danger zone">&#x26A0;&#xFE0F;</button>
-        <button class="marker-btn" data-marker="priority" onclick="toggleMarkerMode('priority')" title="Mark: Priority target">&#x2B50;</button>
-        <div class="marker-sep"></div>
-        <button class="marker-btn clear-markers" onclick="clearAllAnnotations()" title="Clear all annotations">Clear</button>
-      </div>
     </div>
-    <!-- Annotation overlays (positioned fixed, outside map container) -->
-    <div id="annotation-ctx-menu"></div>
-    <div id="annotation-note-input"></div>
     <div id="sidebar">
       <div class="sb-section" id="phase-panel"></div>
       <div id="income-breakdown"></div>
@@ -668,21 +591,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <div id="replay-sparkline"><h3>Win Probability</h3><div id="replay-sparkline-svg"></div></div>
       <div id="replay-log"></div>
       <div class="history-section" id="history-panel"></div>
-      <div id="chat-panel">
-        <div id="chat-toggle" onclick="toggleChat()"><span>Chat</span><span class="chat-arrow">&#9660;</span></div>
-        <div id="chat-messages"></div>
-        <div id="chat-emoji-bar">
-          <button onclick="sendEmoji('\uD83D\uDC4D')" title="Nice">&#128077;</button>
-          <button onclick="sendEmoji('\uD83D\uDE24')" title="Frustrated">&#128548;</button>
-          <button onclick="sendEmoji('\uD83C\uDFAF')" title="Bullseye">&#127919;</button>
-          <button onclick="sendEmoji('\uD83D\uDE02')" title="Haha">&#128514;</button>
-        </div>
-        <div id="chat-input-row" style="display:none">
-          <input type="text" id="chat-input" placeholder="Say something..." maxlength="120" onkeydown="if(event.key==='Enter')sendChat()">
-          <button id="chat-send-btn" onclick="sendChat()">Send</button>
-        </div>
-      </div>
-      <div id="strat-tips"></div>
     </div>
     <div id="mobile-sidebar-tab" onclick="toggleMobileSidebar()">Show Orders <span class="tab-arrow">&#9650;</span></div>
   </div>
@@ -1503,48 +1411,8 @@ function buildMap() {
   // Check if any territory lacks path data (circle-mode map)
   const isCircleMap = G && G.territories && G.territories.some(t => !t.path);
 
-  // Connection lines between adjacent territories (for circle-mode maps)
-  if (isCircleMap && G && G.territories) {
-    const connGroup = svgEl('g', {id:'connection-lines'});
-    const drawn = new Set();
-    G.territories.forEach(t => {
-      const x1 = t.label_x || 0;
-      const y1 = t.label_y || 0;
-      if (t.adjacent) {
-        t.adjacent.forEach(adjId => {
-          const key = Math.min(t.id, adjId) + '-' + Math.max(t.id, adjId);
-          if (drawn.has(key)) return;
-          drawn.add(key);
-          const adj = G.territories.find(tt => tt.id === adjId);
-          if (!adj) return;
-          const x2 = adj.label_x || 0;
-          const y2 = adj.label_y || 0;
-          // Wrap-around connections that span most of the map get dashed style
-          const dx = Math.abs(x2 - x1);
-          if (dx > 500) {
-            connGroup.appendChild(svgEl('line', {
-              x1:x1, y1:y1, x2:x2, y2:y2,
-              class:'connection-line',
-              'stroke-dasharray': '4,4',
-              opacity: '0.2'
-            }));
-          } else {
-            connGroup.appendChild(svgEl('line', {
-              x1:x1, y1:y1, x2:x2, y2:y2,
-              class:'connection-line'
-            }));
-          }
-        });
-      }
-    });
-    svg.appendChild(connGroup);
-  }
-
   // Bonus region boundaries layer (below territories)
   svg.appendChild(svgEl('g', {id:'bonus-boundaries'}));
-
-  // Hover connection lines layer (below territories)
-  svg.appendChild(svgEl('g', {id:'hover-connections'}));
 
   // Territory groups
   const terrGroup = svgEl('g', {id:'territories'});
@@ -1665,8 +1533,6 @@ function buildMap() {
 
   // Draw bonus region boundaries now that POS is populated
   drawBonusBoundaries();
-  // Pre-build hover connection elements for instant show/hide
-  buildHoverConnections();
 
   // Bonus labels on map
   // For maps with 6 bonuses, use hardcoded positions; otherwise compute from territory centroids
@@ -1876,7 +1742,6 @@ function updateMap() {
   updateKbFocusRing();
 
   drawOrderLines();
-  drawHoverConnections();
   updateBonusBoundaryVisibility();
 
 
@@ -1979,104 +1844,6 @@ function estimateCombat(attackers, defenders) {
   if (def <= 0 && atk > 0) return 'Capture (' + atk + ' survive)';
   if (atk <= 0) return 'Fail';
   return 'Stalemate';
-}
-
-// ========== HOVER CONNECTION LINES ==========
-// Pre-built hover connection elements keyed by territory id
-let hoverConnGroups = {};
-
-function buildHoverConnections() {
-  const container = document.getElementById('hover-connections');
-  if (!container) return;
-  container.innerHTML = '';
-  hoverConnGroups = {};
-  if (!G || !G.territories) return;
-
-  G.territories.forEach(t => {
-    if (!POS[t.id] || !t.adjacent) return;
-    const [hx, hy] = POS[t.id];
-    const g = svgEl('g', {'data-hover-terr': t.id, style: 'display:none'});
-
-    t.adjacent.forEach(adjId => {
-      if (!POS[adjId]) return;
-      const [ax, ay] = POS[adjId];
-
-      g.appendChild(svgEl('line', {
-        x1: ax, y1: ay, x2: hx, y2: hy,
-        class: 'hover-conn-line hover-conn-neutral hover-conn-anim',
-        'data-adj': adjId
-      }));
-
-      const bx = ax + (hx - ax) * 0.15;
-      const by = ay + (hy - ay) * 0.15;
-      g.appendChild(svgEl('circle', {
-        cx: bx, cy: by, r: 8,
-        fill: 'rgba(0,0,0,0.75)',
-        stroke: '#6b7280', 'stroke-width': 1.5,
-        'data-badge-adj': adjId, style: 'display:none'
-      }));
-      g.appendChild(svgEl('text', {
-        x: bx, y: by, class: 'hover-army-label',
-        'data-label-adj': adjId
-      }, ''));
-    });
-
-    container.appendChild(g);
-    hoverConnGroups[t.id] = g;
-  });
-}
-
-function drawHoverConnections() {
-  // Hide all pre-built groups
-  Object.values(hoverConnGroups).forEach(g => { g.style.display = 'none'; });
-
-  if (selectedSource !== null) return;
-  if (hoveredTerritory === null || !POS[hoveredTerritory]) return;
-  if (!G) return;
-
-  const g = hoverConnGroups[hoveredTerritory];
-  if (!g) return;
-
-  const ht = terr(hoveredTerritory);
-  if (!ht || !ht.adjacent) return;
-
-  // Update colors and army badges based on current game state
-  g.querySelectorAll('line[data-adj]').forEach(line => {
-    const adjId = parseInt(line.getAttribute('data-adj'));
-    const at = terr(adjId);
-    if (!at) return;
-    let colorClass = 'hover-conn-neutral';
-    if (at.owner === ht.owner && ht.owner === 0) colorClass = 'hover-conn-friendly';
-    else if (at.owner === ht.owner && ht.owner === 1) colorClass = 'hover-conn-enemy';
-    else if (at.owner === 0) colorClass = 'hover-conn-friendly';
-    else if (at.owner === 1) colorClass = 'hover-conn-enemy';
-    line.setAttribute('class', 'hover-conn-line ' + colorClass + ' hover-conn-anim');
-  });
-
-  g.querySelectorAll('circle[data-badge-adj]').forEach(circle => {
-    const adjId = parseInt(circle.getAttribute('data-badge-adj'));
-    const at = terr(adjId);
-    if (!at) { circle.style.display = 'none'; return; }
-    const armyCount = at.armies || 0;
-    if (armyCount > 0 && at.visible !== false) {
-      circle.style.display = '';
-      const colorClass = (at.owner === ht.owner && ht.owner === 0) || at.owner === 0 ? '#60a5fa' :
-                          (at.owner === 1 ? '#ef4444' : '#6b7280');
-      circle.setAttribute('stroke', colorClass);
-    } else {
-      circle.style.display = 'none';
-    }
-  });
-
-  g.querySelectorAll('text[data-label-adj]').forEach(txt => {
-    const adjId = parseInt(txt.getAttribute('data-label-adj'));
-    const at = terr(adjId);
-    if (!at) { txt.textContent = ''; return; }
-    const armyCount = at.armies || 0;
-    txt.textContent = (armyCount > 0 && at.visible !== false) ? armyCount : '';
-  });
-
-  g.style.display = '';
 }
 
 // ========== BONUS REGION BOUNDARIES ==========
