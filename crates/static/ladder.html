@@ -73,6 +73,7 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
   <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
   <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
   <a href="/ladder" style="color:#fff;text-decoration:none;">Ladder</a>
+  <a href="/history" style="color:#8b949e;text-decoration:none;">History</a>
   <a href="/feedback" style="color:#8b949e;text-decoration:none;">Feedback</a>
   <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;margin-left:auto;font-weight:600;">Discord</a>
 </nav>
@@ -131,7 +132,7 @@ async function loadLadder() {
     }
     allPlayers = await res.json();
     if (!allPlayers || allPlayers.length === 0) {
-      content.innerHTML = '<div class="empty-state">No players on the leaderboard yet. Play some games!</div>';
+      content.innerHTML = '<div class="empty-state">No players on the leaderboard yet.<br><a href="/games" style="color:var(--blue)">Play a multiplayer game</a> to appear on the ladder.</div>';
       return;
     }
     allPlayers.sort(function(a, b) { return (b.rating || 0) - (a.rating || 0); });
