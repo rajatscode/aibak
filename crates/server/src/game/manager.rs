@@ -174,7 +174,7 @@ impl GameManager {
         .await?;
 
         // Set picking phase deadline (same duration as turn deadlines).
-        let deadline = chrono::Utc::now() + chrono::Duration::seconds(300);
+        let deadline = chrono::Utc::now() + chrono::Duration::hours(24);
         db::set_turn_deadline(&self.pool, game_id, 0, deadline).await?;
 
         self.hub.broadcast(
@@ -312,7 +312,7 @@ impl GameManager {
         db::update_game_state_tx(&mut tx, game_id, "active", 1, &state_json, None).await?;
 
         // Set first turn deadline.
-        let deadline = chrono::Utc::now() + chrono::Duration::seconds(300);
+        let deadline = chrono::Utc::now() + chrono::Duration::hours(24);
         db::set_turn_deadline_tx(&mut tx, game_id, 1, deadline).await?;
 
         tx.commit().await?;
@@ -534,7 +534,7 @@ impl GameManager {
 
         db::update_game_state_tx(&mut tx, game_id, "active", 1, &state_json, None).await?;
 
-        let deadline = chrono::Utc::now() + chrono::Duration::seconds(300);
+        let deadline = chrono::Utc::now() + chrono::Duration::hours(24);
         db::set_turn_deadline_tx(&mut tx, game_id, 1, deadline).await?;
 
         tx.commit().await?;
@@ -624,7 +624,7 @@ impl GameManager {
                 .await?;
 
             // Set next turn deadline.
-            let deadline = chrono::Utc::now() + chrono::Duration::seconds(300);
+            let deadline = chrono::Utc::now() + chrono::Duration::hours(24);
             db::set_turn_deadline_tx(tx, game_id, new_turn, deadline).await?;
 
             self.hub.broadcast(

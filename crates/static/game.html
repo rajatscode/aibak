@@ -466,10 +466,10 @@ function connectWebSocket() {
 }
 
 function handleGameEvent(event) {
-  if (event.OpponentCommitted) {
+  if (event.type === 'opponent_committed') {
     toast('Opponent submitted', 'success');
   }
-  if (event.TurnResolved || event.GameStateUpdated || event.GameFinished) {
+  if (event.type === 'turn_resolved' || event.type === 'game_state_updated' || event.type === 'game_finished') {
     submitted = false;
     hideSubmitted();
     fetchGameState();
