@@ -354,7 +354,10 @@ async function fetchGameState() {
     turnDeadline = data.turn_deadline || null;
     if (data.has_submitted) {
       submitted = true;
+      window._mySubmittedOrders = data.my_orders || [];
       showSubmitted('Orders submitted - waiting for opponent...');
+    } else {
+      window._mySubmittedOrders = null;
     }
     startDeadlineTimer();
 
@@ -946,8 +949,26 @@ function renderSidebar() {
   var cp = document.getElementById('control-panel');
 
   if (submitted) {
-    pp.innerHTML = '<div class="sb-phase">Waiting...</div><div class="sb-sub">Waiting for opponent to submit</div>';
-    cp.innerHTML = '';
+    pp.innerHTML = '<div class="sb-phase" style="color:var(--green)">\u2713 Orders Submitted</div><div class="sb-sub">Waiting for opponent...</div>';
+    var ordersHtml = '';
+    if (window._mySubmittedOrders && window._mySubmittedOrders.length > 0) {
+      ordersHtml = '<h3 style="margin-top:8px;font-size:12px;color:var(--text3)">Your submitted orders:</h3>';
+      window._mySubmittedOrders.forEach(function(o) {
+        if (o.Deploy) {
+          var t = MAP ? MAP.territories[o.Deploy.territory] : null;
+          ordersHtml += '<div style="font-size:12px;color:var(--text2);padding:2px 0">\u2795 Deploy +' + o.Deploy.armies + ' to ' + (t ? t.name : o.Deploy.territory) + '</div>';
+        } else if (o.Attack) {
+          var from = MAP ? MAP.territories[o.Attack.from] : null;
+          var to = MAP ? MAP.territories[o.Attack.to] : null;
+          ordersHtml += '<div style="font-size:12px;color:var(--text2);padding:2px 0">\u2694 Attack ' + (from?from.name:o.Attack.from) + ' \u2192 ' + (to?to.name:o.Attack.to) + ' (' + o.Attack.armies + ')</div>';
+        } else if (o.Transfer) {
+          var from2 = MAP ? MAP.territories[o.Transfer.from] : null;
+          var to2 = MAP ? MAP.territories[o.Transfer.to] : null;
+          ordersHtml += '<div style="font-size:12px;color:var(--text2);padding:2px 0">\u2192 Transfer ' + (from2?from2.name:o.Transfer.from) + ' \u2192 ' + (to2?to2.name:o.Transfer.to) + ' (' + o.Transfer.armies + ')</div>';
+        }
+      });
+    }
+    cp.innerHTML = ordersHtml;
     var sa = document.getElementById('sidebar-actions');
     if (sa) sa.innerHTML = '';
     return;
@@ -1282,6 +1303,7 @@ async function endTurn() {
   });
   var success = await submitOrders(apiOrders);
   if (success) {
+    window._mySubmittedOrders = apiOrders;
     renderSidebar();
     showSubmitted('Orders submitted - waiting for opponent...');
   } else {

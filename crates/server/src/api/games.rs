@@ -89,6 +89,7 @@ pub struct GameStateResponse {
     pub pick_options: Option<Vec<usize>>,
     pub picks_needed: Option<usize>,
     pub has_submitted: bool,
+    pub my_orders: Option<serde_json::Value>,
     pub my_seat: Option<u8>,
     pub map: Option<serde_json::Value>,
     pub player_a_info: Option<PlayerInfo>,
@@ -230,6 +231,22 @@ pub async fn get_game(
     .await
     .unwrap_or(false);
 
+    // Fetch submitted orders for this player on the current turn.
+    let my_orders: Option<serde_json::Value> = if has_submitted {
+        sqlx::query_scalar::<_, serde_json::Value>(
+            "SELECT orders_json FROM orders WHERE game_id = $1 AND user_id = $2 AND turn = $3"
+        )
+        .bind(game_id)
+        .bind(auth.user_id)
+        .bind(game.turn)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+
     // Fetch turn deadline for active games.
     let turn_deadline = if game.status == "active" || game.status == "picking" {
         db::get_turn_deadline(pool, game_id, game.turn)
@@ -247,6 +264,7 @@ pub async fn get_game(
         pick_options,
         picks_needed,
         has_submitted,
+        my_orders,
         my_seat,
         map: map_data,
         player_a_info,
