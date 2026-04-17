@@ -1193,9 +1193,11 @@ function applyThemeGradients() {
   if (light) {
     setStops('grad-player', '#3b82f6', '#2563eb'); setStops('grad-enemy', '#ef4444', '#dc2626');
     setStops('grad-neutral', '#9ca3af', '#6b7280'); setStops('grad-fog', '#d0d7de', '#bbc3cd');
+    setStops('grad-wasteland', '#a16207', '#854d0e');
   } else {
     setStops('grad-player', '#1e40af', '#0c2349'); setStops('grad-enemy', '#7f1d1d', '#4c0519');
     setStops('grad-neutral', '#5a6672', '#3d4451'); setStops('grad-fog', '#1a2844', '#0f1929');
+    setStops('grad-wasteland', '#78350f', '#451a03');
   }
   // Flat ocean background
   const oceanRect = document.querySelector('#map-svg > rect');
@@ -1211,11 +1213,13 @@ function applyThemeGradients() {
     if (light) {
       if (fill === 'url(#grad-player)') p.setAttribute('stroke', '#93b4e8');
       else if (fill === 'url(#grad-enemy)') p.setAttribute('stroke', '#e8a0a0');
+      else if (fill === 'url(#grad-wasteland)') p.setAttribute('stroke', '#d97706');
       else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#b0b8c4');
       else p.setAttribute('stroke', '#c0c8d0');
     } else {
       if (fill === 'url(#grad-player)') p.setAttribute('stroke', '#0d1a2f');
       else if (fill === 'url(#grad-enemy)') p.setAttribute('stroke', '#0d1a2f');
+      else if (fill === 'url(#grad-wasteland)') p.setAttribute('stroke', '#3d1f00');
       else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#0d1a2f');
       else p.setAttribute('stroke', '#0d1a2f');
     }
@@ -1434,6 +1438,17 @@ function buildMap() {
   neutralGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#374151'}));
   defs.appendChild(neutralGrad);
 
+  // Territory fill gradients — wasteland (dark brownish)
+  const wastelandGrad = svgEl('linearGradient', {id:'grad-wasteland', x1:'0', y1:'0', x2:'0', y2:'1'});
+  wastelandGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#78350f'}));
+  wastelandGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#451a03'}));
+  defs.appendChild(wastelandGrad);
+
+  // Wasteland crosshatch pattern
+  const wastelandPattern = svgEl('pattern', {id:'wasteland-hatch', width:'6', height:'6', patternUnits:'userSpaceOnUse', patternTransform:'rotate(45)'});
+  wastelandPattern.appendChild(svgEl('line', {x1:'0', y1:'0', x2:'0', y2:'6', stroke:'rgba(0,0,0,0.3)', 'stroke-width':'1.5'}));
+  defs.appendChild(wastelandPattern);
+
   // Territory fill gradients — fog
   const fogGrad = svgEl('linearGradient', {id:'grad-fog', x1:'0', y1:'0', x2:'0', y2:'1'});
   fogGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#283040'}));
@@ -1508,6 +1523,29 @@ function buildMap() {
       } else {
         // Fallback circle if no path data
         g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#0d1a2f','stroke-width':2, filter:'url(#territory-shadow)'}));
+      }
+
+      // Wasteland crosshatch overlay
+      if (t.is_wasteland) {
+        if (t.path) {
+          g.appendChild(svgEl('path', {
+            d: t.path,
+            id: 'wasteland-hatch-' + t.id,
+            fill: 'url(#wasteland-hatch)',
+            stroke: 'none',
+            'pointer-events': 'none',
+            opacity: '0.5'
+          }));
+        } else {
+          g.appendChild(svgEl('circle', {
+            cx:x, cy:y, r:18,
+            id: 'wasteland-hatch-' + t.id,
+            fill: 'url(#wasteland-hatch)',
+            stroke: 'none',
+            'pointer-events': 'none',
+            opacity: '0.5'
+          }));
+        }
       }
 
       // Selection highlight (invisible path copy on top)
@@ -1672,10 +1710,17 @@ function updateMap() {
     if (t.visible !== false) {
       if (t.owner === 0) { fill = 'url(#grad-player)'; strokeColor = '#0d1a2f'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
       else if (t.owner === 1) { fill = 'url(#grad-enemy)'; strokeColor = '#0d1a2f'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
+      else if (t.is_wasteland) { fill = 'url(#grad-wasteland)'; strokeColor = '#3d1f00'; ownerBorderColor = 'rgba(251,191,36,0.4)'; }
       else { fill = 'url(#grad-neutral)'; strokeColor = '#0d1a2f'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
     }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
+
+    // Wasteland crosshatch overlay
+    const hatchEl = document.getElementById('wasteland-hatch-' + t.id);
+    if (hatchEl) {
+      hatchEl.style.display = (t.is_wasteland && t.owner === 255 && t.visible !== false) ? '' : 'none';
+    }
 
     // Update army bubble border color to match owner
     if (armyBg) {
@@ -1916,7 +1961,7 @@ function showTooltip(id, e) {
   let owner = t.owner === 0 ? 'You' : t.owner === 1 ? 'AI' : 'Neutral';
   let ownerColor = t.owner === 0 ? 'var(--blue)' : t.owner === 1 ? 'var(--red)' : 'var(--neutral)';
 
-  let html = '<div class="tip-name">' + t.name + '</div>';
+  let html = '<div class="tip-name">' + t.name + (t.is_wasteland ? ' <span style="color:#d97706">\u2620 Wasteland</span>' : '') + '</div>';
   html += '<div>Owner: <span style="color:' + ownerColor + '">' + owner + '</span></div>';
   html += '<div>Armies: <strong>' + (t.armies || 0) + '</strong></div>';
 
@@ -3702,10 +3747,16 @@ function applyReplayState(state) {
     if (t.visible !== false) {
       if (t.owner === 0) fill = 'url(#grad-player)';
       else if (t.owner === 1) fill = 'url(#grad-enemy)';
+      else if (t.is_wasteland) fill = 'url(#grad-wasteland)';
       else fill = 'url(#grad-neutral)';
     }
     pathEl.style.transition = 'fill 0.3s ease';
     pathEl.setAttribute('fill', fill);
+    // Wasteland hatch visibility
+    const hatchEl = document.getElementById('wasteland-hatch-' + t.id);
+    if (hatchEl) {
+      hatchEl.style.display = (t.is_wasteland && t.owner === 255 && t.visible !== false) ? '' : 'none';
+    }
 
     // Armies
     if (t.visible !== false && t.armies > 0) {

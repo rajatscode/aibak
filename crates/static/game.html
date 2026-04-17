@@ -540,12 +540,16 @@ function buildMap() {
   oceanGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#060d15'}));
   defs.appendChild(oceanGrad);
 
-  [['grad-me','#3b82f6','#1d4ed8'],['grad-them','#ef4444','#b91c1c'],['grad-neutral','#6b7280','#374151'],['grad-fog','#283040','#1a2030']].forEach(function(g) {
+  [['grad-me','#3b82f6','#1d4ed8'],['grad-them','#ef4444','#b91c1c'],['grad-neutral','#6b7280','#374151'],['grad-fog','#283040','#1a2030'],['grad-wasteland','#78350f','#451a03']].forEach(function(g) {
     var gr = svgEl('linearGradient', {id:g[0], x1:'0', y1:'0', x2:'0', y2:'1'});
     gr.appendChild(svgEl('stop', {offset:'0%', 'stop-color':g[1]}));
     gr.appendChild(svgEl('stop', {offset:'100%', 'stop-color':g[2]}));
     defs.appendChild(gr);
   });
+
+  var wastelandPattern = svgEl('pattern', {id:'wasteland-hatch', width:'6', height:'6', patternUnits:'userSpaceOnUse', patternTransform:'rotate(45)'});
+  wastelandPattern.appendChild(svgEl('line', {x1:'0', y1:'0', x2:'0', y2:'6', stroke:'rgba(0,0,0,0.3)', 'stroke-width':'1.5'}));
+  defs.appendChild(wastelandPattern);
 
   var armyBg = svgEl('radialGradient', {id:'army-bubble-grad', cx:'40%', cy:'35%', r:'65%'});
   armyBg.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'rgba(40,40,50,0.85)'}));

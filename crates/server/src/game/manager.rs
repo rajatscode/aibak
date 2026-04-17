@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use strat_engine::board::Board;
 use strat_engine::map::MapFile;
-use strat_engine::orders::Order;
+use strat_engine::orders::{Order, validate_orders};
 use strat_engine::picking;
 use strat_engine::state::{GameState, Phase};
 use strat_engine::turn::resolve_turn;
@@ -422,6 +422,9 @@ impl GameManager {
             let seat = self.player_seat_by_id(game, order_row.user_id)?;
             let orders: Vec<Order> = serde_json::from_value(order_row.orders_json.clone())
                 .map_err(|e| GameError::Serialization(e.to_string()))?;
+            if let Err(e) = validate_orders(&orders, seat, &state, &board) {
+                return Err(GameError::InvalidOrders(e.to_string()));
+            }
             player_orders[seat as usize] = orders;
         }
 

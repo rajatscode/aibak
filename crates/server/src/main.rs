@@ -27,7 +27,7 @@ use strat_engine::fog;
 use strat_engine::game_analysis;
 use strat_engine::map::{Map, MapFile};
 use strat_engine::openings;
-use strat_engine::orders::Order;
+use strat_engine::orders::{Order, validate_orders};
 use strat_engine::picking;
 use strat_engine::state::{GameState, NEUTRAL, Phase, PlayerId};
 use strat_engine::turn::{TurnEvent, resolve_turn};
@@ -511,6 +511,11 @@ async fn submit_local_orders(
 
     if app.game.phase != Phase::Play {
         return Err((StatusCode::BAD_REQUEST, "Not in play phase".into()));
+    }
+
+    // Validate player orders before processing.
+    if let Err(e) = validate_orders(&body.orders, PLAYER, &app.game, &app.board) {
+        return Err((StatusCode::BAD_REQUEST, format!("Invalid orders: {e}")));
     }
 
     let visible_before = fog::visible_territories(&app.game, PLAYER, &app.board);
