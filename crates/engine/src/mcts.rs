@@ -274,11 +274,18 @@ pub fn evaluate_position(state: &GameState, player: PlayerId, board: &Board) -> 
     let bonus_score_norm = (bonus_score + 1.0) / 2.0;
 
     // Weighted combination — territory control is king.
-    let raw = territory_score * 0.35
+    let mut raw = territory_score * 0.35
         + income_score * 0.25
         + army_score * 0.15
         + border_score * 0.15
         + bonus_score_norm * 0.10;
+
+    // Finishing bonus: when already dominating (>60% of contested territory),
+    // add extra incentive proportional to how close we are to total elimination.
+    // This prevents the AI from stalling when it should be closing out the game.
+    if territory_score > 0.6 {
+        raw += (territory_score - 0.6) * 0.5;
+    }
 
     raw.clamp(0.01, 0.99)
 }
@@ -423,14 +430,21 @@ fn generate_candidate_actions(
     }
 
     // Hold variation: deploy only, no attacks (sometimes holding is best).
-    if let Some(orders) =
-        generate_hold_variation(state, player, board, &border_territories, income)
-        && !actions.iter().any(|a| a.orders == orders)
-    {
-        actions.push(MctsAction {
-            orders,
-            label: "hold".into(),
-        });
+    // Skip when dominating — holding wastes the advantage.
+    let my_territories = state.territory_count_for(player) as f64;
+    let opp_territories = state.territory_count_for(1 - player) as f64;
+    let territory_ratio = my_territories / (my_territories + opp_territories).max(1.0);
+
+    if territory_ratio <= 0.6 {
+        if let Some(orders) =
+            generate_hold_variation(state, player, board, &border_territories, income)
+            && !actions.iter().any(|a| a.orders == orders)
+        {
+            actions.push(MctsAction {
+                orders,
+                label: "hold".into(),
+            });
+        }
     }
 
     // Attack only the single weakest neighbor.
@@ -453,6 +467,20 @@ fn generate_candidate_actions(
             orders,
             label: "bonus_focus".into(),
         });
+    }
+
+    // All-out attack: when dominating (>60% territory), generate an aggressive
+    // variation that deploys to the strongest border and attacks everything.
+    if territory_ratio > 0.6 {
+        if let Some(orders) =
+            generate_all_out_attack_variation(state, player, board, &border_territories, income)
+            && !actions.iter().any(|a| a.orders == orders)
+        {
+            actions.push(MctsAction {
+                orders,
+                label: "all_out_attack".into(),
+            });
+        }
     }
 
     actions
@@ -1050,6 +1078,69 @@ fn generate_bonus_focus_variation(
         }
     }
 
+    generate_transfers(player, board, &mut sim_armies, &sim_owners, &mut orders);
+
+    Some(orders)
+}
+
+/// Generate an all-out attack variation: deploy to the border with the most
+/// attackable enemy neighbors and attack everything possible from every border.
+fn generate_all_out_attack_variation(
+    state: &GameState,
+    player: PlayerId,
+    board: &Board,
+    border_territories: &[usize],
+    income: u32,
+) -> Option<Vec<Order>> {
+    let map = &board.map;
+
+    // Deploy to the border territory with the most enemy neighbors.
+    let deploy_target = border_territories.iter().copied().max_by_key(|&tid| {
+        let enemy_count = map.territories[tid]
+            .adjacent
+            .iter()
+            .filter(|&&adj| state.territory_owners[adj] != player)
+            .count();
+        // Prefer territories where we already have armies (can overwhelm).
+        (enemy_count, state.territory_armies[tid])
+    })?;
+
+    let mut orders = vec![Order::Deploy {
+        territory: deploy_target,
+        armies: income,
+    }];
+
+    let mut sim_armies = state.territory_armies.clone();
+    let mut sim_owners = state.territory_owners.clone();
+    let start_owners = state.territory_owners.clone();
+    sim_armies[deploy_target] += income;
+
+    // Attack from deploy target first, then all other borders.
+    generate_attacks_from(
+        deploy_target,
+        player,
+        board,
+        &mut sim_armies,
+        &mut sim_owners,
+        &mut orders,
+        &start_owners,
+    );
+    for &tid in border_territories {
+        if tid == deploy_target {
+            continue;
+        }
+        generate_attacks_from(
+            tid,
+            player,
+            board,
+            &mut sim_armies,
+            &mut sim_owners,
+            &mut orders,
+            &start_owners,
+        );
+    }
+
+    // Move all interior armies toward the front.
     generate_transfers(player, board, &mut sim_armies, &sim_owners, &mut orders);
 
     Some(orders)
