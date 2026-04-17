@@ -32,8 +32,8 @@ fn load_small_earth() -> MapFile {
     MapFile::load(&maps_dir().join("small_earth.json")).expect("Failed to load Small Earth map")
 }
 
-fn load_mme() -> MapFile {
-    MapFile::load(&maps_dir().join("mme.json")).expect("Failed to load MME map")
+fn load_big_earth() -> MapFile {
+    MapFile::load(&maps_dir().join("big_earth.json")).expect("Failed to load Big Earth map")
 }
 
 fn default_settings() -> MapSettings {
@@ -58,15 +58,15 @@ fn test_small_earth_loads() {
 }
 
 #[test]
-fn test_mme_loads() {
-    let map = load_mme();
+fn test_big_earth_loads() {
+    let map = load_big_earth();
     assert_eq!(map.territories.len(), 89);
     assert_eq!(map.bonuses.len(), 22);
 }
 
 #[test]
 fn test_all_adjacencies_bidirectional() {
-    for map in [load_small_earth(), load_mme()] {
+    for map in [load_small_earth(), load_big_earth()] {
         for t in &map.territories {
             for &adj in &t.adjacent {
                 assert!(
@@ -84,7 +84,7 @@ fn test_all_adjacencies_bidirectional() {
 
 #[test]
 fn test_all_territories_reachable() {
-    for map in [load_small_earth(), load_mme()] {
+    for map in [load_small_earth(), load_big_earth()] {
         let mut visited = vec![false; map.territories.len()];
         let mut stack = vec![0usize];
         visited[0] = true;
@@ -113,7 +113,7 @@ fn test_all_territories_reachable() {
 
 #[test]
 fn test_all_territories_in_exactly_one_bonus() {
-    for map in [load_small_earth(), load_mme()] {
+    for map in [load_small_earth(), load_big_earth()] {
         let mut bonus_count = vec![0usize; map.territories.len()];
         for bonus in &map.bonuses {
             for &tid in &bonus.territory_ids {
@@ -676,7 +676,7 @@ fn test_transfer_chain() {
 
 #[test]
 fn test_bonus_income_correct() {
-    for map in [load_small_earth(), load_mme()] {
+    for map in [load_small_earth(), load_big_earth()] {
         let board = Board::from_map(map.clone());
         let mut state = GameState::new(&board);
         // Test each bonus individually.
@@ -801,11 +801,11 @@ fn test_game_10_turns() {
     }
 }
 
-// ========== MME FULL GAME ==========
+// ========== BIG EARTH FULL GAME ==========
 
 #[test]
-fn test_mme_full_game() {
-    let map = load_mme();
+fn test_big_earth_full_game() {
+    let map = load_big_earth();
     let board = Board::from_map(map);
     let mut state = GameState::new(&board);
     let mut rng = StdRng::seed_from_u64(77);
@@ -823,7 +823,7 @@ fn test_mme_full_game() {
     for turn in 0..200 {
         if state.phase == Phase::Finished {
             println!(
-                "MME game ended on turn {}, winner: {:?}",
+                "Big Earth game ended on turn {}, winner: {:?}",
                 turn, state.winner
             );
             return;
@@ -1449,7 +1449,7 @@ fn test_picks_with_more_options_than_bonuses() {
 
 #[test]
 fn test_100_random_games_all_maps() {
-    let maps = [("Small Earth", load_small_earth()), ("MME", load_mme())];
+    let maps = [("Small Earth", load_small_earth()), ("Big Earth", load_big_earth())];
 
     for (map_name, map) in &maps {
         let board = Board::from_map(map.clone());

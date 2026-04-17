@@ -43,7 +43,7 @@ The core loop (pick → deploy → move → resolve → repeat) works locally ag
 1. **Deploy to strat.club** — Fly.io + Postgres + Discord OAuth
 2. **Multiplayer works end-to-end** — two real humans play a game via the web
 3. **Ladder is live** — Glicko-2 ratings, visible leaderboard
-4. **Two boards playable** — Small Earth Strategic, MME Strategic
+4. **Two boards playable** — Small Earth Strategic, Big Earth Strategic
 
 Everything else comes after these four things are done.
 
@@ -80,7 +80,7 @@ The following non-core features were stripped to focus on the critical path:
 - [ ] 24h boot timer enforced
 - [ ] Game results update Glicko-2 ratings
 - [ ] Leaderboard shows top players
-- [ ] Small Earth and MME boards are playable
+- [ ] Small Earth and Big Earth boards are playable
 - [ ] Fog of war works correctly in multiplayer
 - [ ] Game replay works after completion
 - [ ] No critical bugs in core game loop

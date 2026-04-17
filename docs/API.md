@@ -102,7 +102,7 @@ Start a new local game. Optionally specify a map template and game settings.
 **Request body (optional):**
 ```json
 {
-  "template": "mme",
+  "template": "big_earth",
   "settings": {
     "fog_of_war": true,
     "starting_armies": 5,

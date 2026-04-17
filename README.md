@@ -78,7 +78,7 @@ That's it. No database, no environment variables, no configuration required for 
 ### Run with a different map
 
 ```bash
-cargo run --bin strat-server -- maps/mme.json
+cargo run --bin strat-server -- maps/big_earth.json
 ```
 
 ### Enable multiplayer
@@ -154,7 +154,7 @@ strat-club/
 
   maps/           JSON map definitions
                     small_earth.json    (42 territories)
-                    mme.json            (89 territories, Modified Medium Earth)
+                    big_earth.json      (89 territories, Big Earth)
                     custom/             User-created maps
 ```
 

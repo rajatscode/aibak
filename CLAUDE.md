@@ -37,7 +37,7 @@ cargo run --bin strat-server
 cargo test
 
 # Specific map
-cargo run --bin strat-server -- maps/mme.json
+cargo run --bin strat-server -- maps/big_earth.json
 ```
 
 ## Game Mechanics

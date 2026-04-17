@@ -121,13 +121,61 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 </nav>
 
 <div id="browser-view">
+  <!-- Multiplayer Hub (requires auth) -->
+  <div id="mp-hub" style="display:none">
+    <div class="content" style="padding-bottom:0">
+      <!-- Auth banner for logged-out users -->
+      <div id="auth-banner" style="display:none;text-align:center;padding:32px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:16px">
+        <p style="font-size:15px;font-weight:600;margin-bottom:8px">Sign in with Discord to play multiplayer</p>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Create games, join the matchmaking queue, and climb the ladder.</p>
+        <a href="/api/auth/discord" class="btn btn-play" style="font-size:14px;padding:8px 24px">Sign in with Discord</a>
+      </div>
+
+      <!-- Multiplayer actions (logged-in only) -->
+      <div id="mp-actions" style="display:none">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+          <button id="btn-find-game" class="btn btn-play" style="font-size:14px;padding:10px 28px" onclick="findGame()">Find Game</button>
+          <button id="btn-create-game" class="btn btn-watch" style="font-size:14px;padding:10px 28px" onclick="createGame()">Create Game</button>
+        </div>
+
+        <!-- Queue status (hidden by default) -->
+        <div id="queue-status" style="display:none;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--gold);animation:pulse-dot 1.5s ease-in-out infinite;display:inline-block"></span>
+              <span id="queue-text" style="font-size:14px;font-weight:600">Searching for opponent...</span>
+            </div>
+            <button class="btn" style="background:var(--bg3);color:var(--red);border-color:var(--red)" onclick="leaveQueue()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Join by ID -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+          <input id="join-game-id" type="text" placeholder="Game ID" style="flex:1;max-width:280px;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:13px;outline:none">
+          <button class="btn btn-watch" style="font-size:13px;padding:8px 16px" onclick="joinGame()">Join</button>
+        </div>
+        <div id="join-error" style="display:none;font-size:12px;color:var(--red);margin-top:-12px;margin-bottom:12px"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="tabs">
+    <div class="tab" data-tab="my-games" id="tab-my-games-btn" style="display:none">My Games</div>
     <div class="tab active" data-tab="active">Active Games</div>
     <div class="tab" data-tab="recent">Recent Games</div>
     <div class="tab" data-tab="local">Local Game</div>
   </div>
 
   <div class="content">
+    <div id="tab-my-games" class="section">
+      <div id="my-games-list" class="game-list">
+        <div class="empty-state" id="my-games-empty">
+          <p>You have no active games.</p>
+          <p style="font-size:12px">Find a game or create one above to get started.</p>
+        </div>
+      </div>
+    </div>
+
     <div id="tab-active" class="section active">
       <div id="active-list" class="game-list">
         <div class="empty-state" id="active-empty">
@@ -673,6 +721,185 @@ function exitSpectator() {
   document.getElementById('spec-map-svg').innerHTML = '';
 }
 
+// --- Multiplayer Hub ---
+var currentUser = null;
+var queuePollInterval = null;
+
+async function checkAuth() {
+  try {
+    var res = await fetch('/api/auth/me');
+    if (!res.ok) throw new Error('not logged in');
+    currentUser = await res.json();
+    document.getElementById('mp-hub').style.display = '';
+    document.getElementById('auth-banner').style.display = 'none';
+    document.getElementById('mp-actions').style.display = '';
+    document.getElementById('tab-my-games-btn').style.display = '';
+    // Switch default tab to My Games when logged in
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.section').forEach(function(s) { s.classList.remove('active'); });
+    document.getElementById('tab-my-games-btn').classList.add('active');
+    document.getElementById('tab-my-games').classList.add('active');
+    loadMyGames();
+  } catch(e) {
+    document.getElementById('mp-hub').style.display = '';
+    document.getElementById('auth-banner').style.display = '';
+    document.getElementById('mp-actions').style.display = 'none';
+    document.getElementById('tab-my-games-btn').style.display = 'none';
+  }
+}
+
+async function loadMyGames() {
+  if (!currentUser) return;
+  try {
+    var res = await fetch('/api/games');
+    if (!res.ok) throw new Error('unavailable');
+    var games = await res.json();
+    // Filter to games the current user is in and that are not finished
+    var myGames = games.filter(function(g) {
+      var isPlayer = g.player_a === currentUser.id || g.player_b === currentUser.id;
+      return isPlayer && g.status !== 'finished';
+    });
+    renderMyGameList(myGames);
+  } catch(e) {
+    document.getElementById('my-games-empty').style.display = '';
+  }
+}
+
+function renderMyGameList(games) {
+  var list = document.getElementById('my-games-list');
+  var empty = document.getElementById('my-games-empty');
+  list.querySelectorAll('.game-card').forEach(function(c) { c.remove(); });
+  if (!games || games.length === 0) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  games.forEach(function(g) {
+    var card = document.createElement('div');
+    card.className = 'game-card';
+    var p1 = g.player_a_name || 'Player 1';
+    var p2 = g.player_b_name || (g.status === 'waiting' ? 'Waiting...' : 'Player 2');
+    var statusClass = 'status-' + g.status;
+    var created = new Date(g.created_at);
+    var timeStr = created.toLocaleDateString() + ' ' + created.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    card.innerHTML =
+      '<div class="game-info">' +
+        '<div class="game-players">' + escHtml(p1) + ' vs ' + escHtml(p2) + '</div>' +
+        '<div class="game-meta">' +
+          '<span class="status-badge ' + statusClass + '">' + g.status + '</span>' +
+          '<span>Map: ' + escHtml(g.template) + '</span>' +
+          '<span>Turn ' + g.turn + '</span>' +
+          '<span>' + timeStr + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="game-actions">' +
+        '<a href="/game/' + g.id + '" class="btn btn-play">Play</a>' +
+        '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + g.id + '\')">Watch</button>' +
+      '</div>';
+    list.appendChild(card);
+  });
+}
+
+async function findGame() {
+  var btn = document.getElementById('btn-find-game');
+  btn.disabled = true;
+  btn.textContent = 'Joining queue...';
+  try {
+    var res = await fetch('/api/queue/join', { method: 'POST' });
+    if (!res.ok) {
+      var err = await res.text();
+      btn.disabled = false;
+      btn.textContent = 'Find Game';
+      alert('Could not join queue: ' + err);
+      return;
+    }
+    document.getElementById('queue-status').style.display = '';
+    btn.style.display = 'none';
+    startQueuePolling();
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Find Game';
+  }
+}
+
+function startQueuePolling() {
+  if (queuePollInterval) clearInterval(queuePollInterval);
+  queuePollInterval = setInterval(pollQueueStatus, 2000);
+}
+
+async function pollQueueStatus() {
+  try {
+    var res = await fetch('/api/queue/status');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data.matched && data.game_id) {
+      clearInterval(queuePollInterval);
+      queuePollInterval = null;
+      window.location.href = '/game/' + data.game_id;
+    } else if (!data.in_queue) {
+      // No longer in queue (maybe timed out)
+      resetQueueUI();
+    }
+  } catch(e) {}
+}
+
+async function leaveQueue() {
+  try {
+    await fetch('/api/queue/leave', { method: 'POST' });
+  } catch(e) {}
+  if (queuePollInterval) { clearInterval(queuePollInterval); queuePollInterval = null; }
+  resetQueueUI();
+}
+
+function resetQueueUI() {
+  document.getElementById('queue-status').style.display = 'none';
+  var btn = document.getElementById('btn-find-game');
+  btn.style.display = '';
+  btn.disabled = false;
+  btn.textContent = 'Find Game';
+}
+
+async function createGame() {
+  var btn = document.getElementById('btn-create-game');
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+  try {
+    var res = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!res.ok) {
+      var err = await res.text();
+      btn.disabled = false;
+      btn.textContent = 'Create Game';
+      alert('Could not create game: ' + err);
+      return;
+    }
+    var data = await res.json();
+    window.location.href = '/game/' + data.id;
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Create Game';
+  }
+}
+
+async function joinGame() {
+  var input = document.getElementById('join-game-id');
+  var errEl = document.getElementById('join-error');
+  var gameId = input.value.trim();
+  errEl.style.display = 'none';
+  if (!gameId) { errEl.textContent = 'Enter a game ID.'; errEl.style.display = ''; return; }
+  try {
+    var res = await fetch('/api/games/' + encodeURIComponent(gameId) + '/join', { method: 'POST' });
+    if (!res.ok) {
+      var err = await res.text();
+      errEl.textContent = err || 'Could not join game.';
+      errEl.style.display = '';
+      return;
+    }
+    window.location.href = '/game/' + encodeURIComponent(gameId);
+  } catch(e) {
+    errEl.textContent = 'Network error.';
+    errEl.style.display = '';
+  }
+}
+
+checkAuth();
 loadActiveGames();
 loadRecentGames();
 loadLocalGame();

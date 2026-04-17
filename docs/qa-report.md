@@ -117,7 +117,7 @@ Adjacency validation (bidirectional check) on both map files:
 | Map | Territories | Adjacency Errors |
 |-----|-------------|-----------------|
 | maps/small_earth.json | 42 | 0 |
-| maps/mme.json | 89 | 0 |
+| maps/big_earth.json | 89 | 0 |
 
 **Result:** Both maps have fully symmetric adjacency graphs. **PASS**
 

@@ -1,7 +1,7 @@
 {
-  "id": "mme_strategic",
-  "name": "Modified Medium Earth — Strategic",
-  "map_id": "mme",
+  "id": "big_earth_strategic",
+  "name": "Big Earth — Strategic",
+  "map_id": "big_earth",
   "config": {
     "picking": {
       "num_picks": 4,

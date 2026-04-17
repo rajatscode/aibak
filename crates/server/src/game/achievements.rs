@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn test_explorer() {
         let mut ctx = base_context();
-        ctx.maps_played = vec!["small_earth".to_string(), "mme".to_string()];
+        ctx.maps_played = vec!["small_earth".to_string(), "big_earth".to_string()];
         ctx.total_maps_available = 2;
         let earned = check_achievements(&[], &ctx, 1);
         assert!(earned.iter().any(|e| e.id == AchievementId::Explorer));
