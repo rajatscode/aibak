@@ -237,7 +237,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* GAME OVER OVERLAY */
 #game-over{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:999}
 #game-over.show{display:flex}
-#game-over .card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:680px;max-height:85vh;overflow-y:auto}
+#game-over .card{position:relative;background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:680px;max-height:85vh;overflow-y:auto}
+#game-over .card .modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
+#game-over .card .modal-close:hover{color:var(--text)}
 #game-over .card h2{font-size:32px;margin-bottom:12px}
 #game-over .card p{color:var(--text2);margin-bottom:16px}
 #game-over .card button{padding:12px 32px;font-size:16px}
@@ -287,7 +289,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* TEMPLATE MODAL */
 #template-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:1000}
 #template-modal.show{display:flex}
-#template-modal .modal-content{text-align:center;max-height:90vh;overflow-y:auto;padding:24px 16px}
+#template-modal .modal-content{position:relative;text-align:center;max-height:90vh;overflow-y:auto;padding:24px 16px}
+#template-modal .modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
+#template-modal .modal-close:hover{color:var(--text)}
 #template-modal .modal-content h2{font-size:24px;font-weight:700;color:var(--gold);margin-bottom:6px}
 #template-modal .modal-content p{color:var(--text2);font-size:13px;margin-bottom:24px}
 #template-modal .template-cards{display:flex;gap:20px}
@@ -617,8 +621,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <div id="mobile-sidebar-tab" onclick="toggleMobileSidebar()">Show Orders <span class="tab-arrow">&#9650;</span></div>
   </div>
 </div>
-<div id="game-over">
+<div id="game-over" onclick="if(event.target===this)hideGameOver()">
   <div class="card">
+    <button class="modal-close" onclick="hideGameOver()">&times;</button>
     <h2 id="go-title"></h2>
     <p id="go-msg"></p>
     <div id="go-stats"></div>
@@ -649,8 +654,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <button onclick="document.getElementById('import-file-input').click()">Choose File</button>
   </div>
 </div>
-<div id="template-modal">
+<div id="template-modal" onclick="if(event.target===this)hideTemplateModal()">
   <div class="modal-content">
+    <button class="modal-close" onclick="hideTemplateModal()">&times;</button>
     <h2>Choose Your Board</h2>
     <p>Select a board to play — each combines a map with gameplay settings</p>
     <div class="template-cards">
@@ -2160,6 +2166,7 @@ function renderOrdersPanel(pp, cp) {
   }
 
   html += '<button class="btn btn-green" style="margin-top:12px" onclick="endTurn()">End Turn</button>';
+  html += '<button style="background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px;margin-top:8px;width:100%;border-radius:6px;cursor:pointer" onclick="resignGame()">Resign</button>';
   html += renderBonusInfo();
   cp.innerHTML = html;
 }
@@ -2919,6 +2926,18 @@ async function showTurnEvents(events) {
   }
 }
 
+function resignGame() {
+  if (resolving) return;
+  if (!confirm('Resign this game? This counts as a loss.')) return;
+  phase = 'finished';
+  if (G) {
+    G.phase = 'finished';
+    G.winner = 1;
+  }
+  turnTimerStop();
+  showGameOver(1);
+}
+
 // ========== GAME OVER ==========
 function showGameOver(winner) {
   const el = document.getElementById('game-over');
@@ -3082,6 +3101,10 @@ function buildAreaChart(data, w, h) {
     '<text x="' + pad + '" y="' + (pad + 8) + '" font-size="8" fill="#2563eb">You</text>' +
     '<text x="' + (pad + 30) + '" y="' + (pad + 8) + '" font-size="8" fill="#dc2626">AI</text>' +
   '</svg>';
+}
+
+function hideGameOver() {
+  document.getElementById('game-over').classList.remove('show');
 }
 
 function goToReplayTurn(turn) {
@@ -3309,6 +3332,12 @@ document.addEventListener('keydown', e => {
   if (kbHelpVisible) {
     if (e.key === 'Escape') { toggleKbHelp(); e.preventDefault(); }
     return;
+  }
+
+  // Escape closes modals
+  if (e.key === 'Escape') {
+    if (document.getElementById('template-modal').classList.contains('show')) { hideTemplateModal(); e.preventDefault(); return; }
+    if (document.getElementById('game-over').classList.contains('show')) { hideGameOver(); e.preventDefault(); return; }
   }
 
   // Replay mode keyboard controls
