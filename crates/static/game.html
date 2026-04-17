@@ -352,11 +352,11 @@ async function fetchGameState() {
     pickOptions = data.pick_options || [];
     picksNeeded = data.picks_needed || pickOptions.length;
     turnDeadline = data.turn_deadline || null;
-    if (data.has_submitted) {
+    if (data.has_submitted && !editingOrders) {
       submitted = true;
       window._mySubmittedOrders = data.my_orders || [];
       showSubmitted('Orders submitted - waiting for opponent...');
-    } else {
+    } else if (!editingOrders) {
       window._mySubmittedOrders = null;
     }
     startDeadlineTimer();
@@ -1287,7 +1287,9 @@ function clearBonusHighlight() {
   });
 }
 
+var editingOrders = false;
 function editSubmittedOrders() {
+  editingOrders = true;
   submitted = false;
   window._mySubmittedOrders = null;
   hideSubmitted();
@@ -1311,6 +1313,7 @@ async function endTurn() {
   });
   var success = await submitOrders(apiOrders);
   if (success) {
+    editingOrders = false;
     window._mySubmittedOrders = apiOrders;
     renderSidebar();
     showSubmitted('Orders submitted - waiting for opponent...');
