@@ -1154,18 +1154,19 @@ function applyThemeGradients() {
   const light = isLightTheme();
   const setStops = (id, c1, c2) => { const g = document.getElementById(id); if (!g) return; const stops = g.querySelectorAll('stop'); if (stops.length >= 2) { stops[0].setAttribute('stop-color', c1); stops[1].setAttribute('stop-color', c2); } };
   if (light) {
-    setStops('ocean-bg', '#c8d6e5', '#dfe6ed');
-    const ob = document.getElementById('ocean-bg'); if (ob) { const s = ob.querySelectorAll('stop'); if (s.length >= 3) s[2].setAttribute('stop-color', '#f0f3f6'); }
     setStops('grad-player', '#3b82f6', '#2563eb'); setStops('grad-enemy', '#ef4444', '#dc2626');
     setStops('grad-neutral', '#9ca3af', '#6b7280'); setStops('grad-fog', '#d0d7de', '#bbc3cd');
-    setStops('army-bubble-grad', 'rgba(240,240,245,0.9)', 'rgba(220,220,230,0.95)');
   } else {
-    setStops('ocean-bg', '#0f2238', '#0a1628');
-    const ob = document.getElementById('ocean-bg'); if (ob) { const s = ob.querySelectorAll('stop'); if (s.length >= 3) s[2].setAttribute('stop-color', '#060d15'); }
     setStops('grad-player', '#3b82f6', '#1d4ed8'); setStops('grad-enemy', '#ef4444', '#b91c1c');
     setStops('grad-neutral', '#6b7280', '#374151'); setStops('grad-fog', '#283040', '#1a2030');
-    setStops('army-bubble-grad', 'rgba(40,40,50,0.85)', 'rgba(10,10,15,0.9)');
   }
+  // Flat ocean background
+  const oceanRect = document.querySelector('#map-svg > rect');
+  if (oceanRect) oceanRect.setAttribute('fill', light ? '#dfe6ed' : '#0a1628');
+  // Flat army bubbles
+  document.querySelectorAll('[id^="army-bg-"]').forEach(c => {
+    c.setAttribute('fill', light ? 'rgba(230,230,240,0.9)' : 'rgba(20,20,30,0.9)');
+  });
   document.querySelectorAll('.territory-path').forEach(p => {
     const fill = p.getAttribute('fill');
     if (light) {
@@ -1269,13 +1270,22 @@ async function startGameWithSettings() {
 // ========== WIN PROBABILITY ==========
 function updateWinProbBar() {
   const wrap = document.getElementById('win-prob-wrap');
-  // Hide during picking phase — win probability isn't meaningful yet.
-  if (!G || !G.win_probability || G.phase === 'picking') {
+  if (!G || !G.win_probability) {
+    wrap.style.display = 'none';
+    return;
+  }
+  const p0 = G.win_probability.player_0 || 0.5;
+  // Always collect history for sparkline/replay, but guard against duplicate pushes
+  if (!winProbHistory.length || G.turn !== winProbHistory._lastTurn) {
+    winProbHistory.push(p0);
+    winProbHistory._lastTurn = G.turn;
+  }
+  // Only show the bar during game review (finished) or replay mode — never during live play.
+  if (G.phase !== 'finished' && !replayMode) {
     wrap.style.display = 'none';
     return;
   }
   wrap.style.display = 'block';
-  const p0 = G.win_probability.player_0 || 0.5;
   const p1 = G.win_probability.player_1 || 0.5;
   const pct = Math.round(p0 * 100);
   document.getElementById('win-prob-blue').style.width = pct + '%';
@@ -1283,8 +1293,6 @@ function updateWinProbBar() {
   const rightText = document.getElementById('win-prob-text-right');
   leftText.textContent = pct + '%';
   rightText.textContent = (100 - pct) + '%';
-  // Store for sparkline
-  winProbHistory.push(p0);
 }
 
 // ========== API ==========
@@ -1360,13 +1368,6 @@ function buildMap() {
   markerBlue.appendChild(svgEl('polygon', {points:'0 0, 8 3, 0 6', fill:'#60a5fa'}));
   defs.appendChild(markerBlue);
 
-  // Ocean background gradient
-  const oceanGrad = svgEl('radialGradient', {id:'ocean-bg', cx:'50%', cy:'45%', r:'65%', fx:'50%', fy:'40%'});
-  oceanGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#0f2238'}));
-  oceanGrad.appendChild(svgEl('stop', {offset:'40%', 'stop-color':'#0a1628'}));
-  oceanGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#060d15'}));
-  defs.appendChild(oceanGrad);
-
   // Territory fill gradients — player (blue)
   const playerGrad = svgEl('linearGradient', {id:'grad-player', x1:'0', y1:'0', x2:'0', y2:'1'});
   playerGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#3b82f6'}));
@@ -1391,11 +1392,7 @@ function buildMap() {
   fogGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#1a2030'}));
   defs.appendChild(fogGrad);
 
-  // Army bubble gradient
-  const armyBubbleGrad = svgEl('radialGradient', {id:'army-bubble-grad', cx:'40%', cy:'35%', r:'65%'});
-  armyBubbleGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'rgba(40,40,50,0.85)'}));
-  armyBubbleGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'rgba(10,10,15,0.9)'}));
-  defs.appendChild(armyBubbleGrad);
+  // Army bubble — flat fill (no gradient)
 
   // Drop shadow filter for territories
   const shadowFilter = svgEl('filter', {id:'territory-shadow', x:'-10%', y:'-10%', width:'120%', height:'120%'});
@@ -1406,7 +1403,7 @@ function buildMap() {
   svg.appendChild(defs);
 
   // Ocean background rect
-  svg.appendChild(svgEl('rect', {x:'0', y:'0', width:'1000', height:'680', fill:'url(#ocean-bg)'}));
+  svg.appendChild(svgEl('rect', {x:'0', y:'0', width:'1000', height:'680', fill:'#0a1628'}));
 
   // Subtle wave decorations between continents
   const waveGroup = svgEl('g', {id:'ocean-waves', opacity:'0.12'});
@@ -1489,8 +1486,8 @@ function buildMap() {
         }));
       }
 
-      // Army count background circle with gradient and colored border
-      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'url(#army-bubble-grad)', stroke:'rgba(255,255,255,0.15)', 'stroke-width':'1.5', style:'display:none', 'pointer-events':'none'}));
+      // Army count background circle with colored border
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'rgba(20,20,30,0.9)', stroke:'rgba(255,255,255,0.15)', 'stroke-width':'1.5', style:'display:none', 'pointer-events':'none'}));
       // Army text
       g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
       // Deploy badge
@@ -1620,7 +1617,7 @@ function updateMap() {
 
     if (!pathEl) return;
 
-    // Color — use gradients for a 3D landmass feel
+    // Color
     let fill = 'url(#grad-fog)';
     let strokeColor = '#080c12';
     let ownerBorderColor = 'rgba(255,255,255,0.15)';
@@ -3598,15 +3595,16 @@ function showPlayAgainPrompt(winner) {
 }
 
 async function fetchReplayState(turn) {
-  replayTurn = turn;
-  updateReplayControls();
-
-  // Check cache
+  // Check cache or fetch from API
   if (!replayCache[turn]) {
     const res = await api('GET', '/api/game/replay/' + turn);
-    if (!res) return;
+    if (!res) return; // Don't advance replayTurn on failure
     replayCache[turn] = res;
   }
+
+  // Only advance turn after successful fetch
+  replayTurn = turn;
+  updateReplayControls();
 
   const state = replayCache[turn];
   applyReplayState(state);
@@ -3627,7 +3625,7 @@ function applyReplayState(state) {
 
     if (!pathEl) return;
 
-    // Color — use gradients in replay too
+    // Color
     let fill = 'url(#grad-fog)';
     if (t.visible !== false) {
       if (t.owner === 0) fill = 'url(#grad-player)';
