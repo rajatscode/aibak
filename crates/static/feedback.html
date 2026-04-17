@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>strat.club — Feedback</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
+}
+html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+
+.content{max-width:680px;margin:0 auto;padding:24px 16px}
+h2{font-size:20px;font-weight:700;margin-bottom:16px}
+
+.submit-box{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:24px}
+.submit-box textarea{width:100%;min-height:80px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:10px;resize:vertical;font-family:inherit}
+.submit-box textarea:focus{outline:none;border-color:var(--blue)}
+.submit-row{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.char-count{font-size:11px;color:var(--text3)}
+.btn{padding:6px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);transition:all .15s}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn-primary:hover{background:#1d4ed8}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.login-hint{font-size:12px;color:var(--text2)}
+.login-hint a{color:var(--blue);text-decoration:none}
+
+.feedback-list{display:flex;flex-direction:column;gap:8px}
+.feedback-item{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;display:flex;gap:12px}
+.vote-col{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:40px}
+.vote-btn{background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3);padding:2px 6px;border-radius:4px;transition:color .15s}
+.vote-btn:hover{color:var(--text)}
+.vote-btn.active-up{color:var(--green)}
+.vote-btn.active-down{color:var(--red)}
+.vote-score{font-size:14px;font-weight:700;color:var(--text)}
+.feedback-body{flex:1;min-width:0}
+.feedback-content{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.feedback-meta{font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:12px;align-items:center}
+.feedback-meta .author{color:var(--text2);font-weight:600}
+.delete-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:0}
+.delete-btn:hover{color:var(--red)}
+
+.empty-state{text-align:center;padding:48px 16px;color:var(--text2);font-size:14px}
+
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+</style>
+</head>
+<body>
+<div style="position:fixed;bottom:8px;right:8px;z-index:9999;background:#d29922;color:#000;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;opacity:0.75;">ALPHA — expect bugs</div>
+<nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
+  <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
+  <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
+  <a href="/puzzle" style="color:#8b949e;text-decoration:none;">Puzzle</a>
+  <a href="/editor" style="color:#8b949e;text-decoration:none;">Editor</a>
+  <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
+  <a href="/profile" style="color:#8b949e;text-decoration:none;">Profile</a>
+  <a href="/tutorial" style="color:#8b949e;text-decoration:none;">Tutorial</a>
+  <a href="/feedback" style="color:#fff;text-decoration:none;">Feedback</a>
+  <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;margin-left:auto;font-weight:600;">Discord</a>
+</nav>
+
+<div class="content">
+  <h2>Feedback</h2>
+
+  <div class="submit-box" id="submit-box">
+    <div class="login-hint" id="login-hint" style="display:none">
+      <a href="/api/auth/discord">Sign in with Discord</a> to submit feedback and vote.
+    </div>
+    <div id="submit-form" style="display:none">
+      <textarea id="feedback-input" maxlength="2000" placeholder="Share your feedback, ideas, or bug reports..."></textarea>
+      <div class="submit-row">
+        <span class="char-count"><span id="char-count">0</span>/2000</span>
+        <button class="btn btn-primary" id="submit-btn" disabled>Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="feedback-list" id="feedback-list">
+    <div class="empty-state">Loading feedback...</div>
+  </div>
+</div>
+
+<script>
+let currentUser = null;
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      currentUser = await res.json();
+      document.getElementById('submit-form').style.display = '';
+      document.getElementById('login-hint').style.display = 'none';
+    } else {
+      document.getElementById('submit-form').style.display = 'none';
+      document.getElementById('login-hint').style.display = '';
+    }
+  } catch {
+    document.getElementById('submit-form').style.display = 'none';
+    document.getElementById('login-hint').style.display = '';
+  }
+}
+
+const input = document.getElementById('feedback-input');
+const charCount = document.getElementById('char-count');
+const submitBtn = document.getElementById('submit-btn');
+
+input.addEventListener('input', () => {
+  charCount.textContent = input.value.length;
+  submitBtn.disabled = input.value.trim().length === 0;
+});
+
+submitBtn.addEventListener('click', async () => {
+  const content = input.value.trim();
+  if (!content) return;
+  submitBtn.disabled = true;
+  try {
+    const res = await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content })
+    });
+    if (res.ok) {
+      input.value = '';
+      charCount.textContent = '0';
+      loadFeedback();
+    } else {
+      const err = await res.text();
+      alert('Error: ' + err);
+    }
+  } catch (e) {
+    alert('Failed to submit: ' + e.message);
+  }
+  submitBtn.disabled = input.value.trim().length === 0;
+});
+
+function timeAgo(dateStr) {
+  const secs = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (secs < 60) return 'just now';
+  if (secs < 3600) return Math.floor(secs / 60) + 'm ago';
+  if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
+  return Math.floor(secs / 86400) + 'd ago';
+}
+
+async function loadFeedback() {
+  const list = document.getElementById('feedback-list');
+  try {
+    const res = await fetch('/api/feedback?limit=50');
+    if (!res.ok) {
+      list.innerHTML = '<div class="empty-state">Could not load feedback. Database may not be configured.</div>';
+      return;
+    }
+    const items = await res.json();
+    if (items.length === 0) {
+      list.innerHTML = '<div class="empty-state">No feedback yet. Be the first!</div>';
+      return;
+    }
+    list.innerHTML = items.map(item => {
+      const score = item.upvotes - item.downvotes;
+      const isOwner = currentUser && currentUser.id === item.user_id;
+      return `<div class="feedback-item" data-id="${item.id}">
+        <div class="vote-col">
+          <button class="vote-btn up" onclick="vote('${item.id}',1)" title="Upvote">&#9650;</button>
+          <span class="vote-score">${score}</span>
+          <button class="vote-btn down" onclick="vote('${item.id}',-1)" title="Downvote">&#9660;</button>
+        </div>
+        <div class="feedback-body">
+          <div class="feedback-content">${escapeHtml(item.content)}</div>
+          <div class="feedback-meta">
+            <span class="author">${escapeHtml(item.username)}</span>
+            <span>${timeAgo(item.created_at)}</span>
+            ${isOwner ? `<button class="delete-btn" onclick="deleteFeedback('${item.id}')">delete</button>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    list.innerHTML = '<div class="empty-state">Failed to load feedback.</div>';
+  }
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+async function vote(id, direction) {
+  if (!currentUser) { alert('Sign in to vote.'); return; }
+  try {
+    await fetch(`/api/feedback/${id}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ direction })
+    });
+    loadFeedback();
+  } catch {}
+}
+
+async function deleteFeedback(id) {
+  if (!confirm('Delete this feedback?')) return;
+  try {
+    await fetch(`/api/feedback/${id}`, { method: 'DELETE' });
+    loadFeedback();
+  } catch {}
+}
+
+checkAuth();
+loadFeedback();
+</script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+pub mod feedback;
 pub mod games;
 pub mod ladder;
 pub mod league;

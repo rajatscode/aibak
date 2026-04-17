@@ -1270,6 +1270,10 @@ async fn landing() -> Html<&'static str> {
     Html(include_str!("../../static/landing.html"))
 }
 
+async fn feedback_page() -> Html<&'static str> {
+    Html(include_str!("../../static/feedback.html"))
+}
+
 async fn app_placeholder() -> Html<&'static str> {
     Html("<html><body><h1>strat-club multiplayer</h1><p>Frontend coming soon.</p></body></html>")
 }
@@ -1565,6 +1569,18 @@ async fn main() {
         .route(
             "/api/arenas/{id}/leaderboard",
             get(api::tournament::arena_leaderboard),
+        )
+        // Feedback.
+        .route("/feedback", get(feedback_page))
+        .route("/api/feedback", post(api::feedback::submit_feedback))
+        .route("/api/feedback", get(api::feedback::list_feedback))
+        .route(
+            "/api/feedback/{id}/vote",
+            post(api::feedback::vote_feedback),
+        )
+        .route(
+            "/api/feedback/{id}",
+            axum::routing::delete(api::feedback::delete_feedback),
         )
         // Map management.
         .route("/api/maps", get(api::maps::list_maps))

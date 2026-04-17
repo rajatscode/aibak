@@ -126,3 +126,26 @@ CREATE TABLE IF NOT EXISTS arena_participants (
 
 CREATE INDEX IF NOT EXISTS idx_arenas_time ON arenas(start_time, end_time);
 CREATE INDEX IF NOT EXISTS idx_arena_participants_arena ON arena_participants(arena_id);
+
+-- ── Feedback system ──
+
+CREATE TABLE IF NOT EXISTS feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    content TEXT NOT NULL CHECK(char_length(content) <= 2000),
+    upvotes INT NOT NULL DEFAULT 0,
+    downvotes INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS feedback_votes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    feedback_id UUID NOT NULL REFERENCES feedback(id),
+    direction INT NOT NULL CHECK(direction IN (-1, 1)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, feedback_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_upvotes ON feedback(upvotes DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_votes_feedback ON feedback_votes(feedback_id);
