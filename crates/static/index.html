@@ -1994,22 +1994,27 @@ function showTooltip(id, e) {
   let ownerColor = t.owner === 0 ? 'var(--blue)' : t.owner === 1 ? 'var(--red)' : 'var(--neutral)';
 
   let html = '<div class="tip-name">' + t.name + (t.is_wasteland ? ' <span style="color:#d97706">\u2620 Wasteland</span>' : '') + '</div>';
-  html += '<div>Owner: <span style="color:' + ownerColor + '">' + owner + '</span></div>';
-  html += '<div>Armies: <strong>' + (t.armies || 0) + '</strong></div>';
 
   // Find bonus info
-  if (G && G.bonuses) {
-    const tBonus = G.bonuses.find(b => b.territories && b.territories.includes(t.id));
+  const tBonus = (G && G.bonuses) ? G.bonuses.find(b => b.territories && b.territories.includes(t.id)) : null;
+
+  if (phase === 'picking') {
+    // During picking: show bonus and neighbors, skip owner/armies
     if (tBonus) {
       const bColor = BONUS_COLORS[tBonus.id % BONUS_COLORS.length];
       html += '<div class="tip-bonus"><span class="bonus-dot" style="background:' + bColor + '"></span>' + tBonus.name + ' (+' + tBonus.value + ', ' + (tBonus.territories || []).length + ' terr)</div>';
     }
-  }
-
-  // Picking hint: show neighbor count
-  if (phase === 'picking' && G && G.adjacency) {
-    const neighbors = (G.adjacency[t.id] || []).length;
-    html += '<div class="tip-hint">' + neighbors + ' neighbor' + (neighbors !== 1 ? 's' : '') + '</div>';
+    if (G && G.adjacency) {
+      const neighbors = (G.adjacency[t.id] || []).length;
+      html += '<div class="tip-hint">' + neighbors + ' neighbor' + (neighbors !== 1 ? 's' : '') + '</div>';
+    }
+  } else {
+    html += '<div>Owner: <span style="color:' + ownerColor + '">' + owner + '</span></div>';
+    html += '<div>Armies: <strong>' + (t.armies || 0) + '</strong></div>';
+    if (tBonus) {
+      const bColor = BONUS_COLORS[tBonus.id % BONUS_COLORS.length];
+      html += '<div class="tip-bonus"><span class="bonus-dot" style="background:' + bColor + '"></span>' + tBonus.name + ' (+' + tBonus.value + ', ' + (tBonus.territories || []).length + ' terr)</div>';
+    }
   }
 
   // Deploy hint
@@ -2123,7 +2128,12 @@ function onStateUpdate() {
     incomeSpan.title = tip;
   }
   document.getElementById('my-terr').textContent = G.my_territories || 0;
-  document.getElementById('enemy-terr').textContent = (G.phase === 'finished') ? (G.enemy_territories || 0) : '?';
+  var fogOn = document.getElementById('set-fog') && document.getElementById('set-fog').checked;
+  if (G.phase === 'finished' || !fogOn) {
+    document.getElementById('enemy-terr').textContent = G.enemy_territories || 0;
+  } else {
+    document.getElementById('enemy-terr').textContent = 'fog';
+  }
 
   // Determine phase
   if (G.phase === 'finished') {
