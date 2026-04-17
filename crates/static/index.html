@@ -108,10 +108,11 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* REPLAY TURN STEPPER */
 #replay-stepper{display:none;position:absolute;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);padding:10px 20px;z-index:100}
 #replay-stepper .stepper-row{display:flex;align-items:center;gap:10px}
-#replay-stepper button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;width:34px;height:34px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s}
+#replay-stepper button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;height:34px;padding:0 12px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px;transition:background .15s,border-color .15s}
 #replay-stepper button:hover:not(:disabled){background:var(--border);border-color:var(--text3)}
 #replay-stepper button:disabled{opacity:.3;cursor:not-allowed}
 #replay-stepper button.active{background:var(--blue);border-color:var(--blue)}
+#rs-play{width:34px;padding:0;font-size:16px}
 #replay-stepper .turn-display{font-size:13px;font-weight:600;color:var(--text);min-width:100px;text-align:center}
 #replay-stepper .slider-wrap{flex:1;display:flex;align-items:center}
 #replay-stepper input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;background:var(--bg3);border-radius:3px;outline:none;cursor:pointer}
@@ -419,7 +420,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #topbar select{padding:3px 6px;font-size:11px}
   /* Replay stepper adjustments */
   #replay-stepper{padding:6px 10px}
-  #replay-stepper button{width:28px;height:28px;font-size:14px}
+  #replay-stepper button{height:28px;padding:0 8px;font-size:11px}
   #replay-stepper .turn-display{font-size:11px;min-width:70px}
   /* Game over overlay */
   #game-over .card{padding:24px 20px;max-width:90vw}
@@ -576,9 +577,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <div class="tooltip" id="tooltip"></div>
       <div id="replay-stepper">
         <div class="stepper-row">
-          <button id="rs-prev" onclick="replayStep(-1)" title="Previous turn (Left arrow)">&#9664;</button>
-          <span class="turn-display" id="rs-turn-display">Turn 1 of 1</span>
-          <button id="rs-next" onclick="replayStep(1)" title="Next turn (Right arrow)">&#9654;</button>
+          <button id="rs-prev" onclick="replayStep(-1)" title="Previous turn (Left arrow)">&#9664; Prev</button>
+          <span class="turn-display" id="rs-turn-display">Turn 1 / 1</span>
+          <button id="rs-next" onclick="replayStep(1)" title="Next turn (Right arrow)">Next &#9654;</button>
           <button id="rs-play" onclick="replayToggleAutoPlay()" title="Auto-play (Space)">&#9654;&#xFE0E;</button>
           <div class="slider-wrap">
             <input type="range" id="rs-slider" min="0" max="1" value="0" oninput="replaySliderChange(this.value)">
@@ -3675,7 +3676,7 @@ function applyReplayState(state) {
 }
 
 function updateReplayControls() {
-  document.getElementById('rs-turn-display').textContent = 'Turn ' + (replayTurn + 1) + ' of ' + (replayMaxTurn + 1);
+  document.getElementById('rs-turn-display').textContent = 'Turn ' + (replayTurn + 1) + ' / ' + (replayMaxTurn + 1);
   document.getElementById('rs-prev').disabled = replayTurn <= 0;
   document.getElementById('rs-next').disabled = replayTurn >= replayMaxTurn;
   document.getElementById('rs-slider').value = replayTurn;
@@ -3739,7 +3740,7 @@ function renderReplaySparkline(currentTurn) {
     return;
   }
 
-  const w = 300, h = 70, pad = 6;
+  const w = Math.max(200, container.clientWidth - 4) || 300, h = 70, pad = 6;
   const usableW = w - pad * 2;
   const usableH = h - pad * 2;
 
