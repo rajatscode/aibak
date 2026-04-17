@@ -387,9 +387,12 @@ impl GameManager {
         let state: GameState =
             serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
                 .map_err(|e| GameError::Serialization(e.to_string()))?;
-        if let Err(e) = validate_orders(&orders, seat, &state, &board) {
-            tx.rollback().await?;
-            return Err(GameError::InvalidOrders(e.to_string()));
+        // Skip validation for eliminated players (they submit empty orders).
+        if state.territory_count_for(seat) > 0 {
+            if let Err(e) = validate_orders(&orders, seat, &state, &board) {
+                tx.rollback().await?;
+                return Err(GameError::InvalidOrders(e.to_string()));
+            }
         }
 
         // Store orders.
@@ -602,6 +605,9 @@ impl GameManager {
 
         if new_state.phase == Phase::Finished {
             // Game over.
+            let state_json = serde_json::to_value(&new_state)
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
+
             if let Some(winner_seat) = new_state.winner {
                 let winner_id = if winner_seat == 0 {
                     game.player_a.ok_or(GameError::NotFound)?
@@ -614,8 +620,6 @@ impl GameManager {
                     game.player_a.ok_or(GameError::NotFound)?
                 };
 
-                let state_json = serde_json::to_value(&new_state)
-                    .map_err(|e| GameError::Serialization(e.to_string()))?;
                 db::finish_game_tx(tx, game_id, winner_id, &state_json).await?;
 
                 // Update ratings (uses pool directly, outside the row lock).
@@ -631,6 +635,13 @@ impl GameManager {
 
                 self.hub
                     .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id }).await;
+            } else {
+                // Simultaneous elimination (no winner) — still mark game as finished.
+                error!("Game {game_id} finished with no winner (simultaneous elimination)");
+                let fallback_winner = game.player_a.ok_or(GameError::NotFound)?;
+                db::finish_game_tx(tx, game_id, fallback_winner, &state_json).await?;
+                self.hub
+                    .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id: fallback_winner }).await;
             }
         } else {
             let state_json = serde_json::to_value(&new_state)

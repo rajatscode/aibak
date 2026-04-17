@@ -89,7 +89,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .btn-green:hover:not(:disabled){background:#4ade80}
 .btn-gold{background:var(--gold);color:#000}
 .btn-gold:hover:not(:disabled){background:#fbbf24}
-.bonus-row{display:flex;align-items:center;gap:6px;padding:3px 6px;font-size:11px;border-radius:4px;margin:1px 0}
+.bonus-highlight{stroke-width:2.5 !important;animation:bonus-fade 2s ease-out forwards}
+@keyframes bonus-fade{0%{stroke-opacity:1}80%{stroke-opacity:1}100%{stroke-opacity:0}}
+.bonus-row{display:flex;align-items:center;gap:6px;padding:3px 6px;font-size:11px;border-radius:4px;margin:1px 0;cursor:pointer}
 .bonus-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
 .bonus-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bonus-prog{color:var(--text3);font-size:10px;flex-shrink:0}
@@ -1056,7 +1058,7 @@ function renderBonusInfo() {
     if (owned) cls += ' owned complete';
     else if (enemyOwned) cls += ' enemy-owned';
     if (nearly) cls += ' nearly';
-    html += '<div class="'+cls+'" onclick="showBonusHighlight('+d.b.id+')" style="cursor:pointer">' +
+    html += '<div class="'+cls+'" onclick="showBonusHighlight('+d.b.id+')">' +
       '<span class="bonus-dot" style="background:'+color+'"></span>' +
       '<span class="bonus-name">'+d.b.name+'</span>' +
       '<span class="bonus-prog">+'+d.b.value+'&ensp;'+d.myCount+'/'+d.total+'</span>' +
@@ -1383,6 +1385,32 @@ function moveTooltip(e) {
   tip.style.top = (e.clientY-rect.top-30)+'px';
 }
 function hideTooltip() { document.getElementById('tooltip').classList.remove('show'); }
+
+// ========== BONUS HIGHLIGHT ==========
+var bonusHighlightTimer = null;
+function showBonusHighlight(bonusId) {
+  clearBonusHighlight();
+  if (!MAP || !MAP.bonuses) return;
+  var b = MAP.bonuses.find(function(x) { return x.id === bonusId; });
+  if (!b) return;
+  var tids = b.territory_ids || [];
+  var color = BONUS_COLORS[b.id % BONUS_COLORS.length];
+  tids.forEach(function(tid) {
+    var hl = document.getElementById('highlight-' + tid);
+    if (hl) {
+      hl.style.stroke = color;
+      hl.classList.add('bonus-highlight');
+    }
+  });
+  bonusHighlightTimer = setTimeout(clearBonusHighlight, 2000);
+}
+function clearBonusHighlight() {
+  if (bonusHighlightTimer) { clearTimeout(bonusHighlightTimer); bonusHighlightTimer = null; }
+  document.querySelectorAll('.bonus-highlight').forEach(function(el) {
+    el.classList.remove('bonus-highlight');
+    el.style.stroke = '';
+  });
+}
 
 // ========== DEADLINE TIMER ==========
 function startDeadlineTimer() {

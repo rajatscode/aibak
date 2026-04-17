@@ -8,6 +8,10 @@ use crate::cards::Card;
 /// Player seat index: 0 or 1.
 pub type PlayerId = u8;
 
+fn default_alive() -> [bool; 2] {
+    [true; 2]
+}
+
 /// Neutral owner sentinel.
 pub const NEUTRAL: PlayerId = 255;
 
@@ -29,8 +33,10 @@ pub struct GameState {
     /// Card pieces earned (3 pieces = 1 reinforcement card).
     pub card_pieces: [u32; 2],
     /// Which players are still alive.
+    #[serde(default = "default_alive")]
     pub alive: [bool; 2],
     /// Winner, if any.
+    #[serde(default)]
     pub winner: Option<PlayerId>,
 }
 
