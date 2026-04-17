@@ -2339,7 +2339,7 @@ function renderOrdersPanel(pp, cp) {
       var orderColor = isAttack ? 'var(--red)' : 'var(--blue)';
       var fromT = terr(o.from);
       var toT = terr(o.to);
-      html += '<div class="order-item" style="border-left:3px solid ' + orderColor + '"><span style="color:' + orderColor + '">' + icon + ' ' + (fromT?fromT.name:o.from) + ' \u2192 ' + (toT?toT.name:o.to) + ' (' + o.armies + ')</span><button class="remove-btn" onclick="editOrder(' + i + ')" title="Edit armies" style="color:var(--text2)">\u270E</button><button class="remove-btn" onclick="removeOrder(' + i + ')">\u2715</button></div>';
+      html += '<div class="order-item" style="border-left:3px solid ' + orderColor + '"><span style="color:' + orderColor + '">' + icon + ' ' + (fromT?fromT.name:o.from) + ' \u2192 ' + (toT?toT.name:o.to) + ' (' + o.armies + ')</span><button class="remove-btn" onclick="moveOrderUp(' + i + ')" title="Move up" style="color:var(--text2)"' + (i===0?' disabled':'') + '>\u25B2</button><button class="remove-btn" onclick="moveOrderDown(' + i + ')" title="Move down" style="color:var(--text2)"' + (i===orders.length-1?' disabled':'') + '>\u25BC</button><button class="remove-btn" onclick="editOrder(' + i + ')" title="Edit armies" style="color:var(--text2)">\u270E</button><button class="remove-btn" onclick="removeOrder(' + i + ')">\u2715</button></div>';
     });
   }
 
@@ -2903,6 +2903,28 @@ function popupConfirm() {
   pendingTarget = null;
   selectedSource = null;
   hideMapArmyPopup();
+  updateMap();
+  renderSidebar();
+}
+
+function moveOrderUp(idx) {
+  if (idx <= 0) return;
+  var tmp = orders[idx];
+  orders[idx] = orders[idx - 1];
+  orders[idx - 1] = tmp;
+  if (editingOrderIdx === idx) editingOrderIdx = idx - 1;
+  else if (editingOrderIdx === idx - 1) editingOrderIdx = idx;
+  updateMap();
+  renderSidebar();
+}
+
+function moveOrderDown(idx) {
+  if (idx >= orders.length - 1) return;
+  var tmp = orders[idx];
+  orders[idx] = orders[idx + 1];
+  orders[idx + 1] = tmp;
+  if (editingOrderIdx === idx) editingOrderIdx = idx + 1;
+  else if (editingOrderIdx === idx + 1) editingOrderIdx = idx;
   updateMap();
   renderSidebar();
 }

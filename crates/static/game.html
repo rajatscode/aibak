@@ -996,7 +996,7 @@ function renderOrdersSidebar(pp, cp) {
       var icon = o.type === 'attack' ? '\u2694' : '\u2192';
       var from = MAP ? MAP.territories[o.from] : null;
       var to = MAP ? MAP.territories[o.to] : null;
-      html += '<div class="order-item"><span>'+icon+' '+(from?from.name:o.from)+' \u2192 '+(to?to.name:o.to)+' ('+o.armies+')</span><button class="remove-btn" onclick="removeOrder('+i+')">\u2715</button></div>';
+      html += '<div class="order-item"><span>'+icon+' '+(from?from.name:o.from)+' \u2192 '+(to?to.name:o.to)+' ('+o.armies+')</span><button class="remove-btn" onclick="moveOrderUp('+i+')" title="Move up" style="color:var(--text2)"'+(i===0?' disabled':'')+'>\u25B2</button><button class="remove-btn" onclick="moveOrderDown('+i+')" title="Move down" style="color:var(--text2)"'+(i===orders.length-1?' disabled':'')+'>\u25BC</button><button class="remove-btn" onclick="removeOrder('+i+')">\u2715</button></div>';
     });
   }
 
@@ -1149,6 +1149,22 @@ function removeDeploy(id) {
   var amount = deploys[id] || 0;
   deployLeft += amount;
   delete deploys[id];
+  updateMap(); renderSidebar();
+}
+
+function moveOrderUp(idx) {
+  if (idx <= 0) return;
+  var tmp = orders[idx];
+  orders[idx] = orders[idx - 1];
+  orders[idx - 1] = tmp;
+  updateMap(); renderSidebar();
+}
+
+function moveOrderDown(idx) {
+  if (idx >= orders.length - 1) return;
+  var tmp = orders[idx];
+  orders[idx] = orders[idx + 1];
+  orders[idx + 1] = tmp;
   updateMap(); renderSidebar();
 }
 
