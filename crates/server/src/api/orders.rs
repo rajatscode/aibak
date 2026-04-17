@@ -56,20 +56,23 @@ pub async fn submit_picks(
     Path(game_id): Path<Uuid>,
     Json(body): Json<SubmitPicksRequest>,
 ) -> Result<Json<ActionResponse>, JsonError> {
+    tracing::info!("submit_picks: game={} user={} picks={:?}", game_id, auth.user_id, body.picks);
     let manager = state.require_game_manager()
         .map_err(|(status, msg)| JsonError(status, msg))?;
-    manager
-        .submit_picks(game_id, auth.user_id, body.picks)
-        .await
-        .map_err(|err| {
+    match manager.submit_picks(game_id, auth.user_id, body.picks).await {
+        Ok(()) => {
+            tracing::info!("submit_picks: success for game={}", game_id);
+            Ok(Json(ActionResponse {
+                success: true,
+                message: "picks submitted".to_string(),
+            }))
+        }
+        Err(err) => {
+            tracing::error!("submit_picks: error for game={}: {:?}", game_id, err);
             let (status, msg) = <_ as Into<(StatusCode, String)>>::into(err);
-            JsonError(status, msg)
-        })?;
-
-    Ok(Json(ActionResponse {
-        success: true,
-        message: "picks submitted".to_string(),
-    }))
+            Err(JsonError(status, msg))
+        }
+    }
 }
 
 /// POST /api/games/:id/orders -- submit orders during play phase.
