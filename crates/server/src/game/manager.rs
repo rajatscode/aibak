@@ -452,8 +452,6 @@ impl GameManager {
 
     /// Handle boot timer expiry during picking phase: auto-submit default picks for missing players,
     /// then resolve picks and transition to active.
-    /// Handle boot timer expiry during picking phase: auto-submit default picks for missing players,
-    /// then resolve picks and transition to active.
     async fn boot_picking_phase(
         &self,
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
