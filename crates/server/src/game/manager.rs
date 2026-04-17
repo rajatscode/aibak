@@ -220,9 +220,9 @@ impl GameManager {
             .map_err(|e| GameError::Serialization(e.to_string()))?;
         let board = Board::from_map(map_file);
 
-        if picks.len() != board.picking().num_picks {
+        if picks.len() < board.picking().num_picks {
             return Err(GameError::InvalidPicks(format!(
-                "need exactly {} picks, got {}",
+                "need at least {} picks, got {}",
                 board.picking().num_picks,
                 picks.len()
             )));

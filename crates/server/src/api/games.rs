@@ -60,6 +60,7 @@ pub struct GameStateResponse {
     pub game: GameResponse,
     pub state: Option<serde_json::Value>,
     pub pick_options: Option<Vec<usize>>,
+    pub picks_needed: Option<usize>,
     pub my_seat: Option<u8>,
     pub map: Option<serde_json::Value>,
     pub player_a_info: Option<PlayerInfo>,
@@ -181,6 +182,11 @@ pub async fn get_game(
 
     let map_data = game.map_json.clone();
 
+    // Get picks_needed from the stored map config.
+    let picks_needed = game.map_json.as_ref().and_then(|mj| {
+        serde_json::from_value::<MapFile>(mj.clone()).ok()
+    }).map(|mf| Board::from_map(mf).config.picking.num_picks);
+
     // Fetch turn deadline for active games.
     let turn_deadline = if game.status == "active" || game.status == "picking" {
         db::get_turn_deadline(pool, game_id, game.turn)
@@ -196,6 +202,7 @@ pub async fn get_game(
         game: GameResponse::from(game),
         state: filtered_state,
         pick_options,
+        picks_needed,
         my_seat,
         map: map_data,
         player_a_info,

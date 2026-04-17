@@ -292,6 +292,7 @@ let STATE = null;         // fog-filtered game state
 let mySeat = null;        // 0 or 1
 let currentUser = null;
 let pickOptions = [];
+let picksNeeded = 0;
 
 let phase = 'loading';
 let picks = [];
@@ -346,6 +347,7 @@ async function fetchGameState() {
     MAP = data.map;
     mySeat = data.my_seat;
     pickOptions = data.pick_options || [];
+    picksNeeded = data.picks_needed || pickOptions.length;
     turnDeadline = data.turn_deadline || null;
     startDeadlineTimer();
 
@@ -914,11 +916,10 @@ function renderSidebar() {
 }
 
 function renderPickingSidebar(pp, cp) {
-  var totalOptions = pickOptions.length;
   var howToPlay = '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;line-height:1.4">Pick territories \u2192 Deploy armies \u2192 Attack neighbors \u2192 Conquer the map</div>';
   pp.innerHTML = howToPlay + '<div class="sb-phase">Pick Phase</div>' +
-    '<div class="sb-sub">Rank all territories by priority</div>' +
-    '<div style="margin-top:8px;font-size:13px;color:var(--gold)">'+picks.length+' / '+totalOptions+' ranked</div>';
+    '<div class="sb-sub">Rank at least '+picksNeeded+' territories (rank more for better fallbacks)</div>' +
+    '<div style="margin-top:8px;font-size:13px;color:var(--gold)">'+picks.length+' / '+picksNeeded+' ranked</div>';
 
   var html = '';
   picks.forEach(function(id, idx) {
@@ -936,7 +937,7 @@ function renderPickingSidebar(pp, cp) {
       '<button class="remove-btn" onclick="unpick('+id+')" title="Remove">\u2715</button>' +
     '</div>';
   });
-  html += '<button class="btn btn-gold" style="margin-top:12px" '+(picks.length<totalOptions?'disabled':'')+' onclick="confirmPicks()">Confirm Picks</button>';
+  html += '<button class="btn btn-gold" style="margin-top:12px" '+(picks.length<picksNeeded?'disabled':'')+' onclick="confirmPicks()">Confirm Picks</button>';
   html += renderBonusInfo();
   cp.innerHTML = html;
 }
@@ -1059,7 +1060,7 @@ function unpick(id) {
 }
 
 async function confirmPicks() {
-  if (picks.length < pickOptions.length) { toast('Rank all territories first', 'error'); return; }
+  if (picks.length < picksNeeded) { toast('Rank at least ' + picksNeeded + ' territories', 'error'); return; }
   if (submitted) return;
   submitted = true;
   var btn = document.querySelector('.btn-gold');
