@@ -600,9 +600,15 @@ function buildMap() {
 
     if (t.visual && t.visual.path) {
       g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#080c12', 'stroke-width':2, 'stroke-linejoin':'round', filter:'url(#territory-shadow)'}));
+      if (t.is_wasteland) {
+        g.appendChild(svgEl('path', {d:t.visual.path, id:'wasteland-hatch-'+t.id, fill:'url(#wasteland-hatch)', stroke:'none', 'pointer-events':'none', opacity:'0.5'}));
+      }
       g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-highlight', id:'highlight-'+t.id, fill:'none', stroke:'none', 'stroke-width':3, 'pointer-events':'none'}));
     } else {
       g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#080c12', 'stroke-width':2, filter:'url(#territory-shadow)'}));
+      if (t.is_wasteland) {
+        g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, id:'wasteland-hatch-'+t.id, fill:'url(#wasteland-hatch)', stroke:'none', 'pointer-events':'none', opacity:'0.5'}));
+      }
       g.appendChild(svgEl('circle', {cx:x, cy:y, r:20, class:'territory-highlight', id:'highlight-'+t.id, fill:'none', stroke:'none', 'stroke-width':3, 'pointer-events':'none'}));
     }
 
@@ -679,10 +685,14 @@ function updateMap() {
     var fill, strokeColor, borderColor;
     if (isMe) { fill='url(#grad-me)'; strokeColor='#152a5e'; borderColor='rgba(96,165,250,0.6)'; }
     else if (isThem) { fill='url(#grad-them)'; strokeColor='#5a1010'; borderColor='rgba(239,68,68,0.6)'; }
+    else if (t.is_wasteland) { fill='url(#grad-wasteland)'; strokeColor='#3d1f00'; borderColor='rgba(251,191,36,0.4)'; }
     else { fill='url(#grad-neutral)'; strokeColor='#1a1f2a'; borderColor='rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
     if (armyBgEl) armyBgEl.setAttribute('stroke', borderColor);
+    // Wasteland hatch visibility
+    var hatchEl = document.getElementById('wasteland-hatch-'+t.id);
+    if (hatchEl) { hatchEl.style.display = (t.is_wasteland && owner === 255) ? '' : 'none'; }
 
     if (highlightEl) {
       highlightEl.classList.remove('selected-highlight');
@@ -1197,7 +1207,7 @@ function showTooltip(id, e) {
   var ownerLabel = isMe ? 'You' : isThem ? 'Opponent' : 'Neutral';
   var ownerColor = isMe ? 'var(--blue)' : isThem ? 'var(--red)' : 'var(--neutral)';
 
-  var html = '<div class="tip-name">'+t.name+'</div>';
+  var html = '<div class="tip-name">'+t.name+(t.is_wasteland ? ' <span style="color:#d97706">\u2620 Wasteland</span>' : '')+'</div>';
   html += '<div>Owner: <span style="color:'+ownerColor+'">'+ownerLabel+'</span></div>';
   html += '<div>Armies: <strong>'+(STATE.territory_armies[id]||0)+'</strong></div>';
   if (MAP.bonuses) {
