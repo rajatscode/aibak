@@ -8,10 +8,10 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --bg:#0d1117;--bg2:#0f1419;--bg3:#1a1f2e;--border:#21293a;
   --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
-  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
-  --neutral:#4b5563;--fog:#1f2937;
+  --blue:#4a9eff;--red:#f87171;--green:#34d399;--gold:#fbbf24;
+  --neutral:#6b7280;--fog:#111827;
 }
 [data-theme="light"]{
   --bg:#ffffff;--bg2:#f6f8fa;--bg3:#e1e4e8;--border:#d0d7de;
@@ -30,8 +30,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #topbar .stats .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 #topbar button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px;transition:background .15s}
 #topbar button:hover{background:var(--border)}
-#topbar .btn-quickplay{background:var(--green);color:#000;border-color:var(--green);font-weight:700;padding:4px 14px}
-#topbar .btn-quickplay:hover{background:#4ade80}
+
 #topbar .session-info{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text3)}
 #topbar .session-info .game-counter{color:var(--text2);font-weight:600}
 #topbar .session-info .session-timer{color:var(--text3)}
@@ -68,13 +67,13 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 
 /* MAIN LAYOUT */
 #main{display:flex;flex:1;overflow:hidden}
-#map-container{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 45%, #111d2e 0%, #0c1520 40%, #080e14 100%)}
-#sidebar{width:340px;min-width:340px;background:linear-gradient(180deg, var(--bg2) 0%, #131820 100%);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#map-container{flex:1;position:relative;overflow:hidden;background:#0d1117}
+#sidebar{width:340px;min-width:340px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 
 /* SVG MAP */
 #map-svg{width:100%;height:100%}
 .territory-path{cursor:pointer;transition:fill .2s ease,stroke .2s ease,opacity .2s ease,filter .2s ease}
-.territory-path:hover{filter:brightness(1.35) drop-shadow(0 0 8px rgba(255,255,255,.2)) drop-shadow(0 0 16px rgba(255,255,255,.08))}
+.territory-path:hover{filter:brightness(1.12)}
 .territory-highlight{pointer-events:none;transition:stroke .2s ease,stroke-width .2s ease}
 .army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
 .army-text.large-army{font-size:15px}
@@ -83,20 +82,20 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .annotation-marker{pointer-events:none;font-size:11px;text-anchor:middle;dominant-baseline:central}
 
 /* ANNOTATION CONTEXT MENU */
-#annotation-ctx-menu{display:none;position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px 0;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#annotation-ctx-menu{display:none;position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px 0;min-width:170px}
 #annotation-ctx-menu .ctx-item{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:12px;color:var(--text);cursor:pointer;transition:background .1s}
 #annotation-ctx-menu .ctx-item:hover{background:var(--bg3)}
 #annotation-ctx-menu .ctx-item .ctx-icon{width:18px;text-align:center}
 #annotation-ctx-menu .ctx-sep{height:1px;background:var(--border);margin:4px 0}
 
 /* ANNOTATION NOTE INPUT */
-#annotation-note-input{display:none;position:fixed;z-index:10000;background:var(--bg2);border:1px solid var(--gold);border-radius:8px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#annotation-note-input{display:none;position:fixed;z-index:10000;background:var(--bg2);border:1px solid var(--gold);border-radius:8px;padding:8px}
 #annotation-note-input input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;width:180px;outline:none}
 #annotation-note-input input:focus{border-color:var(--gold)}
 #annotation-note-input .note-hint{font-size:10px;color:var(--text3);margin-top:4px}
 
 /* MARKER TOOLBAR */
-#marker-toolbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:5px 10px;z-index:80;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+#marker-toolbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:5px 10px;z-index:80}
 #marker-toolbar .marker-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid transparent;background:transparent;cursor:pointer;font-size:16px;transition:background .15s,border-color .15s}
 #marker-toolbar .marker-btn:hover{background:var(--bg3)}
 #marker-toolbar .marker-btn.active{border-color:var(--gold);background:var(--bg3)}
@@ -124,7 +123,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .combat-text{pointer-events:none;font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central;text-shadow:0 1px 3px rgba(0,0,0,.8)}
 
 /* REPLAY TURN STEPPER */
-#replay-stepper{display:none;position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(13,17,23,.85),rgba(13,17,23,.97));border-top:1px solid var(--border);padding:10px 20px;z-index:100;backdrop-filter:blur(8px)}
+#replay-stepper{display:none;position:absolute;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);padding:10px 20px;z-index:100}
 #replay-stepper .stepper-row{display:flex;align-items:center;gap:10px}
 #replay-stepper button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;width:34px;height:34px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s}
 #replay-stepper button:hover:not(:disabled){background:var(--border);border-color:var(--text3)}
@@ -151,7 +150,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #replay-log .log-system{color:var(--gold)}
 
 /* MAP ARMY POPUP */
-#map-army-popup{position:absolute;display:none;background:var(--bg2);border:2px solid var(--gold);border-radius:8px;padding:6px 10px;z-index:200;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.6)}
+#map-army-popup{position:absolute;display:none;background:var(--bg2);border:2px solid var(--gold);border-radius:8px;padding:6px 10px;z-index:200;white-space:nowrap}
 #map-army-popup .popup-label{font-size:11px;color:var(--text2);margin-bottom:4px;text-align:center}
 #map-army-popup .popup-row{display:flex;align-items:center;gap:6px}
 #map-army-popup button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
@@ -192,7 +191,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* SIDEBAR SECTIONS */
 .sb-section{padding:12px;border-bottom:1px solid var(--border)}
 .sb-section h3{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.sb-phase{font-size:18px;font-weight:700;margin-bottom:4px}
+.sb-phase{font-size:18px;font-weight:700;margin-bottom:4px;letter-spacing:0.5px}
 .sb-sub{font-size:13px;color:var(--text2)}
 
 /* DEPLOY COUNTER */
@@ -254,7 +253,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.error{border-color:var(--red);background:#2d1013}
 .toast.success{border-color:var(--green);background:#0d2818}
-.toast.achievement{border-color:var(--gold);background:linear-gradient(135deg,#2d2510,#1a1608);border-width:2px;font-size:14px;padding:14px 24px;box-shadow:0 4px 24px rgba(227,179,65,.25)}
+.toast.achievement{border-color:var(--gold);background:#1a1608;border-width:2px;font-size:14px;padding:14px 24px}
 .toast.achievement .ach-title{font-weight:700;color:var(--gold)}
 .toast.achievement .ach-desc{color:var(--text2);font-size:12px;margin-top:2px}
 
@@ -313,11 +312,11 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #template-modal .modal-content p{color:var(--text2);font-size:13px;margin-bottom:24px}
 #template-modal .template-cards{display:flex;gap:20px}
 .template-card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:32px 28px;cursor:pointer;transition:all .2s ease;width:240px;text-align:center}
-.template-card:hover{border-color:var(--gold);transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.template-card:hover{border-color:var(--gold);transform:translateY(-4px)}
 .template-card h3{font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px}
 .template-card .template-info{font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5}
 .template-card .template-icon{font-size:36px;margin-bottom:12px}
-.template-card.selected{border-color:var(--gold);box-shadow:0 0 16px rgba(227,179,65,.3)}
+.template-card.selected{border-color:var(--gold)}
 
 /* GAME SETTINGS */
 #game-settings{margin-top:24px;text-align:left;max-width:520px;margin-left:auto;margin-right:auto}
@@ -346,12 +345,12 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 @keyframes glow-green{0%{background:rgba(63,185,80,.2)}100%{background:transparent}}
 
 /* KEYBOARD FOCUS RING */
-.territory-path.kb-focused{filter:brightness(1.35) drop-shadow(0 0 8px rgba(255,255,255,.2)) drop-shadow(0 0 16px rgba(255,255,255,.08))}
+.territory-path.kb-focused{filter:brightness(1.12)}
 .kb-focus-ring{pointer-events:none;fill:none;stroke:var(--gold);stroke-width:3;animation:kb-pulse 1s ease-in-out infinite}
 @keyframes kb-pulse{0%,100%{stroke-width:3;stroke-opacity:1}50%{stroke-width:5;stroke-opacity:.5}}
 
 /* KEYBOARD SHORTCUTS OVERLAY */
-#kb-help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:1100;backdrop-filter:blur(4px)}
+#kb-help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:1100}
 #kb-help-overlay.show{display:flex}
 #kb-help-overlay .kb-card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:32px 40px;max-width:680px;max-height:85vh;overflow-y:auto;width:100%}
 #kb-help-overlay .kb-card h2{font-size:22px;font-weight:700;color:var(--gold);margin-bottom:4px}
@@ -381,19 +380,19 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* THEME TOGGLE */
 #theme-toggle{background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;padding:0;transition:background .15s}
 #theme-toggle:hover{background:var(--border)}
-[data-theme="light"] #map-container{background:radial-gradient(ellipse at 50% 45%, #c8d6e5 0%, #dfe6ed 40%, #eaeef2 100%)}
+[data-theme="light"] #map-container{background:#f6f8fa}
 [data-theme="light"] .toast.error{border-color:var(--red);background:#fee2e2}
 [data-theme="light"] .toast.success{border-color:var(--green);background:#dcfce7}
-[data-theme="light"] .toast.achievement{border-color:var(--gold);background:linear-gradient(135deg,#fef3c7,#fffbeb);box-shadow:0 4px 24px rgba(154,103,0,.15)}
+[data-theme="light"] .toast.achievement{border-color:var(--gold);background:#fffbeb}
 [data-theme="light"] #game-over{background:rgba(255,255,255,.75)}
-[data-theme="light"] #replay-stepper{background:linear-gradient(180deg,rgba(246,248,250,.92),rgba(246,248,250,.98))}
+[data-theme="light"] #replay-stepper{background:#f6f8fa}
 [data-theme="light"] .army-text{fill:#1f2328}
 [data-theme="light"] .connection-line{stroke:var(--border)}
 [data-theme="light"] .hover-conn-friendly{stroke:#2563eb}
 [data-theme="light"] .hover-conn-enemy{stroke:#dc2626}
 [data-theme="light"] .hover-conn-neutral{stroke:#9ca3af}
 [data-theme="light"] .bonus-boundary{opacity:0.35}
-[data-theme="light"] #sidebar{background:linear-gradient(180deg, var(--bg2) 0%, #edf0f3 100%)}
+[data-theme="light"] #sidebar{background:var(--bg2)}
 [data-theme="light"] .phase-flash{background:rgba(255,255,255,.6)}
 [data-theme="light"] #kb-help-overlay{background:rgba(255,255,255,.8)}
 
@@ -421,7 +420,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .undo-redo-bar .undo-hint{font-size:10px;color:var(--text3);margin-left:auto}
 
 /* THREAT HEATMAP */
-.territory-path.threat-overlay{transition:fill .3s ease}
 
 /* CHAT PANEL */
 #chat-panel{border-top:1px solid var(--border);display:flex;flex-direction:column;max-height:280px;min-height:0;transition:max-height .3s ease}
@@ -464,7 +462,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #topbar .controls{gap:4px;flex-wrap:wrap}
   #topbar .session-info{font-size:10px}
   #topbar button{padding:3px 8px;font-size:11px}
-  #topbar .btn-quickplay{padding:3px 10px}
+
   #topbar select{padding:3px 6px;font-size:11px}
   /* Replay stepper adjustments */
   #replay-stepper{padding:6px 10px}
@@ -493,7 +491,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #topbar .controls{gap:3px}
   #topbar .session-info{display:none}
   #topbar button{padding:2px 6px;font-size:10px}
-  #topbar .btn-quickplay{padding:2px 8px;font-size:10px}
+
   #topbar select{font-size:10px}
   #map-container{min-height:55vh}
   #sidebar{max-height:35vh}
@@ -535,7 +533,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #overview-list{overflow-y:auto;max-height:200px;padding:0 12px 8px}
 .ov-row{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:11px;transition:background .1s}
 .ov-row:hover{background:var(--bg3)}
-.ov-row .ov-threat{width:4px;height:16px;border-radius:2px;flex-shrink:0}
 .ov-row .ov-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
 .ov-row .ov-armies{font-weight:700;color:var(--blue);min-width:20px;text-align:right}
 .ov-row .ov-bonus-tag{font-size:9px;color:var(--text3);padding:1px 4px;border-radius:3px;background:var(--bg);white-space:nowrap}
@@ -557,7 +554,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #strat-tips .tip-toggle{font-size:10px;color:var(--text3);cursor:pointer;text-decoration:underline;margin-top:4px;display:inline-block}
 
 /* SESSION STATS BAR */
-#session-stats-bar{position:fixed;bottom:0;left:0;right:0;height:24px;background:rgba(13,17,23,.95);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:20px;font-size:11px;color:var(--text3);z-index:900;transform:translateY(100%);transition:transform .3s ease;backdrop-filter:blur(6px)}
+#session-stats-bar{position:fixed;bottom:0;left:0;right:0;height:24px;background:#0d1117;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:20px;font-size:11px;color:var(--text3);z-index:900;transform:translateY(100%);transition:transform .3s ease}
 #session-stats-bar.visible{transform:translateY(0)}
 #session-stats-bar span{white-space:nowrap}
 #session-stats-bar .ss-val{color:var(--text2);font-weight:600}
@@ -568,8 +565,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 </head>
 <body>
 <div style="position:fixed;bottom:8px;right:8px;z-index:9999;background:#d29922;color:#000;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;opacity:0.75;">ALPHA — expect bugs</div>
-<nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
-  <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
+<nav style="background:#0f1419;border-bottom:1px solid #21293a;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
+  <a href="/" style="color:#fbbf24;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
   <a href="/" style="color:#fff;text-decoration:none;">Play</a>
   <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
   <a href="/ladder" style="color:#8b949e;text-decoration:none;">Ladder</a>
@@ -597,13 +594,11 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <span class="timer-text" id="timer-text">1:30</span>
     </div>
     <div class="controls">
-      <button class="btn-quickplay" id="quickplay-btn" onclick="quickPlay()" title="Quick Play (instant new game)">Quick Play</button>
       <select id="difficulty-select" onchange="setDifficulty(this.value)" title="AI Difficulty" style="display:none">
         <option value="easy">Easy</option>
         <option value="medium">Medium</option>
         <option value="hard" selected>Hard</option>
       </select>
-      <button id="threat-toggle" onclick="toggleThreats()" title="Toggle Threat Heatmap">Threats</button>
       <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Theme">&#9790;</button>
       <button id="mute-toggle" onclick="toggleMute()" title="Toggle Sound On/Off">Sound</button>
       <button onclick="newGame()" title="New Game (N)">New Game</button>
@@ -844,7 +839,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         <span class="kb-key">N</span><span class="kb-desc">New Game</span>
         <span class="kb-key">M</span><span class="kb-desc">Toggle mute</span>
         <span class="kb-key">L</span><span class="kb-desc">Toggle light/dark theme</span>
-        <span class="kb-key">T</span><span class="kb-desc">Toggle threats overlay</span>
+
         <span class="kb-key">O</span><span class="kb-desc">Toggle territory overview panel</span>
         <span class="kb-key">R</span><span class="kb-desc">Enter replay mode (after game ends)</span>
         <span class="kb-key">?</span><span class="kb-desc">Show / hide this help overlay</span>
@@ -859,10 +854,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 // POS is populated dynamically from API territory label_x/label_y
 const POS = {};
 const BONUS_COLORS=['#58a6ff','#e3b341','#f0883e','#bc8cff','#3fb950','#f778ba'];
-const PLAYER_COLOR='#2563eb';
-const ENEMY_COLOR='#dc2626';
-const NEUTRAL_COLOR='#4b5563';
-const FOG_COLOR='#1f2937';
+const PLAYER_COLOR='#4a9eff';
+const ENEMY_COLOR='#f87171';
+const NEUTRAL_COLOR='#6b7280';
+const FOG_COLOR='#111827';
 
 // ========== STATE ==========
 let G = null; // game state
@@ -879,7 +874,7 @@ let pendingMax = 0;
 let pendingType = ''; // 'attack' or 'transfer'
 let editingOrderIdx = null; // index of order being edited in sidebar
 let resolving = false;
-let threatsEnabled = false;
+
 let muted = false;
 let winProbHistory = []; // track win% over turns for sparkline
 let gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
@@ -1269,58 +1264,6 @@ function toggleTheme() {
     document.getElementById('theme-toggle').innerHTML = '&#9728;';
   }
 })();
-
-// ========== THREAT HEATMAP ==========
-function toggleThreats() {
-  threatsEnabled = !threatsEnabled;
-  const btn = document.getElementById('threat-toggle');
-  btn.style.background = threatsEnabled ? 'var(--gold)' : '';
-  btn.style.color = threatsEnabled ? '#000' : '';
-  updateThreatOverlay();
-}
-
-function updateThreatOverlay() {
-  if (!G || !G.territories) return;
-  G.territories.forEach(t => {
-    const highlightEl = document.getElementById('highlight-' + t.id);
-    if (!highlightEl) return;
-    if (!threatsEnabled || t.owner !== 0) {
-      // Clear threat outline
-      if (!selectedSource || selectedSource !== t.id) {
-        highlightEl.setAttribute('stroke', 'none');
-        highlightEl.setAttribute('stroke-width', '0');
-      }
-      return;
-    }
-    // Calculate threat level — only change the OUTLINE, keep territory fill unchanged
-    let myArmies = t.armies || 0;
-    let enemyAdjacentArmies = 0;
-    let hasEnemyAdj = false;
-    if (t.adjacent) {
-      t.adjacent.forEach(adjId => {
-        const adj = terr(adjId);
-        if (adj && adj.owner === 1) {
-          enemyAdjacentArmies += adj.armies || 0;
-          hasEnemyAdj = true;
-        }
-      });
-    }
-    if (!hasEnemyAdj) {
-      // Interior territory — no threat outline
-      highlightEl.setAttribute('stroke', 'none');
-      highlightEl.setAttribute('stroke-width', '0');
-    } else {
-      const ratio = myArmies / Math.max(1, enemyAdjacentArmies);
-      let color;
-      if (ratio >= 1.5) color = '#22c55e';      // safe green
-      else if (ratio >= 1) color = '#84cc16';    // cautious
-      else if (ratio >= 0.5) color = '#f59e0b';  // warning orange
-      else color = '#ef4444';                     // danger red
-      highlightEl.setAttribute('stroke', color);
-      highlightEl.setAttribute('stroke-width', '3');
-    }
-  });
-}
 
 // ========== DIFFICULTY ==========
 async function setDifficulty(level) {
@@ -1928,8 +1871,6 @@ function updateMap() {
     if (mapSvg) mapSvg.appendChild(rankGroup);
   }
 
-  // Apply threat overlay if enabled
-  if (threatsEnabled) updateThreatOverlay();
 
   // Reapply keyboard focus ring if active
   updateKbFocusRing();
@@ -3564,56 +3505,6 @@ async function rematch() {
   }
 }
 
-async function quickPlay() {
-  // If a game is in progress, confirm abandonment
-  if (G && phase !== 'finished' && phase !== 'loading') {
-    if (!confirm('Abandon current game and start a new one?')) return;
-  }
-  if (lastGameSettings) {
-    // Reuse last settings for instant start
-    if (replayMode) {
-      replayMode = false;
-      replayStopAutoPlay();
-      replayCache = {};
-      document.getElementById('replay-stepper').style.display = 'none';
-      document.getElementById('replay-sparkline').style.display = 'none';
-      document.getElementById('replay-log').style.display = 'none';
-      document.getElementById('phase-panel').style.display = '';
-      document.getElementById('control-panel').style.display = '';
-  
-      document.getElementById('history-panel').style.display = '';
-    }
-    document.getElementById('game-over').classList.remove('show');
-  
-    phase = 'loading';
-    turnTimerHide();
-    picks = [];
-    deploys = {};
-    orders = [];
-    deployLeft = 0;
-    selectedSource = null;
-    pendingTarget = null;
-    editingOrderIdx = null;
-    resolving = false;
-    winProbHistory = [];
-    annotations = {}; markerMode = null;
-    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
-    clearUndoRedo();
-    clearChat();
-    playSound('tick');
-    sessionGames++;
-    updateSessionDisplay();
-    const res = await api('POST', '/api/new', lastGameSettings);
-    if (res) {
-      updateBoardNameDisplay();
-      await fetchState();
-    }
-  } else {
-    // No previous game — show board picker
-    newGame();
-  }
-}
-
 // ========== SESSION TIMER & COUNTER ==========
 function updateSessionDisplay() {
   var counterEl = document.getElementById('game-counter');
@@ -4125,7 +4016,7 @@ document.addEventListener('keydown', e => {
   if (keyLower === 'n') { newGame(); return; }
   if (keyLower === 'm') { toggleMute(); return; }
   if (keyLower === 'l') { toggleTheme(); return; }
-  if (keyLower === 't') { toggleThreats(); return; }
+
   if (keyLower === 'o') { toggleOverview(); return; }
   if (keyLower === 'r' && phase === 'finished') { enterReplayMode(); return; }
 });

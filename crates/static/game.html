@@ -8,10 +8,10 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --bg:#0d1117;--bg2:#0f1419;--bg3:#1a1f2e;--border:#21293a;
   --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
-  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
-  --neutral:#4b5563;--fog:#1f2937;
+  --blue:#4a9eff;--red:#f87171;--green:#34d399;--gold:#fbbf24;
+  --neutral:#6b7280;--fog:#111827;
 }
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
 #app{display:flex;flex-direction:column;height:100vh}
@@ -33,13 +33,13 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 
 /* MAIN LAYOUT */
 #main{display:flex;flex:1;overflow:hidden}
-#map-container{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 45%, #111d2e 0%, #0c1520 40%, #080e14 100%)}
-#sidebar{width:340px;min-width:340px;background:linear-gradient(180deg, var(--bg2) 0%, #131820 100%);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#map-container{flex:1;position:relative;overflow:hidden;background:#0d1117}
+#sidebar{width:340px;min-width:340px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 
 /* SVG MAP */
 #map-svg{width:100%;height:100%}
 .territory-path{cursor:pointer;transition:fill .2s ease,stroke .2s ease,opacity .2s ease,filter .2s ease}
-.territory-path:hover{filter:brightness(1.35) drop-shadow(0 0 8px rgba(255,255,255,.2))}
+.territory-path:hover{filter:brightness(1.12)}
 .territory-highlight{pointer-events:none;transition:stroke .2s ease,stroke-width .2s ease}
 .army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
 .army-text.large-army{font-size:15px}
@@ -85,7 +85,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .undeployed-warning{color:#f59e0b;font-size:12px;font-weight:600;text-align:center;padding:4px 0}
 
 /* MAP ARMY POPUP */
-#map-army-popup{position:absolute;display:none;background:var(--bg2);border:2px solid var(--gold);border-radius:8px;padding:6px 10px;z-index:200;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.6)}
+#map-army-popup{position:absolute;display:none;background:var(--bg2);border:2px solid var(--gold);border-radius:8px;padding:6px 10px;z-index:200;white-space:nowrap}
 #map-army-popup .popup-label{font-size:11px;color:var(--text2);margin-bottom:4px;text-align:center}
 #map-army-popup .popup-row{display:flex;align-items:center;gap:6px}
 #map-army-popup button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
@@ -153,8 +153,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 </style>
 </head>
 <body>
-<nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
-  <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
+<nav style="background:#0f1419;border-bottom:1px solid #21293a;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
+  <a href="/" style="color:#fbbf24;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
   <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
   <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
   <a href="/ladder" style="color:#8b949e;text-decoration:none;">Ladder</a>

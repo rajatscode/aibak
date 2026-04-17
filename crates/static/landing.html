@@ -10,14 +10,14 @@
 
 :root {
   --bg: #0d1117;
-  --bg-card: #161b22;
+  --bg-card: #0f1419;
   --bg-card-hover: #1c2333;
-  --gold: #e3b341;
-  --blue: #2563eb;
-  --blue-light: #3b82f6;
+  --gold: #fbbf24;
+  --blue: #4a9eff;
+  --blue-light: #5ab0ff;
   --text: #e6edf3;
   --text-muted: #8b949e;
-  --border: #30363d;
+  --border: #21293a;
   --radius: 12px;
 }
 
@@ -51,8 +51,7 @@ nav {
   top: 0;
   width: 100%;
   z-index: 100;
-  background: rgba(13, 17, 23, 0.85);
-  backdrop-filter: blur(12px);
+  background: #0f1419;
   border-bottom: 1px solid var(--border);
   padding: 0 2rem;
 }
@@ -94,7 +93,7 @@ nav {
 .hero-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, rgba(13,17,23,0.5) 0%, rgba(13,17,23,0.92) 70%);
+  background: rgba(13,17,23,0.85);
   z-index: 1;
 }
 .hero-content {
@@ -108,10 +107,7 @@ nav {
   letter-spacing: -1.5px;
   line-height: 1.1;
   margin-bottom: 1.2rem;
-  background: linear-gradient(135deg, var(--text) 0%, var(--gold) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--gold);
 }
 .hero p {
   font-size: clamp(1.1rem, 2.5vw, 1.4rem);
@@ -137,11 +133,9 @@ nav {
 .btn-primary {
   background: var(--blue);
   color: #fff;
-  box-shadow: 0 0 20px rgba(37,99,235,0.3);
 }
 .btn-primary:hover {
   background: var(--blue-light);
-  box-shadow: 0 0 30px rgba(37,99,235,0.5);
   transform: translateY(-2px);
   color: #fff;
 }
@@ -208,7 +202,7 @@ section {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--blue), var(--gold));
+  background: var(--blue);
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -301,7 +295,7 @@ section {
   max-width: 1200px;
   margin: 0 auto;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  background: var(--border);
 }
 
 /* ── Footer ── */
@@ -689,14 +683,13 @@ footer {
       <div class="footer-col">
         <h4>Play</h4>
         <a href="/">Play Game</a>
-        <a href="/tutorial">Tutorial</a>
-        <a href="/editor">Map Editor</a>
+        <a href="/games">Games</a>
+        <a href="/ladder">Ladder</a>
       </div>
       <div class="footer-col">
         <h4>Community</h4>
-        <a href="/profile">Profile</a>
-        <a href="/games">Live Games</a>
-        <a href="https://github.com/rmehndir/strat-club" target="_blank" rel="noopener">GitHub</a>
+        <a href="/feedback">Feedback</a>
+        <a href="https://discord.gg/URuwbk42bB" target="_blank" rel="noopener">Discord</a>
       </div>
     </div>
   </div>
