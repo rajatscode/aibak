@@ -1380,8 +1380,8 @@ function updateWinProbBar() {
     winProbHistory.push(p0);
     winProbHistory._lastTurn = G.turn;
   }
-  // Only show the bar during game review (finished) or replay mode — never during live play.
-  if (G.phase !== 'finished' && !replayMode) {
+  // Show the bar during play, finished, and replay modes.
+  if (G.phase === 'picking') {
     wrap.style.display = 'none';
     return;
   }
