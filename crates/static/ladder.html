@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>strat.club — Ladder</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
+}
+html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+
+.content{max-width:760px;margin:0 auto;padding:24px 16px}
+h2{font-size:20px;font-weight:700;margin-bottom:16px}
+
+.ladder-table{width:100%;border-collapse:collapse;font-size:14px}
+.ladder-table th{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text2);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+.ladder-table td{padding:8px 12px;border-bottom:1px solid var(--bg3);color:var(--text)}
+.ladder-table tr:last-child td{border-bottom:none}
+.ladder-table tr:hover td{background:var(--bg2)}
+.ladder-table tr.current-user td{background:rgba(37,99,235,.12);border-color:var(--blue)}
+.ladder-table .rank-col{font-weight:700;color:var(--gold);width:50px}
+.ladder-table .rating-col{font-weight:600}
+.ladder-table .winrate-col{color:var(--text2)}
+
+.rank-1{color:#ffd700}
+.rank-2{color:#c0c0c0}
+.rank-3{color:#cd7f32}
+
+.pagination{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px}
+.pagination button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;transition:background .15s}
+.pagination button:hover:not(:disabled){background:var(--border)}
+.pagination button:disabled{opacity:.4;cursor:not-allowed}
+.pagination .page-info{font-size:13px;color:var(--text2);min-width:80px;text-align:center}
+
+.empty-state{text-align:center;padding:48px 16px;color:var(--text2);font-size:14px}
+
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+</style>
+</head>
+<body>
+<div style="position:fixed;bottom:8px;right:8px;z-index:9999;background:#d29922;color:#000;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;opacity:0.75;">ALPHA — expect bugs</div>
+<nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
+  <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
+  <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
+  <a href="/puzzle" style="color:#8b949e;text-decoration:none;">Puzzle</a>
+  <a href="/editor" style="color:#8b949e;text-decoration:none;">Editor</a>
+  <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
+  <a href="/profile" style="color:#8b949e;text-decoration:none;">Profile</a>
+  <a href="/ladder" style="color:#fff;text-decoration:none;">Ladder</a>
+  <a href="/tutorial" style="color:#8b949e;text-decoration:none;">Tutorial</a>
+  <a href="/feedback" style="color:#8b949e;text-decoration:none;">Feedback</a>
+  <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;margin-left:auto;font-weight:600;">Discord</a>
+</nav>
+
+<div class="content">
+  <h2>Leaderboard</h2>
+  <div id="ladder-content">
+    <div class="empty-state">Loading leaderboard...</div>
+  </div>
+</div>
+
+<footer style="width:100%;text-align:center;padding:24px 16px;font-size:12px;color:#8b949e;border-top:1px solid #30363d;margin-top:24px;">
+  strat.club
+</footer>
+
+<script>
+var PAGE_SIZE = 20;
+var currentPage = 0;
+var allPlayers = [];
+var currentUserId = null;
+
+function escHtml(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function checkAuth() {
+  try {
+    var res = await fetch('/api/auth/me');
+    if (res.ok) {
+      var user = await res.json();
+      currentUserId = user.id;
+    }
+  } catch(e) {}
+}
+
+async function loadLadder() {
+  var content = document.getElementById('ladder-content');
+  try {
+    var res = await fetch('/api/ladder');
+    if (!res.ok) {
+      content.innerHTML = '<div class="empty-state">Could not load leaderboard. Database may not be configured.</div>';
+      return;
+    }
+    allPlayers = await res.json();
+    if (!allPlayers || allPlayers.length === 0) {
+      content.innerHTML = '<div class="empty-state">No players on the leaderboard yet. Play some games!</div>';
+      return;
+    }
+    allPlayers.sort(function(a, b) { return (b.rating || 0) - (a.rating || 0); });
+    renderPage();
+  } catch(e) {
+    content.innerHTML = '<div class="empty-state">Failed to load leaderboard.</div>';
+  }
+}
+
+function renderPage() {
+  var content = document.getElementById('ladder-content');
+  var totalPages = Math.ceil(allPlayers.length / PAGE_SIZE);
+  var start = currentPage * PAGE_SIZE;
+  var end = Math.min(start + PAGE_SIZE, allPlayers.length);
+  var pageItems = allPlayers.slice(start, end);
+
+  var html = '<table class="ladder-table"><thead><tr>' +
+    '<th>Rank</th><th>Username</th><th>Rating</th><th>W/L</th><th>Win Rate</th>' +
+    '</tr></thead><tbody>';
+
+  for (var i = 0; i < pageItems.length; i++) {
+    var p = pageItems[i];
+    var rank = start + i + 1;
+    var wins = p.games_won || 0;
+    var losses = (p.games_played || 0) - wins;
+    var winRate = p.games_played > 0 ? ((wins / p.games_played) * 100).toFixed(1) + '%' : '-';
+    var isCurrentUser = currentUserId && p.id === currentUserId;
+    var rankClass = rank <= 3 ? ' rank-' + rank : '';
+
+    html += '<tr' + (isCurrentUser ? ' class="current-user"' : '') + '>' +
+      '<td class="rank-col' + rankClass + '">#' + rank + '</td>' +
+      '<td>' + escHtml(p.username) + '</td>' +
+      '<td class="rating-col">' + Math.round(p.rating || 1500) + '</td>' +
+      '<td>' + wins + ' / ' + losses + '</td>' +
+      '<td class="winrate-col">' + winRate + '</td>' +
+      '</tr>';
+  }
+
+  html += '</tbody></table>';
+
+  if (totalPages > 1) {
+    html += '<div class="pagination">' +
+      '<button onclick="prevPage()" id="btn-prev"' + (currentPage === 0 ? ' disabled' : '') + '>&lsaquo; Prev</button>' +
+      '<span class="page-info">Page ' + (currentPage + 1) + ' / ' + totalPages + '</span>' +
+      '<button onclick="nextPage()" id="btn-next"' + (currentPage >= totalPages - 1 ? ' disabled' : '') + '>Next &rsaquo;</button>' +
+      '</div>';
+  }
+
+  content.innerHTML = html;
+}
+
+function prevPage() {
+  if (currentPage > 0) { currentPage--; renderPage(); }
+}
+
+function nextPage() {
+  var totalPages = Math.ceil(allPlayers.length / PAGE_SIZE);
+  if (currentPage < totalPages - 1) { currentPage++; renderPage(); }
+}
+
+checkAuth().then(loadLadder);
+</script>
+</body>
+</html>

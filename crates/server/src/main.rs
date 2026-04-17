@@ -1274,6 +1274,10 @@ async fn feedback_page() -> Html<&'static str> {
     Html(include_str!("../../static/feedback.html"))
 }
 
+async fn ladder_page() -> Html<&'static str> {
+    Html(include_str!("../../static/ladder.html"))
+}
+
 async fn app_placeholder() -> Html<&'static str> {
     Html("<html><body><h1>strat-club multiplayer</h1><p>Frontend coming soon.</p></body></html>")
 }
@@ -1576,6 +1580,8 @@ async fn main() {
             "/api/arenas/{id}/leaderboard",
             get(api::tournament::arena_leaderboard),
         )
+        // Ladder.
+        .route("/ladder", get(ladder_page))
         // Feedback.
         .route("/feedback", get(feedback_page))
         .route("/api/feedback", post(api::feedback::submit_feedback))
