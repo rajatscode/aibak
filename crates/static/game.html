@@ -1,4 +1,1150 @@
 <!DOCTYPE html>
-<html><head><title>strat.club — Multiplayer Game</title></head>
-<body><h1>Multiplayer game board loading...</h1><p>This page is under construction.</p></body>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>strat.club - Game</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
+  --neutral:#4b5563;--fog:#1f2937;
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* TOP BAR */
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-height:48px;flex-shrink:0;gap:12px}
+#topbar h1{font-size:16px;font-weight:700;color:var(--gold);letter-spacing:1px}
+#topbar .stats{display:flex;gap:16px;font-size:13px;color:var(--text2)}
+#topbar .stats span{display:flex;align-items:center;gap:4px}
+#topbar .stats .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.player-bar{display:flex;align-items:center;gap:16px;padding:6px 16px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:13px}
+.player-bar .player{display:flex;align-items:center;gap:8px}
+.player-bar .player .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.player-bar .player .name{font-weight:700}
+.player-bar .player .rating{color:var(--text3);font-size:11px}
+.player-bar .player.active{background:rgba(255,255,255,0.05);border-radius:6px;padding:4px 10px}
+.player-bar .vs{color:var(--text3);font-weight:700}
+.player-bar .turn-info{margin-left:auto;color:var(--text2)}
+
+/* MAIN LAYOUT */
+#main{display:flex;flex:1;overflow:hidden}
+#map-container{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 45%, #111d2e 0%, #0c1520 40%, #080e14 100%)}
+#sidebar{width:340px;min-width:340px;background:linear-gradient(180deg, var(--bg2) 0%, #131820 100%);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+
+/* SVG MAP */
+#map-svg{width:100%;height:100%}
+.territory-path{cursor:pointer;transition:fill .2s ease,stroke .2s ease,opacity .2s ease,filter .2s ease}
+.territory-path:hover{filter:brightness(1.35) drop-shadow(0 0 8px rgba(255,255,255,.2))}
+.territory-highlight{pointer-events:none;transition:stroke .2s ease,stroke-width .2s ease}
+.army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
+.army-text.large-army{font-size:15px}
+.deploy-badge{pointer-events:none;font-size:10px;font-weight:700;fill:var(--green);text-anchor:middle;dominant-baseline:central}
+.connection-line{stroke:var(--bg3);stroke-width:1;opacity:.3}
+.pick-ring{fill:none;stroke:var(--gold);stroke-width:3;pointer-events:none}
+.pick-rank{pointer-events:none;font-size:16px;font-weight:900;fill:var(--gold);text-anchor:middle;dominant-baseline:central}
+.selected-highlight{animation:pulse-gold 1.2s ease-in-out infinite}
+@keyframes pulse-gold{0%,100%{stroke-width:3;stroke:var(--gold)}50%{stroke-width:5;stroke:#fbbf24}}
+.order-line{stroke-width:2;stroke-dasharray:6,3;fill:none;marker-end:url(#arrowhead)}
+.plus-one{pointer-events:none;font-size:14px;font-weight:700;fill:var(--green);text-anchor:middle;animation:float-up .6s ease-out forwards}
+@keyframes float-up{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-25px)}}
+.route-attack{stroke-width:3;fill:none;stroke-linecap:round;stroke-dasharray:12,6;animation:dash-flow .6s linear infinite}
+@keyframes dash-flow{to{stroke-dashoffset:-18}}
+.route-transfer{stroke-width:1.5;fill:none;stroke-dasharray:4,4;opacity:0.5;stroke:#60a5fa}
+.route-combat-bg{fill:rgba(0,0,0,0.8);rx:4;ry:4}
+.route-combat-text{pointer-events:none;font-size:9px;font-weight:600;fill:#fff;text-anchor:middle;dominant-baseline:central}
+.bonus-boundary{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;opacity:0.25;pointer-events:none;stroke-dasharray:6,4}
+.flash-deploy{animation:flash-green .4s ease-out}
+@keyframes flash-green{0%{filter:brightness(2) saturate(1.5)}100%{filter:none}}
+
+/* SIDEBAR */
+.sb-section{padding:12px;border-bottom:1px solid var(--border)}
+.sb-section h3{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.sb-phase{font-size:18px;font-weight:700;margin-bottom:4px}
+.sb-sub{font-size:13px;color:var(--text2)}
+.deploy-counter{font-size:28px;font-weight:800;color:var(--green);text-align:center;padding:8px 0}
+.deploy-hint{font-size:11px;color:var(--text3);text-align:center}
+.order-item{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px;font-size:12px;border:1px solid var(--border)}
+.order-item .remove-btn{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px}
+.order-item .remove-btn:hover{color:#f87171}
+.btn{display:block;width:100%;padding:10px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;transition:background .15s,opacity .15s}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover:not(:disabled){background:#3b82f6}
+.btn-green{background:var(--green);color:#000}
+.btn-green:hover:not(:disabled){background:#4ade80}
+.btn-gold{background:var(--gold);color:#000}
+.btn-gold:hover:not(:disabled){background:#fbbf24}
+.bonus-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px}
+.bonus-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.bonus-row.complete{background:rgba(63,185,80,.1);border-radius:4px;padding:3px 4px}
+.undeployed-warning{color:#f59e0b;font-size:12px;font-weight:600;text-align:center;padding:4px 0}
+
+/* MAP ARMY POPUP */
+#map-army-popup{position:absolute;display:none;background:var(--bg2);border:2px solid var(--gold);border-radius:8px;padding:6px 10px;z-index:200;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.6)}
+#map-army-popup .popup-label{font-size:11px;color:var(--text2);margin-bottom:4px;text-align:center}
+#map-army-popup .popup-row{display:flex;align-items:center;gap:6px}
+#map-army-popup button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+#map-army-popup button:hover{background:var(--border)}
+#map-army-popup .popup-count{font-size:18px;font-weight:700;min-width:32px;text-align:center;color:var(--text)}
+#map-army-popup .popup-go{background:var(--blue);color:#fff;border:none;border-radius:4px;padding:4px 14px;cursor:pointer;font-size:13px;font-weight:600;width:auto}
+#map-army-popup .popup-go:hover{background:#3b82f6}
+
+/* TOOLTIP */
+.tooltip{position:absolute;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:11px;pointer-events:none;z-index:100;white-space:nowrap;opacity:0;transition:opacity .15s;line-height:1.6}
+.tooltip.show{opacity:1}
+.tooltip .tip-name{font-weight:700;font-size:12px;margin-bottom:2px}
+
+/* TOAST */
+#toast-container{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transform:translateY(-10px);transition:opacity .3s,transform .3s;pointer-events:auto}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{border-color:var(--red);background:#2d1013}
+.toast.success{border-color:var(--green);background:#0d2818}
+
+/* PHASE FLASH */
+.phase-flash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:500;pointer-events:none;opacity:0;transition:opacity .3s}
+.phase-flash.show{opacity:1}
+.phase-flash span{font-size:24px;font-weight:800;color:var(--gold);text-shadow:0 0 20px rgba(227,179,65,.5)}
+
+/* GAME OVER OVERLAY */
+#game-over{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:999}
+#game-over.show{display:flex}
+#game-over .card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:480px}
+#game-over .card h2{font-size:32px;margin-bottom:12px}
+#game-over .card p{color:var(--text2);margin-bottom:16px}
+#game-over .card button{padding:12px 32px;font-size:16px}
+
+/* WAITING OVERLAY */
+#waiting-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:998}
+#waiting-overlay.show{display:flex}
+#waiting-overlay .card{background:var(--bg2);border:2px solid var(--gold);border-radius:16px;padding:40px 60px;text-align:center}
+#waiting-overlay .card h2{font-size:24px;color:var(--gold);margin-bottom:12px}
+#waiting-overlay .card p{color:var(--text2);font-size:14px}
+#waiting-overlay .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* SUBMITTED OVERLAY */
+#submitted-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:400;align-items:center;justify-content:center}
+#submitted-overlay.show{display:flex}
+#submitted-overlay .msg{background:var(--bg2);border:2px solid var(--green);border-radius:12px;padding:20px 40px;text-align:center;font-size:16px;font-weight:700;color:var(--green)}
+
+/* WS STATUS */
+#ws-status{font-size:10px;padding:4px 12px;border-top:1px solid var(--border);color:var(--text3);flex-shrink:0}
+#ws-status .connected{color:var(--green)}
+#ws-status .disconnected{color:var(--red)}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+
+/* MOBILE */
+@media (max-width: 768px) {
+  #main{flex-direction:column}
+  #sidebar{width:100%;min-width:unset;max-height:40vh;border-left:none;border-top:1px solid var(--border);overflow-y:auto}
+  #map-container{flex:1;min-height:50vh}
+  .player-bar{flex-wrap:wrap;gap:8px}
+}
+</style>
+</head>
+<body>
+<nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
+  <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
+  <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
+  <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
+  <a href="/profile" style="color:#8b949e;text-decoration:none;">Profile</a>
+  <span style="color:#fff;font-weight:600;">Game</span>
+</nav>
+<div id="app">
+  <div id="topbar">
+    <h1>strat.club</h1>
+    <div class="stats">
+      <span>Turn <strong id="turn-num">0</strong></span>
+      <span><span class="dot" style="background:var(--blue)"></span> <strong id="my-terr">0</strong></span>
+      <span><span class="dot" style="background:var(--red)"></span> <strong id="enemy-terr">0</strong></span>
+      <span id="status-badge" style="font-weight:700;color:var(--gold)"></span>
+    </div>
+  </div>
+  <div class="player-bar" id="player-bar">
+    <div class="player" id="player-a-info">
+      <span class="dot" style="background:var(--blue)"></span>
+      <span class="name" id="pa-name">Player A</span>
+      <span class="rating" id="pa-rating"></span>
+    </div>
+    <span class="vs">vs</span>
+    <div class="player" id="player-b-info">
+      <span class="dot" style="background:var(--red)"></span>
+      <span class="name" id="pb-name">Player B</span>
+      <span class="rating" id="pb-rating"></span>
+    </div>
+    <div class="turn-info" id="turn-info"></div>
+  </div>
+  <div id="main">
+    <div id="map-container">
+      <svg id="map-svg" viewBox="0 0 1000 680"></svg>
+      <div id="map-army-popup">
+        <div class="popup-label" id="popup-label"></div>
+        <div class="popup-row">
+          <button onclick="popupAdjust(-1)">-</button>
+          <span class="popup-count" id="popup-count">0</span>
+          <button onclick="popupAdjust(1)">+</button>
+          <button class="popup-go" onclick="popupConfirm()">Go</button>
+        </div>
+      </div>
+      <div class="phase-flash" id="phase-flash"><span id="flash-text"></span></div>
+      <div class="tooltip" id="tooltip"></div>
+      <div id="submitted-overlay"><div class="msg" id="submitted-msg">Orders submitted - waiting for opponent...</div></div>
+    </div>
+    <div id="sidebar">
+      <div class="sb-section" id="phase-panel"></div>
+      <div class="sb-section" id="control-panel" style="flex:1;overflow-y:auto;min-height:0"></div>
+      <div id="ws-status"><span class="disconnected">Connecting...</span></div>
+    </div>
+  </div>
+</div>
+<div id="game-over">
+  <div class="card">
+    <h2 id="go-title"></h2>
+    <p id="go-msg"></p>
+    <div style="margin-top:16px">
+      <a href="/games" class="btn btn-primary" style="display:inline-block;text-decoration:none;width:auto;padding:12px 32px">Back to Games</a>
+    </div>
+  </div>
+</div>
+<div id="waiting-overlay">
+  <div class="card">
+    <div class="spinner"></div>
+    <h2>Waiting for opponent...</h2>
+    <p>Share this link to invite a player</p>
+    <p style="margin-top:12px;color:var(--gold);font-family:monospace;font-size:12px;word-break:break-all" id="game-link"></p>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+// ========== CONSTANTS ==========
+const POS = {};
+const BONUS_COLORS=['#58a6ff','#e3b341','#f0883e','#bc8cff','#3fb950','#f778ba'];
+
+// ========== STATE ==========
+let GAME_ID = null;
+let GAME = null;          // game metadata from API
+let MAP = null;           // map data (territories, bonuses)
+let STATE = null;         // fog-filtered game state
+let mySeat = null;        // 0 or 1
+let currentUser = null;
+let pickOptions = [];
+
+let phase = 'loading';
+let picks = [];
+let deploys = {};
+let deployLeft = 0;
+let orders = [];
+let selectedSource = null;
+let pendingTarget = null;
+let pendingArmies = 0;
+let pendingMax = 0;
+let pendingType = '';
+let submitted = false;
+let ws = null;
+let lastTurn = -1;        // track turn transitions
+
+// ========== INIT ==========
+(async function init() {
+  const pathParts = window.location.pathname.split('/');
+  GAME_ID = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
+  if (!GAME_ID) { toast('Invalid game URL', 'error'); return; }
+  document.getElementById('game-link').textContent = window.location.href;
+
+  // Check auth
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { window.location.href = '/api/auth/discord'; return; }
+    currentUser = await r.json();
+  } catch (e) {
+    window.location.href = '/api/auth/discord';
+    return;
+  }
+
+  await fetchGameState();
+  connectWebSocket();
+})();
+
+// ========== API ==========
+async function fetchGameState() {
+  try {
+    const r = await fetch('/api/games/' + GAME_ID);
+    if (!r.ok) {
+      const err = await r.json().catch(function() { return {}; });
+      toast(err.message || 'Failed to load game', 'error');
+      return;
+    }
+    const data = await r.json();
+    GAME = data.game;
+    STATE = data.state;
+    MAP = data.map;
+    mySeat = data.my_seat;
+    pickOptions = data.pick_options || [];
+
+    if (data.player_a_info) {
+      document.getElementById('pa-name').textContent = data.player_a_info.username;
+      document.getElementById('pa-rating').textContent = Math.round(data.player_a_info.rating);
+    }
+    if (data.player_b_info) {
+      document.getElementById('pb-name').textContent = data.player_b_info.username;
+      document.getElementById('pb-rating').textContent = Math.round(data.player_b_info.rating);
+    }
+    document.getElementById('player-a-info').classList.toggle('active', mySeat === 0);
+    document.getElementById('player-b-info').classList.toggle('active', mySeat === 1);
+
+    onStateUpdate();
+  } catch (e) {
+    toast('Network error: ' + e.message, 'error');
+  }
+}
+
+async function submitPicks(picksArr) {
+  try {
+    const r = await fetch('/api/games/' + GAME_ID + '/picks', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({picks: picksArr})
+    });
+    const data = await r.json();
+    if (!r.ok || data.success === false) {
+      toast(data.message || 'Failed to submit picks', 'error');
+      return false;
+    }
+    toast('Picks submitted!', 'success');
+    submitted = true;
+    showSubmitted('Picks submitted - waiting for opponent...');
+    renderSidebar();
+    return true;
+  } catch (e) {
+    toast('Network error: ' + e.message, 'error');
+    return false;
+  }
+}
+
+async function submitOrders(apiOrders) {
+  try {
+    const r = await fetch('/api/games/' + GAME_ID + '/orders', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({orders: apiOrders})
+    });
+    const data = await r.json();
+    if (!r.ok || data.success === false) {
+      toast(data.message || 'Failed to submit orders', 'error');
+      return false;
+    }
+    toast('Orders submitted!', 'success');
+    submitted = true;
+    showSubmitted('Orders submitted - waiting for opponent...');
+    renderSidebar();
+    return true;
+  } catch (e) {
+    toast('Network error: ' + e.message, 'error');
+    return false;
+  }
+}
+
+// ========== WEBSOCKET ==========
+function connectWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws');
+  ws.onopen = function() {
+    updateWsStatus(true);
+    ws.send(JSON.stringify({type: 'subscribe', game_id: GAME_ID}));
+  };
+  ws.onmessage = function(evt) {
+    try { handleGameEvent(JSON.parse(evt.data)); } catch (e) {}
+  };
+  ws.onclose = function() {
+    updateWsStatus(false);
+    setTimeout(connectWebSocket, 3000);
+  };
+  ws.onerror = function() { updateWsStatus(false); };
+}
+
+function handleGameEvent(event) {
+  if (event.OpponentCommitted) {
+    toast('Opponent submitted', 'success');
+  }
+  if (event.TurnResolved || event.GameStateUpdated || event.GameFinished) {
+    submitted = false;
+    hideSubmitted();
+    fetchGameState();
+  }
+}
+
+function updateWsStatus(connected) {
+  var el = document.getElementById('ws-status');
+  el.innerHTML = connected
+    ? '<span class="connected">Connected</span>'
+    : '<span class="disconnected">Disconnected - reconnecting...</span>';
+}
+
+// ========== STATE UPDATE ==========
+function onStateUpdate() {
+  if (!GAME || !MAP) return;
+
+  // Waiting overlay
+  var waitingEl = document.getElementById('waiting-overlay');
+  if (GAME.status === 'waiting') { waitingEl.classList.add('show'); return; }
+  else { waitingEl.classList.remove('show'); }
+
+  var turn = STATE ? STATE.turn : GAME.turn;
+  document.getElementById('turn-num').textContent = turn || 0;
+  document.getElementById('status-badge').textContent = GAME.status.toUpperCase();
+
+  // Territory counts
+  var myCount = 0, enemyCount = 0;
+  if (STATE) {
+    var owners = STATE.territory_owners || [];
+    for (var i = 0; i < owners.length; i++) {
+      if (owners[i] === mySeat) myCount++;
+      else if (owners[i] !== 255) enemyCount++;
+    }
+  }
+  document.getElementById('my-terr').textContent = myCount;
+  document.getElementById('enemy-terr').textContent = enemyCount;
+
+  // Determine phase
+  var status = GAME.status;
+  var statePhase = STATE ? STATE.phase : null;
+  if (status === 'finished' || statePhase === 'Finished') {
+    phase = 'finished';
+  } else if (status === 'picking' || statePhase === 'Picking') {
+    if (!submitted) { phase = 'picking'; picks = []; }
+  } else if (status === 'active' || statePhase === 'Play') {
+    var currentTurn = turn || 0;
+    if (!submitted && (phase !== 'orders' || lastTurn !== currentTurn)) {
+      phase = 'orders';
+      lastTurn = currentTurn;
+      deploys = {};
+      orders = [];
+      selectedSource = null;
+      pendingTarget = null;
+      deployLeft = calculateIncome();
+    }
+  }
+
+  document.getElementById('turn-info').textContent =
+    phase === 'picking' ? 'Pick Phase' :
+    phase === 'orders' ? 'Turn ' + (turn||0) + ' - Deploy & Attack' :
+    phase === 'finished' ? 'Game Over' : '';
+
+  buildMap();
+  updateMap();
+  renderSidebar();
+
+  if (phase === 'finished') showGameOver();
+}
+
+function calculateIncome() {
+  if (!STATE || !MAP) return 5;
+  var owners = STATE.territory_owners || [];
+  var income = (MAP.settings && MAP.settings.base_income) || 5;
+  if (MAP.bonuses) {
+    MAP.bonuses.forEach(function(b) {
+      if (b.territory_ids.every(function(tid) { return owners[tid] === mySeat; })) income += b.value;
+    });
+  }
+  return income;
+}
+
+// ========== SVG HELPERS ==========
+function svgEl(tag, attrs, text) {
+  var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  if (attrs) Object.entries(attrs).forEach(function(kv) { el.setAttribute(kv[0], kv[1]); });
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+// ========== MAP RENDERING ==========
+function buildMap() {
+  if (!MAP || !MAP.territories) return;
+  var svg = document.getElementById('map-svg');
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', '0 0 1000 680');
+
+  var defs = svgEl('defs');
+  var marker = svgEl('marker', {id:'arrowhead',markerWidth:8,markerHeight:6,refX:8,refY:3,orient:'auto'});
+  marker.appendChild(svgEl('polygon', {points:'0 0, 8 3, 0 6', fill:'var(--gold)'}));
+  defs.appendChild(marker);
+
+  var oceanGrad = svgEl('radialGradient', {id:'ocean-bg', cx:'50%', cy:'45%', r:'65%', fx:'50%', fy:'40%'});
+  oceanGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#0f2238'}));
+  oceanGrad.appendChild(svgEl('stop', {offset:'40%', 'stop-color':'#0a1628'}));
+  oceanGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#060d15'}));
+  defs.appendChild(oceanGrad);
+
+  [['grad-me','#3b82f6','#1d4ed8'],['grad-them','#ef4444','#b91c1c'],['grad-neutral','#6b7280','#374151'],['grad-fog','#283040','#1a2030']].forEach(function(g) {
+    var gr = svgEl('linearGradient', {id:g[0], x1:'0', y1:'0', x2:'0', y2:'1'});
+    gr.appendChild(svgEl('stop', {offset:'0%', 'stop-color':g[1]}));
+    gr.appendChild(svgEl('stop', {offset:'100%', 'stop-color':g[2]}));
+    defs.appendChild(gr);
+  });
+
+  var armyBg = svgEl('radialGradient', {id:'army-bubble-grad', cx:'40%', cy:'35%', r:'65%'});
+  armyBg.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'rgba(40,40,50,0.85)'}));
+  armyBg.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'rgba(10,10,15,0.9)'}));
+  defs.appendChild(armyBg);
+
+  var shadow = svgEl('filter', {id:'territory-shadow', x:'-10%', y:'-10%', width:'120%', height:'120%'});
+  shadow.appendChild(svgEl('feDropShadow', {dx:'0', dy:'1', 'stdDeviation':'1.5', 'flood-color':'rgba(0,0,0,0.4)', 'flood-opacity':'0.4'}));
+  defs.appendChild(shadow);
+  svg.appendChild(defs);
+
+  svg.appendChild(svgEl('rect', {x:'0', y:'0', width:'1000', height:'680', fill:'url(#ocean-bg)'}));
+
+  // Connection lines for circle-mode maps
+  var isCircleMap = MAP.territories.some(function(t) { return !t.visual || !t.visual.path; });
+  if (isCircleMap) {
+    var connGroup = svgEl('g', {id:'connection-lines'});
+    var drawn = {};
+    MAP.territories.forEach(function(t) {
+      var lp = t.visual ? t.visual.label_pos : [0,0];
+      (t.adjacent || []).forEach(function(adjId) {
+        var key = Math.min(t.id, adjId) + '-' + Math.max(t.id, adjId);
+        if (drawn[key]) return;
+        drawn[key] = true;
+        var adj = MAP.territories[adjId];
+        if (!adj) return;
+        var lp2 = adj.visual ? adj.visual.label_pos : [0,0];
+        connGroup.appendChild(svgEl('line', {x1:lp[0], y1:lp[1], x2:lp2[0], y2:lp2[1], class:'connection-line'}));
+      });
+    });
+    svg.appendChild(connGroup);
+  }
+
+  svg.appendChild(svgEl('g', {id:'bonus-boundaries'}));
+
+  var terrGroup = svgEl('g', {id:'territories'});
+  MAP.territories.forEach(function(t) {
+    var lp = t.visual ? t.visual.label_pos : [0,0];
+    var x = lp[0], y = lp[1];
+    var g = svgEl('g', {class:'territory-group', 'data-id':t.id});
+
+    if (t.visual && t.visual.path && MAP.bonuses) {
+      var tBonus = MAP.bonuses.find(function(b) { return b.territory_ids.includes(t.id); });
+      if (tBonus) {
+        g.appendChild(svgEl('path', {d:t.visual.path, fill:BONUS_COLORS[tBonus.id%BONUS_COLORS.length], stroke:'none', opacity:'0.08', 'pointer-events':'none'}));
+      }
+    }
+
+    if (t.visual && t.visual.path) {
+      g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#080c12', 'stroke-width':2, 'stroke-linejoin':'round', filter:'url(#territory-shadow)'}));
+      g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-highlight', id:'highlight-'+t.id, fill:'none', stroke:'none', 'stroke-width':3, 'pointer-events':'none'}));
+    } else {
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#080c12', 'stroke-width':2, filter:'url(#territory-shadow)'}));
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:20, class:'territory-highlight', id:'highlight-'+t.id, fill:'none', stroke:'none', 'stroke-width':3, 'pointer-events':'none'}));
+    }
+
+    g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'url(#army-bubble-grad)', stroke:'rgba(255,255,255,0.15)', 'stroke-width':'1.5', style:'display:none', 'pointer-events':'none'}));
+    g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
+    g.appendChild(svgEl('text', {x:x+14, y:y-14, class:'deploy-badge', id:'deploy-badge-'+t.id}, ''));
+
+    g.addEventListener('click', function(e) { onTerritoryClick(t.id, e); });
+    g.addEventListener('mouseenter', function(e) { showTooltip(t.id, e); });
+    g.addEventListener('mouseleave', hideTooltip);
+    g.addEventListener('mousemove', moveTooltip);
+    terrGroup.appendChild(g);
+  });
+  svg.appendChild(terrGroup);
+  svg.appendChild(svgEl('g', {id:'order-lines'}));
+
+  // Compute centroids from rendered paths
+  MAP.territories.forEach(function(t) {
+    var pathEl = document.getElementById('terr-' + t.id);
+    if (pathEl && pathEl.tagName === 'path') {
+      try {
+        var bbox = pathEl.getBBox();
+        POS[t.id] = [bbox.x + bbox.width/2, bbox.y + bbox.height/2];
+        var bg = document.getElementById('army-bg-'+t.id);
+        var army = document.getElementById('army-'+t.id);
+        var badge = document.getElementById('deploy-badge-'+t.id);
+        if (bg) { bg.setAttribute('cx', POS[t.id][0]); bg.setAttribute('cy', POS[t.id][1]); }
+        if (army) { army.setAttribute('x', POS[t.id][0]); army.setAttribute('y', POS[t.id][1]); }
+        if (badge) { badge.setAttribute('x', POS[t.id][0]+14); badge.setAttribute('y', POS[t.id][1]-14); }
+      } catch(e) { POS[t.id] = t.visual ? t.visual.label_pos : [0,0]; }
+    } else {
+      POS[t.id] = t.visual ? t.visual.label_pos : [0,0];
+    }
+  });
+
+  drawBonusBoundaries();
+
+  // Bonus labels
+  var bonusGroup = svgEl('g', {id:'bonus-labels', opacity:'0.75'});
+  if (MAP.bonuses) {
+    MAP.bonuses.forEach(function(b) {
+      var minX = Infinity, minY = Infinity;
+      b.territory_ids.forEach(function(tid) { var p = POS[tid]; if (p) { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); } });
+      if (minX >= Infinity) return;
+      var bx = minX - 10, by = minY - 18;
+      var color = BONUS_COLORS[b.id % BONUS_COLORS.length];
+      var lg = svgEl('g', {'pointer-events':'none'});
+      lg.appendChild(svgEl('text', {x:bx, y:by, 'text-anchor':'start', 'font-size':'9px', 'font-weight':'700', fill:color}, b.name));
+      lg.appendChild(svgEl('text', {x:bx, y:by+11, 'text-anchor':'start', 'font-size':'8px', 'font-weight':'600', fill:'#aaa', id:'bonus-prog-'+b.id}, ''));
+      bonusGroup.appendChild(lg);
+    });
+  }
+  svg.appendChild(bonusGroup);
+  svg.appendChild(svgEl('g', {id:'floats'}));
+}
+
+function updateMap() {
+  if (!MAP || !STATE) return;
+  var owners = STATE.territory_owners || [];
+  var armies = STATE.territory_armies || [];
+
+  MAP.territories.forEach(function(t) {
+    var pathEl = document.getElementById('terr-'+t.id);
+    var highlightEl = document.getElementById('highlight-'+t.id);
+    var armyEl = document.getElementById('army-'+t.id);
+    var armyBgEl = document.getElementById('army-bg-'+t.id);
+    var badgeEl = document.getElementById('deploy-badge-'+t.id);
+    if (!pathEl) return;
+
+    var owner = owners[t.id];
+    var isMe = owner === mySeat;
+    var isThem = owner !== mySeat && owner !== 255;
+
+    var fill, strokeColor, borderColor;
+    if (isMe) { fill='url(#grad-me)'; strokeColor='#152a5e'; borderColor='rgba(96,165,250,0.6)'; }
+    else if (isThem) { fill='url(#grad-them)'; strokeColor='#5a1010'; borderColor='rgba(239,68,68,0.6)'; }
+    else { fill='url(#grad-neutral)'; strokeColor='#1a1f2a'; borderColor='rgba(255,255,255,0.15)'; }
+    pathEl.setAttribute('fill', fill);
+    pathEl.setAttribute('stroke', strokeColor);
+    if (armyBgEl) armyBgEl.setAttribute('stroke', borderColor);
+
+    if (highlightEl) {
+      highlightEl.classList.remove('selected-highlight');
+      if (selectedSource === t.id) {
+        highlightEl.setAttribute('stroke', 'var(--gold)');
+        highlightEl.setAttribute('stroke-width', '4');
+        highlightEl.classList.add('selected-highlight');
+      } else if (phase === 'picking' && picks.includes(t.id)) {
+        highlightEl.setAttribute('stroke', 'var(--green)');
+        highlightEl.setAttribute('stroke-width', '3');
+        highlightEl.removeAttribute('stroke-dasharray');
+      } else if (phase === 'picking' && pickOptions.includes(t.id)) {
+        highlightEl.setAttribute('stroke', 'var(--gold)');
+        highlightEl.setAttribute('stroke-width', '2');
+        highlightEl.setAttribute('stroke-dasharray', '6,3');
+      } else {
+        highlightEl.setAttribute('stroke', 'none');
+        highlightEl.removeAttribute('stroke-dasharray');
+      }
+    }
+
+    var displayArmies = armies[t.id] || 0;
+    var dep = deploys[t.id] || 0;
+    if (dep > 0) displayArmies += dep;
+
+    if (displayArmies > 0) {
+      armyEl.textContent = displayArmies;
+      if (displayArmies > 10) { armyEl.classList.add('large-army'); if (armyBgEl) armyBgEl.setAttribute('r','14'); }
+      else { armyEl.classList.remove('large-army'); if (armyBgEl) armyBgEl.setAttribute('r','12'); }
+      if (armyBgEl) armyBgEl.style.display = '';
+    } else {
+      armyEl.textContent = '';
+      if (armyBgEl) armyBgEl.style.display = 'none';
+    }
+    if (badgeEl) badgeEl.textContent = dep > 0 ? '+'+dep : '';
+  });
+
+  // Bonus progress
+  if (MAP.bonuses && STATE) {
+    MAP.bonuses.forEach(function(b) {
+      var progEl = document.getElementById('bonus-prog-'+b.id);
+      if (!progEl) return;
+      var myCount = b.territory_ids.filter(function(tid) { return owners[tid] === mySeat; }).length;
+      var total = b.territory_ids.length;
+      var complete = myCount === total;
+      progEl.textContent = complete ? '\u2713 +'+b.value+'/turn' : myCount+'/'+total+' (+'+b.value+')';
+      progEl.setAttribute('fill', complete ? '#4ade80' : '#fff');
+    });
+  }
+
+  // Pick rank numbers
+  var existingRanks = document.getElementById('pick-ranks');
+  if (existingRanks) existingRanks.remove();
+  if (phase === 'picking' && picks.length > 0) {
+    var rankGroup = svgEl('g', {id:'pick-ranks'});
+    picks.forEach(function(id, idx) {
+      var pos = POS[id]; if (!pos) return;
+      rankGroup.appendChild(svgEl('circle', {cx:pos[0], cy:pos[1], r:22, class:'pick-ring'}));
+      rankGroup.appendChild(svgEl('text', {x:pos[0], y:pos[1], class:'pick-rank'}, ''+(idx+1)));
+    });
+    document.getElementById('map-svg').appendChild(rankGroup);
+  }
+
+  drawOrderLines();
+}
+
+function drawOrderLines() {
+  var g = document.getElementById('order-lines');
+  if (!g) return;
+  g.innerHTML = '';
+
+  orders.forEach(function(o) {
+    if (o.from === undefined || o.to === undefined || !POS[o.from] || !POS[o.to]) return;
+    var x1=POS[o.from][0], y1=POS[o.from][1], x2=POS[o.to][0], y2=POS[o.to][1];
+    var isAttack = o.type === 'attack';
+    var color = isAttack ? '#ef4444' : '#60a5fa';
+    g.appendChild(svgEl('line', {x1:x1,y1:y1,x2:x2,y2:y2, stroke:color, 'stroke-width':2.5, 'stroke-dasharray':'8,4', 'marker-end':'url(#arrowhead)', opacity:0.85}));
+    var mx=(x1+x2)/2, my=(y1+y2)/2;
+    g.appendChild(svgEl('circle', {cx:mx, cy:my, r:9, fill:'rgba(0,0,0,0.7)', stroke:color, 'stroke-width':1.5}));
+    g.appendChild(svgEl('text', {x:mx, y:my, 'text-anchor':'middle', 'dominant-baseline':'central', 'font-size':'9px', 'font-weight':'700', fill:'#fff', 'pointer-events':'none'}, ''+o.armies));
+  });
+
+  // Attack route preview from selected source
+  if (selectedSource !== null && POS[selectedSource] && MAP && STATE) {
+    var srcT = MAP.territories[selectedSource];
+    if (srcT) {
+      var srcArmies = availableArmies(selectedSource);
+      (srcT.adjacent || []).forEach(function(adj) {
+        if (!POS[adj]) return;
+        var x1=POS[selectedSource][0], y1=POS[selectedSource][1], x2=POS[adj][0], y2=POS[adj][1];
+        var adjOwner = STATE.territory_owners[adj];
+        if (adjOwner === mySeat) {
+          g.appendChild(svgEl('line', {x1:x1,y1:y1,x2:x2,y2:y2, class:'route-transfer'}));
+        } else {
+          var attackColor = adjOwner === 255 ? '#6b7280' : '#ef4444';
+          g.appendChild(svgEl('line', {x1:x1,y1:y1,x2:x2,y2:y2, class:'route-attack', stroke:attackColor}));
+          if (srcArmies > 0) {
+            var defArmies = STATE.territory_armies[adj] || 0;
+            var estimate = estimateCombat(srcArmies, defArmies);
+            var mx=(x1+x2)/2, my=(y1+y2)/2;
+            var label = srcArmies+'v'+defArmies+' \u2192 '+estimate;
+            var textW = label.length * 5.2 + 10;
+            g.appendChild(svgEl('rect', {x:mx-textW/2, y:my-8, width:textW, height:16, class:'route-combat-bg'}));
+            g.appendChild(svgEl('text', {x:mx, y:my, class:'route-combat-text', fill:estimate.indexOf('Capture')>=0?'#4ade80':'#f87171'}, label));
+          }
+        }
+      });
+    }
+  }
+}
+
+function drawBonusBoundaries() {
+  var g = document.getElementById('bonus-boundaries');
+  if (!g || !MAP || !MAP.bonuses) return;
+  g.innerHTML = '';
+  MAP.bonuses.forEach(function(b) {
+    var points = [];
+    b.territory_ids.forEach(function(tid) { var p = POS[tid]; if (p) points.push(p); });
+    if (points.length < 3) return;
+    var hull = convexHull(points);
+    if (hull.length < 3) return;
+    var cx = hull.reduce(function(s,p){return s+p[0];},0)/hull.length;
+    var cy = hull.reduce(function(s,p){return s+p[1];},0)/hull.length;
+    var expanded = hull.map(function(p) {
+      var dx=p[0]-cx, dy=p[1]-cy, dist=Math.sqrt(dx*dx+dy*dy);
+      return [p[0]+(dx/(dist||1))*20, p[1]+(dy/(dist||1))*20];
+    });
+    var d = 'M'+expanded.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' L')+' Z';
+    g.appendChild(svgEl('path', {d:d, class:'bonus-boundary', stroke:BONUS_COLORS[b.id%BONUS_COLORS.length]}));
+  });
+}
+
+function convexHull(points) {
+  var pts = points.slice().sort(function(a,b){return a[0]-b[0]||a[1]-b[1];});
+  if (pts.length <= 2) return pts;
+  function cross(O,A,B){return (A[0]-O[0])*(B[1]-O[1])-(A[1]-O[1])*(B[0]-O[0]);}
+  var lower = [];
+  for (var i=0;i<pts.length;i++){while(lower.length>=2&&cross(lower[lower.length-2],lower[lower.length-1],pts[i])<=0)lower.pop();lower.push(pts[i]);}
+  var upper = [];
+  for (var i=pts.length-1;i>=0;i--){while(upper.length>=2&&cross(upper[upper.length-2],upper[upper.length-1],pts[i])<=0)upper.pop();upper.push(pts[i]);}
+  lower.pop();upper.pop();
+  return lower.concat(upper);
+}
+
+function estimateCombat(attackers, defenders) {
+  var atk=attackers, def=defenders;
+  for (var i=0;i<100&&atk>0&&def>0;i++){
+    var atkKills=Math.round(atk*0.6), defKills=Math.round(def*0.7);
+    def=Math.max(0,def-atkKills); atk=Math.max(0,atk-defKills);
+    if (atkKills===0&&defKills===0) break;
+  }
+  if (def<=0&&atk>0) return 'Capture ('+atk+')';
+  if (atk<=0) return 'Fail';
+  return 'Stalemate';
+}
+
+// ========== TERRITORY HELPERS ==========
+function isOwned(id) { return STATE && STATE.territory_owners[id] === mySeat; }
+function availableArmies(id) {
+  if (!STATE) return 0;
+  var a = (STATE.territory_armies[id]||0) + (deploys[id]||0);
+  orders.forEach(function(o){if(o.from===id)a-=o.armies;});
+  return Math.max(0, a-1);
+}
+
+// ========== SIDEBAR ==========
+function renderSidebar() {
+  var pp = document.getElementById('phase-panel');
+  var cp = document.getElementById('control-panel');
+
+  if (submitted) {
+    pp.innerHTML = '<div class="sb-phase">Waiting...</div><div class="sb-sub">Waiting for opponent to submit</div>';
+    cp.innerHTML = '';
+    return;
+  }
+
+  if (phase === 'picking') renderPickingSidebar(pp, cp);
+  else if (phase === 'orders') renderOrdersSidebar(pp, cp);
+  else if (phase === 'finished') { pp.innerHTML = '<div class="sb-phase">Game Over</div>'; cp.innerHTML = ''; }
+  else { pp.innerHTML = '<div class="sb-phase">Loading...</div>'; cp.innerHTML = ''; }
+}
+
+function renderPickingSidebar(pp, cp) {
+  var totalOptions = pickOptions.length;
+  pp.innerHTML = '<div class="sb-phase">Pick Phase</div>' +
+    '<div class="sb-sub">Rank all territories by priority</div>' +
+    '<div style="margin-top:8px;font-size:13px;color:var(--gold)">'+picks.length+' / '+totalOptions+' ranked</div>';
+
+  var html = '';
+  picks.forEach(function(id, idx) {
+    var t = MAP ? MAP.territories[id] : null;
+    var bonusLabel = '';
+    if (MAP && MAP.bonuses) {
+      var pb = MAP.bonuses.find(function(b){return b.territory_ids.includes(id);});
+      if (pb) bonusLabel = '<span style="font-size:9px;color:var(--text3);margin-left:4px">('+pb.name+')</span>';
+    }
+    html += '<div class="order-item">' +
+      '<span style="color:var(--gold);font-weight:900;font-size:16px;margin-right:8px;min-width:24px;text-align:center">'+(idx+1)+'</span>' +
+      '<span style="flex:1">'+(t?t.name:id)+bonusLabel+'</span>' +
+      '<button class="remove-btn" onclick="movePickUp('+idx+')" title="Move up" style="color:var(--text2)"'+(idx===0?' disabled':'')+'>\u25B2</button>' +
+      '<button class="remove-btn" onclick="movePickDown('+idx+')" title="Move down" style="color:var(--text2)"'+(idx===picks.length-1?' disabled':'')+'>\u25BC</button>' +
+      '<button class="remove-btn" onclick="unpick('+id+')" title="Remove">\u2715</button>' +
+    '</div>';
+  });
+  html += '<button class="btn btn-gold" style="margin-top:12px" '+(picks.length<totalOptions?'disabled':'')+' onclick="confirmPicks()">Confirm Picks</button>';
+  html += renderBonusInfo();
+  cp.innerHTML = html;
+}
+
+function renderOrdersSidebar(pp, cp) {
+  var subText;
+  if (selectedSource !== null) {
+    var t = MAP ? MAP.territories[selectedSource] : null;
+    subText = 'Click adjacent territory to attack/move from ' + (t?t.name:'');
+  } else if (deployLeft > 0) {
+    subText = 'Click your territories to deploy, then attack';
+  } else {
+    subText = 'Click territory, then target to attack/move';
+  }
+
+  var headerHtml = '<div class="sb-phase">Orders</div><div class="sb-sub">'+subText+'</div>';
+  if (deployLeft > 0) {
+    headerHtml += '<div class="deploy-counter">'+deployLeft+'</div>' +
+      '<div class="deploy-hint">'+deployLeft+' armies to deploy - Click +1, Shift +5, Right-click -1</div>';
+  }
+  pp.innerHTML = headerHtml;
+
+  var html = '<h3 style="margin-top:8px">Orders</h3>';
+  var deployEntries = Object.entries(deploys).filter(function(kv){return kv[1]>0;});
+  var hasAny = deployEntries.length > 0 || orders.length > 0;
+
+  if (!hasAny) {
+    html += '<div style="font-size:12px;color:var(--text3)">No orders yet</div>';
+  } else {
+    deployEntries.forEach(function(kv) {
+      var id=kv[0], count=kv[1];
+      var t = MAP ? MAP.territories[parseInt(id)] : null;
+      html += '<div class="order-item"><span>\u2795 Deploy +'+count+' to '+(t?t.name:id)+'</span><button class="remove-btn" onclick="removeDeploy('+id+')">\u2715</button></div>';
+    });
+    orders.forEach(function(o, i) {
+      var icon = o.type === 'attack' ? '\u2694' : '\u2192';
+      var from = MAP ? MAP.territories[o.from] : null;
+      var to = MAP ? MAP.territories[o.to] : null;
+      html += '<div class="order-item"><span>'+icon+' '+(from?from.name:o.from)+' \u2192 '+(to?to.name:o.to)+' ('+o.armies+')</span><button class="remove-btn" onclick="removeOrder('+i+')">\u2715</button></div>';
+    });
+  }
+
+  if (deployLeft > 0) html += '<div class="undeployed-warning">'+deployLeft+' armies undeployed</div>';
+  html += '<button class="btn btn-green" style="margin-top:12px" onclick="endTurn()">End Turn</button>';
+  html += renderBonusInfo();
+  cp.innerHTML = html;
+}
+
+function renderBonusInfo() {
+  if (!MAP || !MAP.bonuses || !STATE) return '';
+  var owners = STATE.territory_owners || [];
+  var html = '<h3 style="margin-top:12px">Bonuses</h3>';
+  MAP.bonuses.forEach(function(b) {
+    var color = BONUS_COLORS[b.id%BONUS_COLORS.length];
+    var myCount = b.territory_ids.filter(function(tid){return owners[tid]===mySeat;}).length;
+    var complete = myCount === b.territory_ids.length;
+    html += '<div class="bonus-row '+(complete?'complete':'')+'"><span class="bonus-dot" style="background:'+color+'"></span>'+b.name+' (+'+b.value+') '+myCount+'/'+b.territory_ids.length+'</div>';
+  });
+  return html;
+}
+
+// ========== TERRITORY CLICK ==========
+function onTerritoryClick(id, e) {
+  if (submitted) return;
+  if (phase === 'picking') onPickClick(id);
+  else if (phase === 'orders') onOrdersClick(id, e);
+}
+
+function onPickClick(id) {
+  if (picks.includes(id)) { picks = picks.filter(function(p){return p!==id;}); }
+  else {
+    if (!pickOptions.includes(id)) return;
+    if (picks.length >= pickOptions.length) return;
+    picks.push(id);
+  }
+  updateMap(); renderSidebar();
+}
+
+function movePickUp(idx) {
+  if (idx<=0) return;
+  var tmp=picks[idx]; picks[idx]=picks[idx-1]; picks[idx-1]=tmp;
+  updateMap(); renderSidebar();
+}
+function movePickDown(idx) {
+  if (idx>=picks.length-1) return;
+  var tmp=picks[idx]; picks[idx]=picks[idx+1]; picks[idx+1]=tmp;
+  updateMap(); renderSidebar();
+}
+function unpick(id) {
+  picks = picks.filter(function(p){return p!==id;});
+  updateMap(); renderSidebar();
+}
+
+async function confirmPicks() {
+  if (picks.length < pickOptions.length) { toast('Rank all territories first', 'error'); return; }
+  await submitPicks(picks);
+}
+
+function onOrdersClick(id, e) {
+  if (pendingTarget !== null) {
+    if (id === pendingTarget) popupConfirm();
+    else cancelPending();
+    return;
+  }
+
+  if (selectedSource === null) {
+    if (isOwned(id)) {
+      if (deployLeft > 0) onDeployClick(id, e);
+      else {
+        if (availableArmies(id) <= 0) { toast('No armies available', 'error'); return; }
+        selectedSource = id;
+        updateMap(); renderSidebar();
+      }
+    }
+  } else {
+    if (selectedSource === id) { selectedSource = null; updateMap(); renderSidebar(); return; }
+    var src = MAP.territories[selectedSource];
+    if (!src || !(src.adjacent||[]).includes(id)) {
+      if (isOwned(id)) {
+        if (deployLeft > 0) { selectedSource = null; onDeployClick(id, e); }
+        else if (availableArmies(id) > 0) { selectedSource = id; }
+        else { selectedSource = null; }
+      } else { selectedSource = null; }
+      updateMap(); renderSidebar();
+      return;
+    }
+    var max = availableArmies(selectedSource);
+    if (max <= 0) { toast('No armies available', 'error'); selectedSource = null; updateMap(); renderSidebar(); return; }
+    var tgtOwner = STATE.territory_owners[id];
+    pendingTarget = id;
+    pendingType = (tgtOwner === mySeat) ? 'transfer' : 'attack';
+    pendingMax = max;
+    pendingArmies = max;
+    showMapArmyPopup(id);
+    updateMap(); renderSidebar();
+  }
+}
+
+function onDeployClick(id, e) {
+  if (!isOwned(id)) return;
+  var amount = e.shiftKey ? 5 : 1;
+  var actual = Math.min(amount, deployLeft);
+  if (actual <= 0) return;
+  if (!deploys[id]) deploys[id] = 0;
+  deploys[id] += actual;
+  deployLeft -= actual;
+  floatText(id, '+'+actual);
+  updateMap(); renderSidebar();
+}
+
+function removeDeploy(id) {
+  id = parseInt(id);
+  var amount = deploys[id] || 0;
+  deployLeft += amount;
+  delete deploys[id];
+  updateMap(); renderSidebar();
+}
+
+function removeOrder(idx) {
+  orders.splice(idx, 1);
+  updateMap(); renderSidebar();
+}
+
+// ========== ARMY POPUP ==========
+function showMapArmyPopup(targetId) {
+  var popup = document.getElementById('map-army-popup');
+  var pos = POS[targetId]; if (!pos) return;
+  var svg = document.getElementById('map-svg');
+  var container = document.getElementById('map-container');
+  var pt = svg.createSVGPoint();
+  pt.x = pos[0]; pt.y = pos[1];
+  var ctm = svg.getScreenCTM();
+  if (ctm) {
+    var sp = pt.matrixTransform(ctm);
+    var cr = container.getBoundingClientRect();
+    popup.style.left = (sp.x - cr.left + 15) + 'px';
+    popup.style.top = (sp.y - cr.top - 20) + 'px';
+  }
+  var t = MAP ? MAP.territories[targetId] : null;
+  document.getElementById('popup-label').textContent = pendingType + ' \u2192 ' + (t?t.name:targetId);
+  document.getElementById('popup-count').textContent = pendingArmies;
+  popup.style.display = 'block';
+}
+
+function popupAdjust(delta) {
+  pendingArmies = Math.max(1, Math.min(pendingMax, pendingArmies + delta));
+  document.getElementById('popup-count').textContent = pendingArmies;
+}
+
+function popupConfirm() {
+  if (pendingTarget === null) return;
+  orders.push({type:pendingType, from:selectedSource, to:pendingTarget, armies:pendingArmies});
+  hidePopup(); selectedSource = null; pendingTarget = null;
+  updateMap(); renderSidebar();
+}
+
+function cancelPending() { hidePopup(); pendingTarget = null; updateMap(); renderSidebar(); }
+function hidePopup() { document.getElementById('map-army-popup').style.display = 'none'; }
+
+// ========== END TURN ==========
+async function endTurn() {
+  if (submitted) return;
+  var apiOrders = [];
+  Object.entries(deploys).forEach(function(kv) {
+    if (kv[1] > 0) apiOrders.push({Deploy: {territory: parseInt(kv[0]), armies: kv[1]}});
+  });
+  orders.forEach(function(o) {
+    if (o.type === 'attack') apiOrders.push({Attack: {from:o.from, to:o.to, armies:o.armies}});
+    else apiOrders.push({Transfer: {from:o.from, to:o.to, armies:o.armies}});
+  });
+  await submitOrders(apiOrders);
+}
+
+// ========== GAME OVER ==========
+function showGameOver() {
+  if (!GAME) return;
+  var el = document.getElementById('game-over');
+  var title = document.getElementById('go-title');
+  var msg = document.getElementById('go-msg');
+  var winnerId = GAME.winner_id;
+  var iWon = (mySeat===0 && winnerId===GAME.player_a) || (mySeat===1 && winnerId===GAME.player_b);
+
+  if (!winnerId) {
+    title.textContent = 'Game Over'; title.style.color = 'var(--text)';
+    msg.textContent = 'The game has ended.';
+  } else if (iWon) {
+    title.textContent = 'Victory!'; title.style.color = 'var(--green)';
+    msg.textContent = 'You won in '+(GAME.turn||0)+' turns!';
+  } else {
+    title.textContent = 'Defeat'; title.style.color = 'var(--red)';
+    msg.textContent = 'You lost after '+(GAME.turn||0)+' turns.';
+  }
+  el.classList.add('show');
+}
+
+// ========== UI HELPERS ==========
+function showSubmitted(msg) {
+  document.getElementById('submitted-msg').textContent = msg;
+  document.getElementById('submitted-overlay').classList.add('show');
+}
+function hideSubmitted() { document.getElementById('submitted-overlay').classList.remove('show'); }
+
+function toast(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast ' + (type||'');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  requestAnimationFrame(function(){el.classList.add('show');});
+  setTimeout(function(){el.classList.remove('show');setTimeout(function(){el.remove();},300);}, 2500);
+}
+
+function floatText(territoryId, text, color) {
+  var fg = document.getElementById('floats');
+  if (!fg || !POS[territoryId]) return;
+  var el = svgEl('text', {x:POS[territoryId][0], y:POS[territoryId][1]-20, class:'plus-one'}, text);
+  if (color) el.setAttribute('fill', color);
+  fg.appendChild(el);
+  setTimeout(function(){el.remove();}, 700);
+}
+
+function showTooltip(id, e) {
+  if (!MAP || !STATE) return;
+  var t = MAP.territories[id]; if (!t) return;
+  var tip = document.getElementById('tooltip');
+  var owner = STATE.territory_owners[id];
+  var isMe = owner === mySeat;
+  var isThem = owner !== mySeat && owner !== 255;
+  var ownerLabel = isMe ? 'You' : isThem ? 'Opponent' : 'Neutral';
+  var ownerColor = isMe ? 'var(--blue)' : isThem ? 'var(--red)' : 'var(--neutral)';
+
+  var html = '<div class="tip-name">'+t.name+'</div>';
+  html += '<div>Owner: <span style="color:'+ownerColor+'">'+ownerLabel+'</span></div>';
+  html += '<div>Armies: <strong>'+(STATE.territory_armies[id]||0)+'</strong></div>';
+  if (MAP.bonuses) {
+    var tBonus = MAP.bonuses.find(function(b){return b.territory_ids.includes(id);});
+    if (tBonus) {
+      html += '<div style="display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:2px;display:inline-block;background:'+BONUS_COLORS[tBonus.id%BONUS_COLORS.length]+'"></span>'+tBonus.name+' (+'+tBonus.value+')</div>';
+    }
+  }
+  tip.innerHTML = html;
+  tip.classList.add('show');
+  var rect = document.getElementById('map-container').getBoundingClientRect();
+  tip.style.left = (e.clientX-rect.left+12)+'px';
+  tip.style.top = (e.clientY-rect.top-30)+'px';
+}
+function moveTooltip(e) {
+  var tip = document.getElementById('tooltip');
+  if (!tip.classList.contains('show')) return;
+  var rect = document.getElementById('map-container').getBoundingClientRect();
+  tip.style.left = (e.clientX-rect.left+12)+'px';
+  tip.style.top = (e.clientY-rect.top-30)+'px';
+}
+function hideTooltip() { document.getElementById('tooltip').classList.remove('show'); }
+
+// ========== KEYBOARD SHORTCUTS ==========
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (pendingTarget !== null) cancelPending();
+    else if (selectedSource !== null) { selectedSource = null; updateMap(); renderSidebar(); }
+  }
+  if (e.key === 'Enter' && phase === 'orders' && selectedSource === null && pendingTarget === null && !submitted) endTurn();
+});
+
+document.addEventListener('contextmenu', function(e) {
+  var terrEl = e.target.closest('.territory-group');
+  if (terrEl && phase === 'orders' && !submitted) {
+    e.preventDefault();
+    var id = parseInt(terrEl.getAttribute('data-id'));
+    if (deploys[id] && deploys[id] > 0) {
+      deploys[id]--;
+      deployLeft++;
+      if (deploys[id] <= 0) delete deploys[id];
+      updateMap(); renderSidebar();
+    }
+  }
+});
+</script>
+</body>
 </html>
