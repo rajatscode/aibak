@@ -74,12 +74,13 @@ pub fn resolve_picks(state: &mut GameState, picks: [&Picks; 2], board: &Board, s
         while pick_indices[seat] < picks[seat].len() {
             let tid = picks[seat][pick_indices[seat]];
             pick_indices[seat] += 1;
-            if !claimed[tid] && tid < board.map.territory_count() {
-                claimed[tid] = true;
-                player_assigned[seat].push(tid);
-                found = true;
-                break;
+            if tid >= board.map.territory_count() || claimed[tid] {
+                continue;
             }
+            claimed[tid] = true;
+            player_assigned[seat].push(tid);
+            found = true;
+            break;
         }
 
         // If player ran out of picks, assign a random unclaimed territory

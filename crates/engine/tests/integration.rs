@@ -1722,31 +1722,21 @@ fn test_deploy_capped_at_income() {
 }
 
 #[test]
-fn test_deploy_to_enemy_territory_ignored() {
-    // Deploy to territory owned by opponent should be skipped by turn resolution.
+fn test_deploy_to_enemy_territory_rejected_by_validation() {
+    // validate_orders rejects deploying to enemy territory.
     let board = Board::from_map(test_map_4());
     let state = setup_play_state(&board);
-    let mut rng = StdRng::seed_from_u64(42);
 
-    let orders = [
-        vec![Order::Deploy {
-            territory: 2, // owned by P1
-            armies: 5,
-        }],
-        vec![Order::Deploy {
-            territory: 2,
-            armies: 5,
-        }],
-    ];
-
-    let result = resolve_turn(&state, orders, &board, &mut rng);
-    // P0's deploy to enemy territory: check via events that it wasn't applied to P0
-    // P1's deploy should work normally
-    assert_eq!(result.state.territory_armies[2], 10); // 5 original + 5 from P1
+    let orders = vec![Order::Deploy {
+        territory: 2, // owned by P1
+        armies: 5,
+    }];
+    let result = validate_orders(&orders, 0, &state, &board);
+    assert!(result.is_err(), "Deploy to enemy territory should fail validation");
 }
 
 #[test]
-fn test_deploy_to_neutral_territory_ignored() {
+fn test_deploy_to_neutral_territory_rejected_by_validation() {
     let board = Board::from_map(test_map_4());
     let mut state = GameState::new(&board);
     state.territory_owners = vec![0, NEUTRAL, 1, NEUTRAL];
@@ -1755,21 +1745,12 @@ fn test_deploy_to_neutral_territory_ignored() {
     state.phase = Phase::Play;
     state.turn = 1;
 
-    let mut rng = StdRng::seed_from_u64(42);
-    let orders = [
-        vec![Order::Deploy {
-            territory: 1, // neutral
-            armies: 5,
-        }],
-        vec![Order::Deploy {
-            territory: 2,
-            armies: 5,
-        }],
-    ];
-
-    let result = resolve_turn(&state, orders, &board, &mut rng);
-    // Neutral territory should not receive P0's deploy.
-    assert_eq!(result.state.territory_armies[1], 2);
+    let orders = vec![Order::Deploy {
+        territory: 1, // neutral
+        armies: 5,
+    }];
+    let result = validate_orders(&orders, 0, &state, &board);
+    assert!(result.is_err(), "Deploy to neutral territory should fail validation");
 }
 
 #[test]

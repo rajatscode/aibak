@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use axum::extract::State;
+use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
@@ -200,6 +201,27 @@ async fn session_cookie_layer(
     }
 
     resp
+}
+
+/// JSON extractor that sanitizes deserialization errors to avoid leaking internals.
+struct SanitizedJson<T>(T);
+
+impl<S, T> axum::extract::FromRequest<S> for SanitizedJson<T>
+where
+    axum::Json<T>: axum::extract::FromRequest<S, Rejection = JsonRejection>,
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request(
+        req: axum::extract::Request,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        match axum::Json::<T>::from_request(req, state).await {
+            Ok(Json(value)) => Ok(SanitizedJson(value)),
+            Err(_) => Err((StatusCode::BAD_REQUEST, "Invalid request body".to_string())),
+        }
+    }
 }
 
 fn create_fresh_local_state(board: &Board) -> LocalState {
@@ -429,7 +451,7 @@ async fn get_local_game(
     State(state): State<AppState>,
     session: SessionId,
 ) -> Json<GameView> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -439,9 +461,9 @@ async fn get_local_game(
 async fn submit_local_picks(
     State(state): State<AppState>,
     session: SessionId,
-    Json(body): Json<PicksRequest>,
+    SanitizedJson(body): SanitizedJson<PicksRequest>,
 ) -> Result<Json<ActionResult>, (StatusCode, String)> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -456,6 +478,20 @@ async fn submit_local_picks(
             StatusCode::BAD_REQUEST,
             format!("Need at least {} picks", needed),
         ));
+    }
+
+    // Validate all pick IDs are in bounds.
+    for &tid in &body.picks {
+        if tid >= app.board.map.territory_count() {
+            return Err((StatusCode::BAD_REQUEST, format!("Invalid territory ID: {}", tid)));
+        }
+    }
+
+    // Validate picks are from pick_options.
+    for &tid in &body.picks {
+        if !app.pick_options.contains(&tid) {
+            return Err((StatusCode::BAD_REQUEST, format!("Territory {} is not a valid pick option", tid)));
+        }
     }
 
     // Track pick choices in local stats.
@@ -502,9 +538,9 @@ async fn submit_local_picks(
 async fn submit_local_orders(
     State(state): State<AppState>,
     session: SessionId,
-    Json(body): Json<OrdersRequest>,
+    SanitizedJson(body): SanitizedJson<OrdersRequest>,
 ) -> Result<Json<ActionResult>, (StatusCode, String)> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -708,12 +744,29 @@ async fn new_local_game(
     State(state): State<AppState>,
     session: SessionId,
     body: Option<Json<NewGameRequest>>,
-) -> Json<ActionResult> {
+) -> Result<Json<ActionResult>, (StatusCode, Json<ActionResult>)> {
     let (template, settings) = body
         .map(|b| (b.0.template.unwrap_or_default(), b.0.settings))
         .unwrap_or_default();
 
-    let mut map = state.local.lock().unwrap();
+    // Validate template name to prevent path traversal.
+    if !template.is_empty()
+        && !template
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ActionResult {
+                success: false,
+                message: "Invalid template name".into(),
+                events: Vec::new(),
+                new_achievements: Vec::new(),
+            }),
+        ));
+    }
+
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -725,13 +778,16 @@ async fn new_local_game(
             Ok(new_map) => {
                 app.board = Board::from_map(new_map);
             }
-            Err(e) => {
-                return Json(ActionResult {
-                    success: false,
-                    message: format!("Failed to load template '{}': {}", template, e),
-                    events: Vec::new(),
-                    new_achievements: Vec::new(),
-                });
+            Err(_) => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ActionResult {
+                        success: false,
+                        message: format!("Template '{}' not found", template),
+                        events: Vec::new(),
+                        new_achievements: Vec::new(),
+                    }),
+                ));
             }
         }
     }
@@ -772,12 +828,12 @@ async fn new_local_game(
     app.starting_territories.clear();
     app.max_simultaneous_bonuses = 0;
     let board_name = app.board.name.clone();
-    Json(ActionResult {
+    Ok(Json(ActionResult {
         success: true,
         message: format!("New game on {}", board_name),
         events: Vec::new(),
         new_achievements: Vec::new(),
-    })
+    }))
 }
 
 async fn get_replay_turn(
@@ -785,7 +841,7 @@ async fn get_replay_turn(
     session: SessionId,
     axum::extract::Path(turn): axum::extract::Path<u32>,
 ) -> Json<serde_json::Value> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -996,7 +1052,7 @@ async fn auth_me(
 // ── Analysis & difficulty endpoints ──
 
 async fn get_analysis(State(state): State<AppState>, session: SessionId) -> Json<serde_json::Value> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -1012,7 +1068,7 @@ async fn get_analysis(State(state): State<AppState>, session: SessionId) -> Json
 
 /// Export the complete game data as a JSON download (for sharing/replay).
 async fn export_game(State(state): State<AppState>, session: SessionId) -> impl IntoResponse {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -1241,7 +1297,7 @@ async fn import_game(
     }
 
     // Apply to local state.
-    let mut local_map = state.local.lock().unwrap();
+    let mut local_map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = local_map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -1265,7 +1321,7 @@ async fn import_game(
 }
 
 async fn get_post_analysis(State(state): State<AppState>, session: SessionId) -> Json<serde_json::Value> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -1295,9 +1351,9 @@ struct DifficultyRequest {
 async fn set_difficulty(
     State(state): State<AppState>,
     session: SessionId,
-    Json(body): Json<DifficultyRequest>,
+    SanitizedJson(body): SanitizedJson<DifficultyRequest>,
 ) -> Json<ActionResult> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -1317,7 +1373,7 @@ async fn games_page() -> Html<&'static str> {
 // ── Stats endpoints ──
 
 async fn get_local_stats(State(state): State<AppState>, session: SessionId) -> Json<serde_json::Value> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));
@@ -1392,7 +1448,7 @@ async fn get_local_stats(State(state): State<AppState>, session: SessionId) -> J
 }
 
 async fn get_achievements(State(state): State<AppState>, session: SessionId) -> Json<serde_json::Value> {
-    let mut map = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap_or_else(|e| e.into_inner());
     let app = map
         .entry(session.0)
         .or_insert_with(|| create_fresh_local_state(&state.default_board));

@@ -208,6 +208,30 @@ impl GameManager {
             )));
         }
 
+        // Validate all pick IDs are in bounds.
+        for &tid in &picks {
+            if tid >= board.map.territory_count() {
+                return Err(GameError::InvalidPicks(format!(
+                    "invalid territory ID: {}",
+                    tid
+                )));
+            }
+        }
+
+        // Validate picks are from pick_options.
+        if let Some(pick_opts_json) = &game.pick_options {
+            let pick_options: Vec<usize> = serde_json::from_value(pick_opts_json.clone())
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
+            for &tid in &picks {
+                if !pick_options.contains(&tid) {
+                    return Err(GameError::InvalidPicks(format!(
+                        "territory {} is not a valid pick option",
+                        tid
+                    )));
+                }
+            }
+        }
+
         let picks_json =
             serde_json::to_value(&picks).map_err(|e| GameError::Serialization(e.to_string()))?;
 
