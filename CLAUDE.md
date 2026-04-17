@@ -5,22 +5,21 @@ Competitive territory strategy game. 1v1, Glicko-rated ladder with seasons, Disc
 ## Architecture
 
 Rust workspace:
-- `crates/engine` — Pure game logic (no IO). Combat, turns, fog, picking, cards, AI (greedy + MCTS), win probability analysis, daily puzzles, openings book.
+- `crates/engine` — Pure game logic (no IO). Combat, turns, fog, picking, cards, AI (greedy + MCTS), win probability analysis, openings book.
 - `crates/server` — Axum web server. Modules: `api/`, `auth/`, `config/`, `db/`, `game/` (matchmaking, rating, league, achievements, tournaments, timers), `ws/`.
 - `crates/cli` — CLI game runner.
-- `crates/static/` — Embedded HTML pages (game, editor, tutorial, puzzle, profile, games browser, landing).
-- `maps/` — JSON map definitions.
+- `crates/static/` — Embedded HTML pages (index, game, games, ladder, feedback, landing).
+- `maps/` — JSON map definitions (Small Earth, Big Earth).
 
 ## Pages
 
 | Route | Description |
 |-------|-------------|
 | `/` | Main game (local play vs AI) |
-| `/editor` | Map creator (force-directed layout, organic shapes, auto-clustering) |
-| `/tutorial` | Interactive 10-step tutorial with combat calculator |
-| `/profile` | Player stats, rating chart, match history |
-| `/games` | Game browser, spectator mode |
-| `/puzzle` | Daily puzzle challenges (optimal attack, min-attackers) |
+| `/games` | Multiplayer hub: find/create/join games, spectate |
+| `/game/{id}` | Multiplayer game board (WebSocket, fog of war) |
+| `/ladder` | Leaderboard with tier badges (Bronze → Grandmaster) |
+| `/feedback` | User feedback with voting |
 | `/landing` | Marketing landing page |
 
 ## Running
@@ -77,8 +76,11 @@ Three-layer evaluation:
 ```
 Local:     GET /, POST /api/new, GET /api/game, POST /api/picks, POST /api/orders
            GET /api/game/analysis, POST /api/difficulty, GET /api/stats
+           GET /api/achievements, GET /api/game/replay/{turn}
 Auth:      GET /api/auth/discord, /callback, POST /logout, GET /me
 Games:     POST /api/games, GET /api/games, GET /:id, POST /:id/join, picks, orders
+Feedback:  POST /api/feedback, GET /api/feedback, POST /api/feedback/:id/vote
+           DELETE /api/feedback/:id (rate limited: 5/hr submit, 30/hr vote)
 Maps:      GET /api/maps, POST /api/maps, DELETE /api/maps/:id
 Queue:     POST /api/queue/join, POST /api/queue/leave, GET /api/queue/status
 League:    GET /api/seasons, /current, /:id/standings, GET /api/match-history
