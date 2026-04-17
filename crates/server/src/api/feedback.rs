@@ -16,6 +16,8 @@ pub struct FeedbackRow {
     pub content: String,
     pub upvotes: i32,
     pub downvotes: i32,
+    pub resolved: bool,
+    pub resolved_at: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub username: String,
 }
@@ -50,6 +52,11 @@ pub struct VoteResponse {
 #[derive(Serialize)]
 pub struct DeleteResponse {
     success: bool,
+}
+
+#[derive(Serialize)]
+pub struct ResolveResponse {
+    resolved: bool,
 }
 
 async fn update_vote_counts(
@@ -126,9 +133,9 @@ pub async fn list_feedback(
     let offset = query.offset.unwrap_or(0);
 
     let rows = sqlx::query_as::<_, FeedbackRow>(
-        "SELECT f.id, f.user_id, f.content, f.upvotes, f.downvotes, f.created_at, u.username \
+        "SELECT f.id, f.user_id, f.content, f.upvotes, f.downvotes, f.resolved, f.resolved_at, f.created_at, u.username \
          FROM feedback f JOIN users u ON f.user_id = u.id \
-         ORDER BY (f.upvotes - f.downvotes) DESC, f.created_at DESC \
+         ORDER BY f.resolved ASC, (f.upvotes - f.downvotes) DESC, f.created_at DESC \
          LIMIT $1 OFFSET $2",
     )
     .bind(limit)
@@ -278,4 +285,39 @@ pub async fn delete_feedback(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(DeleteResponse { success: true }))
+}
+
+/// POST /api/feedback/:id/resolve -- toggle resolved status (author only).
+pub async fn resolve_feedback(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(feedback_id): Path<Uuid>,
+) -> Result<Json<ResolveResponse>, (StatusCode, String)> {
+    let pool = state.require_db()?;
+
+    // Check ownership.
+    let owner_id = sqlx::query_scalar::<_, Uuid>("SELECT user_id FROM feedback WHERE id = $1")
+        .bind(feedback_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "feedback not found".to_string()))?;
+
+    if owner_id != auth.user_id {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "you can only resolve your own feedback".to_string(),
+        ));
+    }
+
+    // Toggle resolved.
+    let new_resolved = sqlx::query_scalar::<_, bool>(
+        "UPDATE feedback SET resolved = NOT resolved, resolved_at = CASE WHEN resolved THEN NULL ELSE now() END WHERE id = $1 RETURNING resolved",
+    )
+    .bind(feedback_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(ResolveResponse { resolved: new_resolved }))
 }

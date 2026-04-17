@@ -135,6 +135,8 @@ CREATE TABLE IF NOT EXISTS feedback (
     content TEXT NOT NULL CHECK(char_length(content) <= 2000),
     upvotes INT NOT NULL DEFAULT 0,
     downvotes INT NOT NULL DEFAULT 0,
+    resolved BOOLEAN NOT NULL DEFAULT false,
+    resolved_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

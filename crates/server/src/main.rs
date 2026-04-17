@@ -1714,6 +1714,10 @@ async fn main() {
             post(api::feedback::vote_feedback),
         )
         .route(
+            "/api/feedback/{id}/resolve",
+            post(api::feedback::resolve_feedback),
+        )
+        .route(
             "/api/feedback/{id}",
             axum::routing::delete(api::feedback::delete_feedback),
         )

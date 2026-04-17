@@ -49,6 +49,11 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 .feedback-meta .author{color:var(--text2);font-weight:600}
 .delete-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:0}
 .delete-btn:hover{color:var(--red)}
+.resolve-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:0}
+.resolve-btn:hover{color:var(--green)}
+.feedback-item.resolved{opacity:0.5}
+.resolved-badge{font-size:10px;color:var(--green);font-weight:600;border:1px solid var(--green);border-radius:4px;padding:1px 6px}
+.resolved-section-label{font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;padding:16px 0 8px}
 
 .empty-state{text-align:center;padding:48px 16px;color:var(--text2);font-size:14px}
 
@@ -181,10 +186,13 @@ async function loadFeedback() {
       list.innerHTML = '<div class="empty-state">No feedback yet. Be the first!</div>';
       return;
     }
-    list.innerHTML = items.map(item => {
+    const unresolved = items.filter(i => !i.resolved);
+    const resolved = items.filter(i => i.resolved);
+
+    function renderItem(item) {
       const score = item.upvotes - item.downvotes;
       const isOwner = currentUser && currentUser.id === item.user_id;
-      return `<div class="feedback-item" data-id="${item.id}">
+      return `<div class="feedback-item${item.resolved ? ' resolved' : ''}" data-id="${item.id}">
         <div class="vote-col">
           <button class="vote-btn up" onclick="vote('${item.id}',1)" title="Upvote">&#9650;</button>
           <span class="vote-score">${score}</span>
@@ -195,11 +203,20 @@ async function loadFeedback() {
           <div class="feedback-meta">
             <span class="author">${escapeHtml(item.username)}</span>
             <span>${timeAgo(item.created_at)}</span>
+            ${item.resolved ? '<span class="resolved-badge">Resolved</span>' : ''}
+            ${isOwner ? `<button class="resolve-btn" onclick="resolveFeedback('${item.id}')">${item.resolved ? 'unresolve' : 'resolve'}</button>` : ''}
             ${isOwner ? `<button class="delete-btn" onclick="deleteFeedback('${item.id}')">delete</button>` : ''}
           </div>
         </div>
       </div>`;
-    }).join('');
+    }
+
+    let html = unresolved.map(renderItem).join('');
+    if (resolved.length > 0) {
+      html += '<div class="resolved-section-label">Resolved</div>';
+      html += resolved.map(renderItem).join('');
+    }
+    list.innerHTML = html;
   } catch {
     list.innerHTML = '<div class="empty-state">Failed to load feedback.</div>';
   }
@@ -219,6 +236,14 @@ async function vote(id, direction) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ direction })
     });
+    loadFeedback();
+  } catch {}
+}
+
+async function resolveFeedback(id) {
+  if (!currentUser) return;
+  try {
+    await fetch(`/api/feedback/${id}/resolve`, { method: 'POST' });
     loadFeedback();
   } catch {}
 }
