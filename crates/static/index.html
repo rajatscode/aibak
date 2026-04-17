@@ -524,7 +524,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <span id="board-name-display" style="font-size:11px;color:var(--text3);margin-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px"></span>
     <div class="stats">
       <span>Turn <strong id="turn-num">1</strong></span>
-      <span>Income <strong id="income-num">5</strong></span>
+      <span id="income-span" style="cursor:help" title="Base: 5 (complete a bonus for extra income)">Income <strong id="income-num">5</strong></span>
       <span><span class="dot" style="background:var(--blue)"></span> You: <strong id="my-terr">0</strong></span>
       <span><span class="dot" style="background:var(--red)"></span> Enemy: <strong id="enemy-terr">0</strong></span>
     </div>
@@ -1926,6 +1926,25 @@ function onStateUpdate() {
   // Top bar
   document.getElementById('turn-num').textContent = G.turn || 1;
   document.getElementById('income-num').textContent = G.income || 0;
+  // Update income tooltip with breakdown
+  var incomeSpan = document.getElementById('income-span');
+  if (incomeSpan) {
+    var base = G.base_income || 5;
+    var tip = 'Base: ' + base;
+    var ownedBonuses = [];
+    if (G.bonuses) {
+      G.bonuses.forEach(function(b) {
+        if (b.player_count === b.total) ownedBonuses.push(b);
+      });
+    }
+    if (ownedBonuses.length > 0) {
+      ownedBonuses.forEach(function(b) { tip += ' + ' + b.name + ': +' + b.value; });
+      tip += ' = ' + (G.income || 0);
+    } else {
+      tip += ' (complete a bonus for extra income)';
+    }
+    incomeSpan.title = tip;
+  }
   document.getElementById('my-terr').textContent = G.my_territories || 0;
   document.getElementById('enemy-terr').textContent = (G.phase === 'finished') ? (G.enemy_territories || 0) : '?';
 
@@ -2059,7 +2078,8 @@ function renderOrdersPanel(pp, cp) {
     subText = 'Click your territory, then click target to attack/transfer';
   }
 
-  let headerHtml = '<div class="sb-phase">Orders</div>' +
+  let phaseLabel = deployLeft > 0 ? 'Deploy ' + deployLeft + ' armies' : 'Orders';
+  let headerHtml = '<div class="sb-phase">' + phaseLabel + '</div>' +
     '<div class="sb-sub">' + subText + '</div>';
 
   if (deployLeft > 0 && G.turn === 1) {
