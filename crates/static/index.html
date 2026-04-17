@@ -463,9 +463,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #map-container{flex:1;min-height:50vh}
   #sidebar-toggle{display:none}
   #mobile-sidebar-tab{display:block}
-  /* Collapsed state on mobile: sidebar hidden */
-  #main:not(.mobile-sidebar-open) #sidebar{max-height:0;border-top:none;overflow:hidden}
-  #main.mobile-sidebar-open #sidebar{max-height:40vh}
+  /* Mobile: sidebar always visible at bottom */
+  #sidebar{overflow-y:auto}
+  #mobile-sidebar-tab{display:none !important}
   /* Topbar adjustments */
   #topbar{padding:6px 10px;gap:8px;flex-wrap:wrap}
   #topbar h1{font-size:14px}
