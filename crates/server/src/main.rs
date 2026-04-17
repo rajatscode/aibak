@@ -5,6 +5,7 @@ mod db;
 mod game;
 mod ws;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -51,8 +52,10 @@ pub struct AppState {
     pub game_manager: Option<Arc<game::manager::GameManager>>,
     /// Matchmaking queue for real-time player pairing.
     pub matchmaking: Arc<game::matchmaking::MatchmakingQueue>,
-    /// Local (single-player vs AI) game state.
-    pub local: Arc<Mutex<LocalState>>,
+    /// Per-session local (single-player vs AI) game states, keyed by session cookie.
+    pub local: Arc<Mutex<HashMap<String, LocalState>>>,
+    /// Default board used as template for new sessions.
+    pub default_board: Arc<Board>,
 }
 
 impl AppState {
@@ -132,6 +135,92 @@ struct LocalStats {
 struct TurnLog {
     turn: u32,
     events: Vec<TurnEvent>,
+}
+
+// ── Session management for per-user local play ──
+
+/// Extractor + middleware: each browser gets its own game state via a session cookie.
+#[derive(Clone)]
+struct SessionId(String);
+
+impl<S: Send + Sync> axum::extract::FromRequestParts<S> for SessionId {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        // Read from extension set by session_cookie_layer middleware.
+        if let Some(sid) = parts.extensions.get::<SessionId>() {
+            return Ok(sid.clone());
+        }
+        // Fallback: read directly from cookie header.
+        let id = extract_session_id(&parts.headers)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        Ok(SessionId(id))
+    }
+}
+
+fn extract_session_id(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
+        .get("cookie")?
+        .to_str()
+        .ok()?
+        .split(';')
+        .find_map(|c| {
+            let c = c.trim();
+            c.strip_prefix("strat_session=").map(|v| v.to_string())
+        })
+}
+
+/// Middleware that ensures a `strat_session` cookie is set and injects `SessionId` extension.
+async fn session_cookie_layer(
+    mut req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let existing = extract_session_id(req.headers());
+    let session_id = existing
+        .clone()
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+    req.extensions_mut().insert(SessionId(session_id.clone()));
+
+    let mut resp = next.run(req).await;
+
+    if existing.is_none() {
+        resp.headers_mut().insert(
+            axum::http::header::SET_COOKIE,
+            format!(
+                "strat_session={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400",
+                session_id
+            )
+            .parse()
+            .unwrap(),
+        );
+    }
+
+    resp
+}
+
+fn create_fresh_local_state(board: &Board) -> LocalState {
+    let mut rng = StdRng::from_entropy();
+    let game = GameState::new(board);
+    let pick_options = picking::generate_pick_options(board, &mut rng);
+    LocalState {
+        board: board.clone(),
+        game,
+        rng,
+        pick_options,
+        turn_history: Vec::new(),
+        ai_strength: AiStrength::Hard,
+        starting_armies: picking::DEFAULT_STARTING_ARMIES,
+        state_history: Vec::new(),
+        win_prob_history: Vec::new(),
+        local_stats: LocalStats::default(),
+        achievements: Vec::new(),
+        starting_territories: Vec::new(),
+        max_simultaneous_bonuses: 0,
+    }
 }
 
 // ── Local play API response types ──
@@ -334,16 +423,26 @@ fn fog_filter_events(
 
 // ── Local play route handlers ──
 
-async fn get_local_game(State(state): State<AppState>) -> Json<GameView> {
-    let app = state.local.lock().unwrap();
-    Json(build_game_view(&app))
+async fn get_local_game(
+    State(state): State<AppState>,
+    session: SessionId,
+) -> Json<GameView> {
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
+    Json(build_game_view(app))
 }
 
 async fn submit_local_picks(
     State(state): State<AppState>,
+    session: SessionId,
     Json(body): Json<PicksRequest>,
 ) -> Result<Json<ActionResult>, (StatusCode, String)> {
-    let mut app = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
 
     if app.game.phase != Phase::Picking {
         return Err((StatusCode::BAD_REQUEST, "Not in picking phase".into()));
@@ -400,9 +499,13 @@ async fn submit_local_picks(
 
 async fn submit_local_orders(
     State(state): State<AppState>,
+    session: SessionId,
     Json(body): Json<OrdersRequest>,
 ) -> Result<Json<ActionResult>, (StatusCode, String)> {
-    let mut app = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
 
     if app.game.phase != Phase::Play {
         return Err((StatusCode::BAD_REQUEST, "Not in play phase".into()));
@@ -596,13 +699,17 @@ struct NewGameRequest {
 
 async fn new_local_game(
     State(state): State<AppState>,
+    session: SessionId,
     body: Option<Json<NewGameRequest>>,
 ) -> Json<ActionResult> {
     let (template, settings) = body
         .map(|b| (b.0.template.unwrap_or_default(), b.0.settings))
         .unwrap_or_default();
 
-    let mut app = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
 
     // Load a different map if requested.
     if !template.is_empty() {
@@ -668,9 +775,13 @@ async fn new_local_game(
 
 async fn get_replay_turn(
     State(state): State<AppState>,
+    session: SessionId,
     axum::extract::Path(turn): axum::extract::Path<u32>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let app = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
 
     let idx = turn as usize;
     if idx >= app.state_history.len() {
@@ -876,8 +987,11 @@ async fn auth_me(
 
 // ── Analysis & difficulty endpoints ──
 
-async fn get_analysis(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let app = state.local.lock().unwrap();
+async fn get_analysis(State(state): State<AppState>, session: SessionId) -> Json<serde_json::Value> {
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
     let wp = analysis::full_win_probability(&app.game, &app.board, 200);
     Json(serde_json::json!({
         "win_probability": {
@@ -889,8 +1003,11 @@ async fn get_analysis(State(state): State<AppState>) -> Json<serde_json::Value> 
 }
 
 /// Export the complete game data as a JSON download (for sharing/replay).
-async fn export_game(State(state): State<AppState>) -> impl IntoResponse {
-    let app = state.local.lock().unwrap();
+async fn export_game(State(state): State<AppState>, session: SessionId) -> impl IntoResponse {
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
 
     let map_data = serde_json::to_value(&app.board.map).unwrap_or_default();
 
@@ -984,6 +1101,7 @@ async fn export_game(State(state): State<AppState>) -> impl IntoResponse {
 /// Import a previously exported game for replay.
 async fn import_game(
     State(state): State<AppState>,
+    session: SessionId,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<ActionResult>, (StatusCode, String)> {
     // Validate the import data.
@@ -1115,7 +1233,10 @@ async fn import_game(
     }
 
     // Apply to local state.
-    let mut app = state.local.lock().unwrap();
+    let mut local_map = state.local.lock().unwrap();
+    let app = local_map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
     let map_name = board.map.name.clone();
     app.board = board;
     app.game = final_state;
@@ -1135,8 +1256,11 @@ async fn import_game(
     }))
 }
 
-async fn get_post_analysis(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let app = state.local.lock().unwrap();
+async fn get_post_analysis(State(state): State<AppState>, session: SessionId) -> Json<serde_json::Value> {
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
 
     // Collect turn events from the turn history.
     let turn_events: Vec<Vec<TurnEvent>> = app
@@ -1162,9 +1286,13 @@ struct DifficultyRequest {
 
 async fn set_difficulty(
     State(state): State<AppState>,
+    session: SessionId,
     Json(body): Json<DifficultyRequest>,
 ) -> Json<ActionResult> {
-    let mut app = state.local.lock().unwrap();
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
     app.ai_strength = body.level;
     Json(ActionResult {
         success: true,
@@ -1180,8 +1308,11 @@ async fn games_page() -> Html<&'static str> {
 
 // ── Stats endpoints ──
 
-async fn get_local_stats(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let app = state.local.lock().unwrap();
+async fn get_local_stats(State(state): State<AppState>, session: SessionId) -> Json<serde_json::Value> {
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
     let stats = &app.local_stats;
     let current_rating = stats.rating.rating;
     let rd = stats.rating.rd;
@@ -1252,8 +1383,11 @@ async fn get_local_stats(State(state): State<AppState>) -> Json<serde_json::Valu
     }))
 }
 
-async fn get_achievements(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let app = state.local.lock().unwrap();
+async fn get_achievements(State(state): State<AppState>, session: SessionId) -> Json<serde_json::Value> {
+    let mut map = state.local.lock().unwrap();
+    let app = map
+        .entry(session.0)
+        .or_insert_with(|| create_fresh_local_state(&state.default_board));
     let views = achievements::build_achievement_views(&app.achievements);
     let earned_count = views.iter().filter(|v| v.earned).count();
     Json(serde_json::json!({
@@ -1350,25 +1484,7 @@ async fn main() {
         "loaded map for local play"
     );
 
-    let mut rng = StdRng::from_entropy();
-    let game = GameState::new(&board);
-    let pick_options = picking::generate_pick_options(&board, &mut rng);
-
-    let local_state = LocalState {
-        board,
-        game,
-        rng,
-        pick_options,
-        turn_history: Vec::new(),
-        ai_strength: AiStrength::Hard,
-        starting_armies: picking::DEFAULT_STARTING_ARMIES,
-        state_history: Vec::new(),
-        win_prob_history: Vec::new(),
-        local_stats: LocalStats::default(),
-        achievements: Vec::new(),
-        starting_territories: Vec::new(),
-        max_simultaneous_bonuses: 0,
-    };
+    let default_board = Arc::new(board);
 
     // Set up WebSocket hub.
     let ws_hub = Arc::new(ws::Hub::new());
@@ -1434,14 +1550,12 @@ async fn main() {
         ws_hub,
         game_manager,
         matchmaking,
-        local: Arc::new(Mutex::new(local_state)),
+        local: Arc::new(Mutex::new(HashMap::new())),
+        default_board,
     };
 
-    let app = Router::new()
-        // Local play routes (original functionality).
-        .route("/", get(index))
-        .route("/favicon.ico", get(favicon))
-        .route("/favicon.svg", get(favicon))
+    // Local play routes with per-session cookie middleware.
+    let local_routes = Router::new()
         .route("/api/game", get(get_local_game))
         .route("/api/picks", post(submit_local_picks))
         .route("/api/orders", post(submit_local_orders))
@@ -1454,7 +1568,16 @@ async fn main() {
         .route("/api/difficulty", post(set_difficulty))
         .route("/api/stats", get(get_local_stats))
         .route("/api/achievements", get(get_achievements))
+        .layer(axum::middleware::from_fn(session_cookie_layer));
+
+    let app = Router::new()
+        // Static routes (no session needed).
+        .route("/", get(index))
+        .route("/favicon.ico", get(favicon))
+        .route("/favicon.svg", get(favicon))
         .route("/api/openings", get(get_openings))
+        // Local play routes with per-session state.
+        .merge(local_routes)
         // Landing page.
         .route("/landing", get(landing))
         // Game browser & spectator.
