@@ -1275,6 +1275,24 @@ async fn ladder_page() -> Html<&'static str> {
     Html(include_str!("../../static/ladder.html"))
 }
 
+async fn not_found() -> Html<String> {
+    Html(r#"<!DOCTYPE html>
+<html><head><title>strat.club — Not Found</title>
+<style>
+body { background: #0d1117; color: #e6edf3; font-family: -apple-system, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+.card { text-align: center; }
+h1 { font-size: 72px; margin: 0; color: #fbbf24; }
+p { color: #8b949e; margin: 16px 0; }
+a { color: #4a9eff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style></head>
+<body><div class="card">
+<h1>404</h1>
+<p>This territory doesn't exist.</p>
+<a href="/">Back to the map</a>
+</div></body></html>"#.to_string())
+}
+
 async fn app_placeholder() -> Html<&'static str> {
     Html("<html><body><h1>strat-club multiplayer</h1><p>Frontend coming soon.</p></body></html>")
 }
@@ -1515,6 +1533,7 @@ async fn main() {
         )
         // WebSocket.
         .route("/ws", get(ws::handler::ws_upgrade))
+        .fallback(not_found)
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
