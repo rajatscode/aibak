@@ -147,6 +147,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 @keyframes flash-capture{0%{filter:brightness(2.5) saturate(2)}50%{filter:brightness(1.5)}100%{filter:none}}
 .flash-fail{animation:flash-fail .3s ease-out}
 @keyframes flash-fail{0%{filter:brightness(0.5) saturate(0.3)}100%{filter:none}}
+.army-badge-pulse{animation:badge-pulse .35s ease-out}
+@keyframes badge-pulse{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
 
 /* ATTACK ROUTE PREVIEW */
 .route-attack{stroke-width:3;fill:none;stroke-linecap:round;stroke-dasharray:12,6;animation:dash-flow .6s linear infinite}
@@ -2099,14 +2101,16 @@ function renderOrdersPanel(pp, cp) {
     deployEntries.forEach(function(kv) {
       var id = kv[0], count = kv[1];
       var t = terr(parseInt(id));
-      html += '<div class="order-item"><span>\u2795 Deploy +' + count + ' to ' + (t?t.name:id) + '</span><button class="remove-btn" onclick="removeDeploy(' + id + ')">\u2715</button></div>';
+      html += '<div class="order-item" style="border-left:3px solid var(--green)"><span style="color:var(--green)">\u2795 Deploy +' + count + ' to ' + (t?t.name:id) + '</span><button class="remove-btn" onclick="removeDeploy(' + id + ')">\u2715</button></div>';
     });
     // Then attack/transfer orders
     orders.forEach(function(o, i) {
-      var icon = o.type === 'attack' ? '\u2694' : '\u2192';
+      var isAttack = o.type === 'attack';
+      var icon = isAttack ? '\u2694' : '\u2192';
+      var orderColor = isAttack ? 'var(--red)' : 'var(--blue)';
       var fromT = terr(o.from);
       var toT = terr(o.to);
-      html += '<div class="order-item"><span>' + icon + ' ' + (fromT?fromT.name:o.from) + ' \u2192 ' + (toT?toT.name:o.to) + ' (' + o.armies + ')</span><button class="remove-btn" onclick="editOrder(' + i + ')" title="Edit armies" style="color:var(--text2)">\u270E</button><button class="remove-btn" onclick="removeOrder(' + i + ')">\u2715</button></div>';
+      html += '<div class="order-item" style="border-left:3px solid ' + orderColor + '"><span style="color:' + orderColor + '">' + icon + ' ' + (fromT?fromT.name:o.from) + ' \u2192 ' + (toT?toT.name:o.to) + ' (' + o.armies + ')</span><button class="remove-btn" onclick="editOrder(' + i + ')" title="Edit armies" style="color:var(--text2)">\u270E</button><button class="remove-btn" onclick="removeOrder(' + i + ')">\u2715</button></div>';
     });
   }
 
@@ -2357,6 +2361,14 @@ function onDeployClick(id, e) {
   floatText(id, '+' + actual);
   playSound('deploy');
   updateMap();
+  // Pulse the army count badge to confirm the deploy registered
+  var armyEl = document.getElementById('army-' + id);
+  if (armyEl) {
+    armyEl.classList.remove('army-badge-pulse');
+    void armyEl.offsetWidth;
+    armyEl.classList.add('army-badge-pulse');
+    setTimeout(function() { armyEl.classList.remove('army-badge-pulse'); }, 400);
+  }
   renderSidebar();
 }
 
@@ -2819,17 +2831,18 @@ async function showTurnEvents(events) {
       const a = e.Attack;
       const p = a.player === 0;
       animateArrow(a.from, a.to, '#ef4444', 600);
-      const combatSymbol = a.captured ? '\u2713' : '\u2717';
-      showCombatText(a.to, a.armies + 'v' + a.defenders + ' ' + combatSymbol, a.captured ? '#4ade80' : '#f87171');
+      showCombatText(a.to, a.armies + 'v' + a.defenders, '#fff');
       if (a.captured) {
         const capturedEl = document.getElementById('terr-' + a.to);
         if (capturedEl) capturedEl.setAttribute('fill', p ? 'url(#grad-player)' : 'url(#grad-enemy)');
         flashTerritory(a.to, 'flash-capture');
+        floatText(a.to, 'Captured!', '#4ade80');
         playSound('capture');
         if (p) gameStats.captured++;
         else gameStats.lost++;
       } else {
         flashTerritory(a.to, 'flash-fail');
+        floatText(a.to, 'Repelled!', '#f87171');
       }
       playSound('attack');
     } else if (e.Transfer) {
