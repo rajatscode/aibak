@@ -25,7 +25,6 @@ That's it. Everything else is a distraction until this works perfectly.
 ### Competitive Player
 - As a competitive player, I want a public Glicko-2 rating and seasonal leaderboard so my skill is objectively measured and I know what I need to climb.
 - As a competitive player, I want frequent matchmaking against similarly skilled opponents so every game is a meaningful test of my ability, not a stomp.
-- As a competitive player, I want access to opening theory and post-game analysis so I can optimize play and discover new strategies.
 
 ### Returning Player
 - As a returning player, I want to see my rating history and previous season rank so I know where I left off and what to chase.
