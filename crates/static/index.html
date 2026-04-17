@@ -1605,7 +1605,7 @@ function buildMap() {
       }
 
       // Army count background circle with colored border
-      g.appendChild(svgEl('circle', {cx:x, cy:y, r:11, id:'army-bg-'+t.id, fill:'rgba(8,12,24,0.85)', stroke:'rgba(255,255,255,0.12)', 'stroke-width':'1.5', style:'display:none', 'pointer-events':'none'}));
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:11, id:'army-bg-'+t.id, fill:'rgba(8,12,24,0.85)', stroke:'rgba(255,255,255,0.12)', 'stroke-width':'1.5', style:'display:none', cursor:'pointer'}));
       // Army text
       g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
       // Deploy badge
@@ -3588,6 +3588,7 @@ document.addEventListener('keydown', e => {
     if (document.getElementById('rules-modal').classList.contains('show')) { hideRulesModal(); e.preventDefault(); return; }
     if (document.getElementById('template-modal').classList.contains('show')) { hideTemplateModal(); e.preventDefault(); return; }
     if (document.getElementById('game-over').classList.contains('show')) { hideGameOver(); e.preventDefault(); return; }
+    if (document.getElementById('import-overlay').classList.contains('show')) { hideImportOverlay(); e.preventDefault(); return; }
   }
 
   // Replay mode keyboard controls
