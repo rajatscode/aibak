@@ -2875,9 +2875,9 @@ async function endTurn() {
   editingOrderIdx = null;
   clearUndoRedo();
   window._lastTurn = null; // Force orders re-init on next fetchState
-  resolving = false;
 
   await fetchState();
+  resolving = false;
 }
 
 async function showTurnEvents(events) {
@@ -3499,7 +3499,7 @@ document.addEventListener('keydown', e => {
   }
 
   // --- Game flow shortcuts ---
-  if (keyLower === 'n') { newGame(); return; }
+  if (keyLower === 'n' && phase !== 'finished' && !document.getElementById('game-over').classList.contains('show')) { newGame(); return; }
   if (keyLower === 'm') { toggleMute(); return; }
   if (keyLower === 'l') { toggleTheme(); return; }
 
