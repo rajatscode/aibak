@@ -167,8 +167,8 @@
       "id": 8,
       "name": "Central America",
       "bonus_id": 0,
-      "is_wasteland": false,
-      "default_armies": 2,
+      "is_wasteland": true,
+      "default_armies": 6,
       "adjacent": [
         6,
         7,
@@ -448,8 +448,8 @@
       "id": 22,
       "name": "East Africa",
       "bonus_id": 3,
-      "is_wasteland": false,
-      "default_armies": 2,
+      "is_wasteland": true,
+      "default_armies": 6,
       "adjacent": [
         20,
         21,
@@ -605,8 +605,8 @@
       "id": 30,
       "name": "Afghanistan",
       "bonus_id": 4,
-      "is_wasteland": false,
-      "default_armies": 2,
+      "is_wasteland": true,
+      "default_armies": 6,
       "adjacent": [
         19,
         26,
@@ -731,8 +731,8 @@
       "id": 36,
       "name": "Indonesia",
       "bonus_id": 5,
-      "is_wasteland": false,
-      "default_armies": 2,
+      "is_wasteland": true,
+      "default_armies": 6,
       "adjacent": [
         29,
         37,
@@ -805,7 +805,7 @@
     {
       "id": 40,
       "name": "Japan",
-      "bonus_id": 5,
+      "bonus_id": 4,
       "is_wasteland": false,
       "default_armies": 2,
       "adjacent": [
@@ -911,6 +911,7 @@
         33,
         34,
         35,
+        40,
         41
       ]
     },
@@ -922,8 +923,7 @@
         36,
         37,
         38,
-        39,
-        40
+        39
       ]
     }
   ],
@@ -934,7 +934,7 @@
   "settings": {
     "luck_pct": 0,
     "base_income": 5,
-    "wasteland_armies": 10,
+    "wasteland_armies": 6,
     "unpicked_neutral_armies": 4,
     "fog_of_war": true,
     "offense_kill_rate": 0.6,

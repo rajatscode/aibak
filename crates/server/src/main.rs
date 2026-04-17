@@ -259,6 +259,7 @@ struct TerritoryView {
     owner: u8,
     armies: u32,
     visible: bool,
+    is_wasteland: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     path: Option<String>,
     label_x: f64,
@@ -328,6 +329,7 @@ fn build_game_view(app: &LocalState) -> GameView {
                     0
                 },
                 visible: is_visible,
+                is_wasteland: t.is_wasteland,
                 path: t.visual.as_ref().map(|v| v.path.clone()),
                 label_x: lx,
                 label_y: ly,
@@ -818,6 +820,7 @@ async fn get_replay_turn(
                 owner: historical_state.territory_owners[i],
                 armies: historical_state.territory_armies[i],
                 visible: true,
+                is_wasteland: t.is_wasteland,
                 path: t.visual.as_ref().map(|v| v.path.clone()),
                 label_x: lx,
                 label_y: ly,

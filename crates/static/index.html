@@ -824,7 +824,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 // ========== CONSTANTS ==========
 // POS is populated dynamically from API territory label_x/label_y
 const POS = {};
-const BONUS_COLORS=['#58a6ff','#e3b341','#f0883e','#bc8cff','#3fb950','#f778ba'];
+const BONUS_COLORS=['#4a7ba7','#c99a4e','#b8703d','#7a6ba3','#3d7d5f','#a85b6d'];
 const PLAYER_COLOR='#4a9eff';
 const ENEMY_COLOR='#f87171';
 const NEUTRAL_COLOR='#6b7280';
@@ -1194,15 +1194,17 @@ function applyThemeGradients() {
     setStops('grad-player', '#3b82f6', '#2563eb'); setStops('grad-enemy', '#ef4444', '#dc2626');
     setStops('grad-neutral', '#9ca3af', '#6b7280'); setStops('grad-fog', '#d0d7de', '#bbc3cd');
   } else {
-    setStops('grad-player', '#3b82f6', '#1d4ed8'); setStops('grad-enemy', '#ef4444', '#b91c1c');
-    setStops('grad-neutral', '#6b7280', '#374151'); setStops('grad-fog', '#283040', '#1a2030');
+    setStops('grad-player', '#1e40af', '#0c2349'); setStops('grad-enemy', '#7f1d1d', '#4c0519');
+    setStops('grad-neutral', '#5a6672', '#3d4451'); setStops('grad-fog', '#1a2844', '#0f1929');
   }
   // Flat ocean background
   const oceanRect = document.querySelector('#map-svg > rect');
-  if (oceanRect) oceanRect.setAttribute('fill', light ? '#dfe6ed' : '#0a1628');
+  if (oceanRect) oceanRect.setAttribute('fill', light ? '#dfe6ed' : '#050e1f');
   // Flat army bubbles
   document.querySelectorAll('[id^="army-bg-"]').forEach(c => {
-    c.setAttribute('fill', light ? 'rgba(230,230,240,0.9)' : 'rgba(20,20,30,0.9)');
+    c.setAttribute('fill', light ? 'rgba(230,230,240,0.9)' : 'rgba(0,10,30,0.95)');
+    c.setAttribute('stroke', light ? 'rgba(0,0,0,0.15)' : 'rgba(100,160,255,0.15)');
+    c.setAttribute('stroke-width', '1');
   });
   document.querySelectorAll('.territory-path').forEach(p => {
     const fill = p.getAttribute('fill');
@@ -1212,10 +1214,10 @@ function applyThemeGradients() {
       else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#b0b8c4');
       else p.setAttribute('stroke', '#c0c8d0');
     } else {
-      if (fill === 'url(#grad-player)') p.setAttribute('stroke', '#152a5e');
-      else if (fill === 'url(#grad-enemy)') p.setAttribute('stroke', '#5a1010');
-      else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#1a1f2a');
-      else p.setAttribute('stroke', '#080c12');
+      if (fill === 'url(#grad-player)') p.setAttribute('stroke', '#0d1a2f');
+      else if (fill === 'url(#grad-enemy)') p.setAttribute('stroke', '#0d1a2f');
+      else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#0d1a2f');
+      else p.setAttribute('stroke', '#0d1a2f');
     }
   });
 }
@@ -1449,7 +1451,7 @@ function buildMap() {
   svg.appendChild(defs);
 
   // Ocean background rect
-  svg.appendChild(svgEl('rect', {x:'0', y:'0', width:'1000', height:'680', fill:'#0a1628'}));
+  svg.appendChild(svgEl('rect', {x:'0', y:'0', width:'1000', height:'680', fill:'#050e1f'}));
 
   // Subtle wave decorations between continents
   const waveGroup = svgEl('g', {id:'ocean-waves', opacity:'0.12'});
@@ -1498,14 +1500,14 @@ function buildMap() {
           class: 'territory-path',
           id: 'terr-' + t.id,
           fill: 'url(#grad-fog)',
-          stroke: '#080c12',
+          stroke: '#0d1a2f',
           'stroke-width': 2,
           'stroke-linejoin': 'round',
           filter: 'url(#territory-shadow)'
         }));
       } else {
         // Fallback circle if no path data
-        g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#080c12','stroke-width':2, filter:'url(#territory-shadow)'}));
+        g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#0d1a2f','stroke-width':2, filter:'url(#territory-shadow)'}));
       }
 
       // Selection highlight (invisible path copy on top)
@@ -1533,7 +1535,7 @@ function buildMap() {
       }
 
       // Army count background circle with colored border
-      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'rgba(20,20,30,0.9)', stroke:'rgba(255,255,255,0.15)', 'stroke-width':'1.5', style:'display:none', 'pointer-events':'none'}));
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'rgba(0,10,30,0.95)', stroke:'rgba(100,160,255,0.15)', 'stroke-width':'1', style:'display:none', 'pointer-events':'none'}));
       // Army text
       g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
       // Deploy badge
@@ -1665,12 +1667,12 @@ function updateMap() {
 
     // Color
     let fill = 'url(#grad-fog)';
-    let strokeColor = '#080c12';
-    let ownerBorderColor = 'rgba(255,255,255,0.15)';
+    let strokeColor = '#0d1a2f';
+    let ownerBorderColor = 'rgba(100,160,255,0.15)';
     if (t.visible !== false) {
-      if (t.owner === 0) { fill = 'url(#grad-player)'; strokeColor = '#152a5e'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
-      else if (t.owner === 1) { fill = 'url(#grad-enemy)'; strokeColor = '#5a1010'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
-      else { fill = 'url(#grad-neutral)'; strokeColor = '#1a1f2a'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
+      if (t.owner === 0) { fill = 'url(#grad-player)'; strokeColor = '#0d1a2f'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
+      else if (t.owner === 1) { fill = 'url(#grad-enemy)'; strokeColor = '#0d1a2f'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
+      else { fill = 'url(#grad-neutral)'; strokeColor = '#0d1a2f'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
     }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);

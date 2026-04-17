@@ -75,16 +75,23 @@ pub fn resolve_turn(
     // Track available armies per territory.
     let mut available: Vec<u32> = new_state.territory_armies.clone();
 
-    // Phase 1: Deployments.
+    // Phase 1: Deployments (capped to player income).
     for player in 0..2u8 {
+        let income = state.income(player, board);
+        let mut deployed = 0u32;
         for order in &orders[player as usize] {
             if let Order::Deploy { territory, armies } = order {
-                new_state.territory_armies[*territory] += armies;
-                available[*territory] += armies;
+                let allowed = (*armies).min(income.saturating_sub(deployed));
+                if allowed == 0 {
+                    continue;
+                }
+                deployed += allowed;
+                new_state.territory_armies[*territory] += allowed;
+                available[*territory] += allowed;
                 events.push(TurnEvent::Deploy {
                     player,
                     territory: *territory,
-                    armies: *armies,
+                    armies: allowed,
                 });
             }
         }
