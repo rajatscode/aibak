@@ -72,10 +72,11 @@ pub fn use_reinforcement_cards(state: &mut GameState, player: PlayerId, count: u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Bonus, Map, MapSettings, PickingConfig, PickingMethod, Territory};
+    use crate::board::Board;
+    use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
 
-    fn test_map() -> Map {
-        Map {
+    fn test_map() -> MapFile {
+        MapFile {
             id: "test".into(),
             name: "Test".into(),
             territories: vec![
@@ -124,7 +125,8 @@ mod tests {
     #[test]
     fn test_award_card_pieces_gives_card_after_3_captures() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
 
         // Capture 2 territories: should get 2 pieces, no card yet.
         award_card_pieces(&mut state, 0, 2);
@@ -141,7 +143,8 @@ mod tests {
     #[test]
     fn test_award_card_pieces_multiple_cards() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
 
         // Capture 7 territories at once: 7 pieces -> 2 cards, 1 leftover.
         award_card_pieces(&mut state, 0, 7);
@@ -152,7 +155,8 @@ mod tests {
     #[test]
     fn test_blockade_multiplies_and_neutralizes() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners[0] = 0;
         state.territory_armies[0] = 4;
         state.hands[0] = vec![Card::Blockade];
@@ -170,7 +174,8 @@ mod tests {
     #[test]
     fn test_blockade_fails_without_card() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners[0] = 0;
         state.territory_armies[0] = 4;
         // No blockade card in hand.
@@ -185,7 +190,8 @@ mod tests {
     #[test]
     fn test_blockade_fails_on_enemy_territory() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners[0] = 1; // enemy owns it
         state.territory_armies[0] = 4;
         state.hands[0] = vec![Card::Blockade];
@@ -197,7 +203,8 @@ mod tests {
     #[test]
     fn test_use_reinforcement_cards() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.hands[0] = vec![
             Card::Reinforcement(5),
             Card::Blockade,
@@ -216,7 +223,8 @@ mod tests {
     #[test]
     fn test_use_reinforcement_cards_multiple() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.hands[0] = vec![
             Card::Reinforcement(5),
             Card::Reinforcement(5),

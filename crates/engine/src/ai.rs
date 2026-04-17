@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::board::Board;
 use crate::combat::resolve_attack;
-use crate::map::Map;
 use crate::mcts::{MctsConfig, mcts_generate_orders};
 use crate::orders::Order;
 use crate::state::{GameState, NEUTRAL, PlayerId};
@@ -38,28 +38,29 @@ pub enum AiStrength {
 pub fn generate_orders_for_strength(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     strength: AiStrength,
 ) -> Vec<Order> {
     match strength {
-        AiStrength::Easy => generate_random_orders(state, player, map),
-        AiStrength::Medium => generate_orders(state, player, map),
+        AiStrength::Easy => generate_random_orders(state, player, board),
+        AiStrength::Medium => generate_orders(state, player, board),
         AiStrength::Hard => {
             let config = MctsConfig {
                 time_budget: Duration::from_millis(500),
                 ..Default::default()
             };
-            mcts_generate_orders(state, player, map, &config)
+            mcts_generate_orders(state, player, board, &config)
         }
     }
 }
 
 /// Generate random (easy) orders: deploy all income on a random border territory,
 /// then attack a random neighbor if possible.
-fn generate_random_orders(state: &GameState, player: PlayerId, map: &Map) -> Vec<Order> {
+fn generate_random_orders(state: &GameState, player: PlayerId, board: &Board) -> Vec<Order> {
     use rand::seq::SliceRandom;
+    let map = &board.map;
 
-    let income = state.income(player, map);
+    let income = state.income(player, board);
     if income == 0 {
         return Vec::new();
     }
@@ -105,18 +106,19 @@ fn generate_random_orders(state: &GameState, player: PlayerId, map: &Map) -> Vec
 }
 
 /// Generate AI orders with multi-step attack planning.
-pub fn generate_orders(state: &GameState, player: PlayerId, map: &Map) -> Vec<Order> {
-    generate_orders_with_profile(state, player, map, AiProfile::Aggressive)
+pub fn generate_orders(state: &GameState, player: PlayerId, board: &Board) -> Vec<Order> {
+    generate_orders_with_profile(state, player, board, AiProfile::Aggressive)
 }
 
 /// Generate AI orders using a specific strategy profile.
 pub fn generate_orders_with_profile(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     _profile: AiProfile,
 ) -> Vec<Order> {
-    let income = state.income(player, map);
+    let map = &board.map;
+    let income = state.income(player, board);
     if income == 0 {
         return Vec::new();
     }
@@ -127,7 +129,7 @@ pub fn generate_orders_with_profile(
     let total_territories = map.territory_count();
     let ai_territories = state.territory_count_for(player);
     if ai_territories as f64 / total_territories as f64 > 0.6 {
-        return generate_cleanup_orders(state, player, map);
+        return generate_cleanup_orders(state, player, board);
     }
 
     let mut orders = Vec::new();
@@ -143,8 +145,8 @@ pub fn generate_orders_with_profile(
     } else {
         100.0
     };
-    let my_income = state.income(player, map);
-    let opp_income = state.income(opp, map);
+    let my_income = state.income(player, board);
+    let opp_income = state.income(opp, board);
     let income_ratio = if opp_income > 0 {
         my_income as f64 / opp_income as f64
     } else {
@@ -239,7 +241,7 @@ pub fn generate_orders_with_profile(
         // Cost to take reachable territories
         let cost: u32 = reachable
             .iter()
-            .map(|&tid| armies_to_take(state.territory_armies[tid], &map.settings))
+            .map(|&tid| armies_to_take(state.territory_armies[tid], board.settings()))
             .sum();
 
         let completion = owned.len() as f64 / bonus.territory_ids.len() as f64;
@@ -304,7 +306,7 @@ pub fn generate_orders_with_profile(
                 if defenders == 0 || attackers == 0 {
                     continue;
                 }
-                let result = resolve_attack(attackers, defenders, &map.settings);
+                let result = resolve_attack(attackers, defenders, board.settings());
 
                 if result.captured {
                     attack_plan.push(PlannedAttack {
@@ -342,7 +344,7 @@ pub fn generate_orders_with_profile(
             if defenders == 0 || attackers == 0 {
                 continue;
             }
-            let result = resolve_attack(attackers, defenders, &map.settings);
+            let result = resolve_attack(attackers, defenders, board.settings());
 
             if result.captured && !attack_plan.iter().any(|a| a.to == target) {
                 attack_plan.push(PlannedAttack {
@@ -380,7 +382,7 @@ pub fn generate_orders_with_profile(
                 if defenders == 0 || attackers == 0 {
                     continue;
                 }
-                let result = resolve_attack(attackers, defenders, &map.settings);
+                let result = resolve_attack(attackers, defenders, board.settings());
 
                 if result.captured && !attack_plan.iter().any(|a| a.from == src) {
                     attack_plan.push(PlannedAttack {
@@ -407,8 +409,8 @@ pub fn generate_orders_with_profile(
 
     let deploy_target = if endgame {
         // Deploy to the border territory that can reach the most enemy territories.
-        find_best_endgame_deploy(state, player, map)
-            .unwrap_or_else(|| find_most_threatened_border(state, player, map).unwrap_or(0))
+        find_best_endgame_deploy(state, player, board)
+            .unwrap_or_else(|| find_most_threatened_border(state, player, board).unwrap_or(0))
     } else if is_opening || behind {
         // Stack: concentrate all income on the single best attack source.
         // In opening, this means the territory closest to completing our best bonus.
@@ -422,9 +424,9 @@ pub fn generate_orders_with_profile(
                 .iter()
                 .copied()
                 .find(|&adj| state.territory_owners[adj] == player)
-                .unwrap_or_else(|| find_most_threatened_border(state, player, map).unwrap_or(0))
+                .unwrap_or_else(|| find_most_threatened_border(state, player, board).unwrap_or(0))
         } else {
-            find_most_threatened_border(state, player, map).unwrap_or(0)
+            find_most_threatened_border(state, player, board).unwrap_or(0)
         }
     } else if dominant {
         // Spread: deploy to the most threatened border to defend bonuses.
@@ -437,12 +439,12 @@ pub fn generate_orders_with_profile(
                     .iter()
                     .copied()
                     .find(|&adj| state.territory_owners[adj] == player)
-                    .unwrap_or_else(|| find_most_threatened_border(state, player, map).unwrap_or(0))
+                    .unwrap_or_else(|| find_most_threatened_border(state, player, board).unwrap_or(0))
             } else {
-                find_most_threatened_border(state, player, map).unwrap_or(0)
+                find_most_threatened_border(state, player, board).unwrap_or(0)
             }
         } else {
-            find_most_threatened_border(state, player, map).unwrap_or(0)
+            find_most_threatened_border(state, player, board).unwrap_or(0)
         }
     } else {
         // Even: stack toward the best attack if we have one, else toward
@@ -450,7 +452,7 @@ pub fn generate_orders_with_profile(
         if let Some(best) = attack_plan.first() {
             best.from
         } else {
-            find_most_threatened_border(state, player, map).unwrap_or_else(|| {
+            find_most_threatened_border(state, player, board).unwrap_or_else(|| {
                 (0..map.territory_count())
                     .find(|&tid| state.territory_owners[tid] == player)
                     .unwrap_or(0)
@@ -505,7 +507,7 @@ pub fn generate_orders_with_profile(
                 if defenders == 0 || attackers == 0 {
                     continue;
                 }
-                let result = resolve_attack(attackers, defenders, &map.settings);
+                let result = resolve_attack(attackers, defenders, board.settings());
 
                 if result.captured {
                     orders.push(Order::Attack {
@@ -547,7 +549,7 @@ pub fn generate_orders_with_profile(
             if defenders == 0 || attackers == 0 {
                 continue;
             }
-            let result = resolve_attack(attackers, defenders, &map.settings);
+            let result = resolve_attack(attackers, defenders, board.settings());
 
             if result.captured {
                 orders.push(Order::Attack {
@@ -560,7 +562,7 @@ pub fn generate_orders_with_profile(
                 sim_owners[target] = player;
                 used_sources[src] = true;
                 attack_count += 1;
-            } else if is_bonus_denial_worthwhile(target, opp, map, state) {
+            } else if is_bonus_denial_worthwhile(target, opp, board, state) {
                 // Improvement #5: attack even if non-capturable when it weakens
                 // a key enemy bonus position
                 orders.push(Order::Attack {
@@ -570,7 +572,7 @@ pub fn generate_orders_with_profile(
                 });
                 sim_armies[src] = 1;
                 // Don't update sim_owners since we didn't capture
-                let killed = (attackers as f64 * map.settings.offense_kill_rate).round() as u32;
+                let killed = (attackers as f64 * board.settings().offense_kill_rate).round() as u32;
                 sim_armies[target] = sim_armies[target].saturating_sub(killed);
                 used_sources[src] = true;
                 attack_count += 1;
@@ -609,7 +611,7 @@ pub fn generate_orders_with_profile(
                 if defenders == 0 || attackers == 0 {
                     continue;
                 }
-                let result = resolve_attack(attackers, defenders, &map.settings);
+                let result = resolve_attack(attackers, defenders, board.settings());
 
                 if result.captured {
                     orders.push(Order::Attack {
@@ -652,7 +654,7 @@ pub fn generate_orders_with_profile(
                 if attackers == 0 || defenders == 0 {
                     continue;
                 }
-                let result = resolve_attack(attackers, defenders, &map.settings);
+                let result = resolve_attack(attackers, defenders, board.settings());
                 if result.captured {
                     orders.push(Order::Attack {
                         from: tid,
@@ -690,7 +692,7 @@ pub fn generate_orders_with_profile(
         if is_interior {
             // Interior territory: BFS toward the most threatened border
             if let Some(toward) =
-                bfs_toward_threatened_border(tid, player, map, &sim_owners, &sim_armies)
+                bfs_toward_threatened_border(tid, player, board, &sim_owners, &sim_armies)
             {
                 let amount = sim_armies[tid] - 1;
                 if amount > 0 {
@@ -707,7 +709,7 @@ pub fn generate_orders_with_profile(
             // Improvement #6: border territory with no attacks this turn.
             // Transfer toward the best stacking position (border territory
             // with highest enemy threat nearby).
-            let best_border = find_best_stack_border(player, map, &sim_owners, &sim_armies);
+            let best_border = find_best_stack_border(player, board, &sim_owners, &sim_armies);
             if let Some(dest) = best_border {
                 if dest != tid {
                     // Only transfer if the destination is adjacent
@@ -724,7 +726,7 @@ pub fn generate_orders_with_profile(
                         }
                     } else {
                         // Not adjacent — BFS one step toward the best border
-                        if let Some(toward) = bfs_toward_target(tid, dest, map, player, &sim_owners)
+                        if let Some(toward) = bfs_toward_target(tid, dest, board, player, &sim_owners)
                         {
                             let amount = sim_armies[tid] - 1;
                             if amount > 0 {
@@ -748,9 +750,10 @@ pub fn generate_orders_with_profile(
 
 /// Cleanup mode: spread deployment across all border territories, attack every
 /// capturable target, and transfer interior armies toward the front.
-fn generate_cleanup_orders(state: &GameState, player: PlayerId, map: &Map) -> Vec<Order> {
+fn generate_cleanup_orders(state: &GameState, player: PlayerId, board: &Board) -> Vec<Order> {
+    let map = &board.map;
     let mut orders = Vec::new();
-    let income = state.income(player, map);
+    let income = state.income(player, board);
     if income == 0 {
         return orders;
     }
@@ -828,7 +831,7 @@ fn generate_cleanup_orders(state: &GameState, player: PlayerId, map: &Map) -> Ve
             if defenders == 0 || attackers == 0 {
                 continue;
             }
-            let result = resolve_attack(attackers, defenders, &map.settings);
+            let result = resolve_attack(attackers, defenders, board.settings());
             if result.captured {
                 orders.push(Order::Attack {
                     from: tid,
@@ -893,7 +896,8 @@ fn armies_to_take(defenders: u32, settings: &crate::map::MapSettings) -> u32 {
 
 /// Find the best border territory for endgame deployment: the one adjacent to
 /// the most enemy territories (maximize attack surface for finishing the game).
-fn find_best_endgame_deploy(state: &GameState, player: PlayerId, map: &Map) -> Option<usize> {
+fn find_best_endgame_deploy(state: &GameState, player: PlayerId, board: &Board) -> Option<usize> {
+    let map = &board.map;
     let mut best = None;
     let mut best_score = 0usize;
     for tid in 0..map.territory_count() {
@@ -914,7 +918,8 @@ fn find_best_endgame_deploy(state: &GameState, player: PlayerId, map: &Map) -> O
 }
 
 /// Find the owned border territory that faces the most enemy armies.
-fn find_most_threatened_border(state: &GameState, player: PlayerId, map: &Map) -> Option<usize> {
+fn find_most_threatened_border(state: &GameState, player: PlayerId, board: &Board) -> Option<usize> {
+    let map = &board.map;
     let mut best = None;
     let mut best_threat = 0u32;
     for tid in 0..map.territory_count() {
@@ -958,7 +963,8 @@ fn find_most_threatened_border(state: &GameState, player: PlayerId, map: &Map) -
 /// Check if attacking a territory is worthwhile for bonus denial, even if
 /// capture isn't possible. Returns true if the target is in a bonus the
 /// opponent is close to completing.
-fn is_bonus_denial_worthwhile(target: usize, opp: PlayerId, map: &Map, state: &GameState) -> bool {
+fn is_bonus_denial_worthwhile(target: usize, opp: PlayerId, board: &Board, state: &GameState) -> bool {
+    let map = &board.map;
     let bonus = &map.bonuses[map.territories[target].bonus_id];
     let opp_owned = bonus
         .territory_ids
@@ -975,10 +981,11 @@ fn is_bonus_denial_worthwhile(target: usize, opp: PlayerId, map: &Map, state: &G
 fn bfs_toward_threatened_border(
     start: usize,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     sim_owners: &[PlayerId],
     sim_armies: &[u32],
 ) -> Option<usize> {
+    let map = &board.map;
     // Find the most threatened border territory as the BFS target
     let mut best_border = None;
     let mut best_threat = 0u32;
@@ -1010,7 +1017,7 @@ fn bfs_toward_threatened_border(
         return None;
     }
 
-    bfs_toward_target(start, target, map, player, sim_owners)
+    bfs_toward_target(start, target, board, player, sim_owners)
 }
 
 /// BFS from `start` to `target` through friendly territory, returning the
@@ -1018,10 +1025,11 @@ fn bfs_toward_threatened_border(
 fn bfs_toward_target(
     start: usize,
     target: usize,
-    map: &Map,
+    board: &Board,
     player: PlayerId,
     sim_owners: &[PlayerId],
 ) -> Option<usize> {
+    let map = &board.map;
     // BFS from target backward to start (so we can extract the first step)
     let n = map.territory_count();
     let mut visited = vec![false; n];
@@ -1071,10 +1079,11 @@ fn bfs_toward_target(
 /// highest total enemy armies (best place to build up for a future attack).
 fn find_best_stack_border(
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     sim_owners: &[PlayerId],
     sim_armies: &[u32],
 ) -> Option<usize> {
+    let map = &board.map;
     let mut best = None;
     let mut best_score = 0i64;
     for tid in 0..map.territory_count() {
@@ -1107,7 +1116,8 @@ fn find_best_stack_border(
 }
 
 /// Generate picks for the AI. Prefers territories in small, high-value bonuses.
-pub fn generate_picks(state: &GameState, map: &Map) -> Vec<usize> {
+pub fn generate_picks(state: &GameState, board: &Board) -> Vec<usize> {
+    let map = &board.map;
     let mut scored: Vec<(usize, f64)> = (0..map.territory_count())
         .filter(|&tid| !map.territories[tid].is_wasteland && state.territory_owners[tid] == NEUTRAL)
         .map(|tid| {

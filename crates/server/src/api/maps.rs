@@ -5,7 +5,7 @@ use axum::extract::Path;
 use axum::http::StatusCode;
 use serde::Serialize;
 
-use strat_engine::map::Map;
+use strat_engine::map::MapFile;
 
 /// Directory for user-created maps.
 fn custom_maps_dir() -> PathBuf {
@@ -41,12 +41,12 @@ pub async fn list_maps() -> Json<MapListResponse> {
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "json")
                 && path.is_file()
-                && let Ok(map) = Map::load(&path)
+                && let Ok(map) = MapFile::load(&path)
             {
                 maps.push(MapInfo {
                     id: map.id.clone(),
                     name: map.name.clone(),
-                    territories: map.territory_count(),
+                    territories: map.territories.len(),
                     bonuses: map.bonuses.len(),
                     is_custom: false,
                 });
@@ -60,12 +60,12 @@ pub async fn list_maps() -> Json<MapListResponse> {
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "json")
                 && path.is_file()
-                && let Ok(map) = Map::load(&path)
+                && let Ok(map) = MapFile::load(&path)
             {
                 maps.push(MapInfo {
                     id: format!("custom/{}", map.id),
                     name: map.name.clone(),
-                    territories: map.territory_count(),
+                    territories: map.territories.len(),
                     bonuses: map.bonuses.len(),
                     is_custom: true,
                 });
@@ -77,7 +77,7 @@ pub async fn list_maps() -> Json<MapListResponse> {
 }
 
 /// Save a custom map. Body is the raw map JSON.
-pub async fn save_map(Json(map): Json<Map>) -> Result<Json<MapInfo>, (StatusCode, String)> {
+pub async fn save_map(Json(map): Json<MapFile>) -> Result<Json<MapInfo>, (StatusCode, String)> {
     // Validate the map.
     if map.territories.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "Map has no territories".into()));
@@ -90,7 +90,7 @@ pub async fn save_map(Json(map): Json<Map>) -> Result<Json<MapInfo>, (StatusCode
     }
 
     // Validate connectivity.
-    let n = map.territory_count();
+    let n = map.territories.len();
     let mut visited = vec![false; n];
     let mut stack = vec![0usize];
     visited[0] = true;
@@ -157,7 +157,7 @@ pub async fn save_map(Json(map): Json<Map>) -> Result<Json<MapInfo>, (StatusCode
     Ok(Json(MapInfo {
         id: format!("custom/{}", map.id),
         name: map.name.clone(),
-        territories: map.territory_count(),
+        territories: map.territories.len(),
         bonuses: map.bonuses.len(),
         is_custom: true,
     }))

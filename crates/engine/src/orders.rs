@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::cards::Card;
-use crate::map::Map;
+use crate::board::Board;
 use crate::state::{GameState, PlayerId};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -41,15 +41,15 @@ pub fn validate_orders(
     orders: &[Order],
     player: PlayerId,
     state: &GameState,
-    map: &Map,
+    board: &Board,
 ) -> Result<(), OrderError> {
-    let income = state.income(player, map);
+    let income = state.income(player, board);
     let mut total_deployed = 0u32;
 
     for order in orders {
         match order {
             Order::Deploy { territory, armies } => {
-                check_bounds(*territory, map)?;
+                check_bounds(*territory, board)?;
                 check_owned(*territory, player, state)?;
                 if *armies == 0 {
                     return Err(OrderError::ZeroDeploy);
@@ -57,13 +57,13 @@ pub fn validate_orders(
                 total_deployed += armies;
             }
             Order::Attack { from, to, armies } => {
-                check_bounds(*from, map)?;
-                check_bounds(*to, map)?;
+                check_bounds(*from, board)?;
+                check_bounds(*to, board)?;
                 check_owned(*from, player, state)?;
                 if state.territory_owners[*to] == player {
                     return Err(OrderError::AttackOwnTerritory(*to));
                 }
-                if !map.are_adjacent(*from, *to) {
+                if !board.map.are_adjacent(*from, *to) {
                     return Err(OrderError::NotAdjacent(*from, *to));
                 }
                 if *armies == 0 {
@@ -71,13 +71,13 @@ pub fn validate_orders(
                 }
             }
             Order::Transfer { from, to, armies } => {
-                check_bounds(*from, map)?;
-                check_bounds(*to, map)?;
+                check_bounds(*from, board)?;
+                check_bounds(*to, board)?;
                 check_owned(*from, player, state)?;
                 if state.territory_owners[*to] != player {
                     return Err(OrderError::TransferToEnemy(*to));
                 }
-                if !map.are_adjacent(*from, *to) {
+                if !board.map.are_adjacent(*from, *to) {
                     return Err(OrderError::NotAdjacent(*from, *to));
                 }
                 if *armies == 0 {
@@ -85,7 +85,7 @@ pub fn validate_orders(
                 }
             }
             Order::PlayCard { card, target } => {
-                check_bounds(*target, map)?;
+                check_bounds(*target, board)?;
                 let hand = &state.hands[player as usize];
                 if !hand.contains(card) {
                     return Err(OrderError::CardNotInHand(card.clone()));
@@ -104,8 +104,8 @@ pub fn validate_orders(
     Ok(())
 }
 
-fn check_bounds(territory: usize, map: &Map) -> Result<(), OrderError> {
-    if territory >= map.territory_count() {
+fn check_bounds(territory: usize, board: &Board) -> Result<(), OrderError> {
+    if territory >= board.map.territory_count() {
         return Err(OrderError::OutOfBounds(territory));
     }
     Ok(())
@@ -121,11 +121,12 @@ fn check_owned(territory: usize, player: PlayerId, state: &GameState) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Bonus, Map, MapSettings, PickingConfig, PickingMethod, Territory};
+    use crate::board::Board;
+    use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
     use crate::state::GameState;
 
-    fn test_map() -> Map {
-        Map {
+    fn test_map() -> MapFile {
+        MapFile {
             id: "test".into(),
             name: "Test".into(),
             territories: vec![
@@ -198,8 +199,8 @@ mod tests {
         }
     }
 
-    fn setup_state(map: &Map) -> GameState {
-        let mut state = GameState::new(map);
+    fn setup_state(board: &Board) -> GameState {
+        let mut state = GameState::new(board);
         state.territory_owners = vec![0, 0, 1, 1];
         state.territory_armies = vec![5, 5, 5, 5];
         state.phase = crate::state::Phase::Play;
@@ -210,13 +211,14 @@ mod tests {
     #[test]
     fn test_validate_catches_over_deployment() {
         let map = test_map();
-        let state = setup_state(&map);
-        let income = state.income(0, &map); // base 5 + bonus 2 = 7
+        let board = Board::from_map(map);
+        let state = setup_state(&board);
+        let income = state.income(0, &board); // base 5 + bonus 2 = 7
         let orders = vec![Order::Deploy {
             territory: 0,
             armies: income + 1,
         }];
-        let result = validate_orders(&orders, 0, &state, &map);
+        let result = validate_orders(&orders, 0, &state, &board);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), OrderError::OverDeploy { .. }));
     }
@@ -224,12 +226,13 @@ mod tests {
     #[test]
     fn test_validate_catches_out_of_bounds() {
         let map = test_map();
-        let state = setup_state(&map);
+        let board = Board::from_map(map);
+        let state = setup_state(&board);
         let orders = vec![Order::Deploy {
             territory: 999,
             armies: 1,
         }];
-        let result = validate_orders(&orders, 0, &state, &map);
+        let result = validate_orders(&orders, 0, &state, &board);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), OrderError::OutOfBounds(999)));
     }
@@ -237,8 +240,9 @@ mod tests {
     #[test]
     fn test_validate_allows_valid_orders() {
         let map = test_map();
-        let state = setup_state(&map);
-        let income = state.income(0, &map);
+        let board = Board::from_map(map);
+        let state = setup_state(&board);
+        let income = state.income(0, &board);
         let orders = vec![
             Order::Deploy {
                 territory: 0,
@@ -250,14 +254,15 @@ mod tests {
                 armies: 4,
             },
         ];
-        let result = validate_orders(&orders, 0, &state, &map);
+        let result = validate_orders(&orders, 0, &state, &board);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_validate_catches_attack_own_territory() {
         let map = test_map();
-        let state = setup_state(&map);
+        let board = Board::from_map(map);
+        let state = setup_state(&board);
         let orders = vec![
             Order::Deploy {
                 territory: 0,
@@ -269,7 +274,7 @@ mod tests {
                 armies: 3,
             }, // 0 and 1 both owned by player 0
         ];
-        let result = validate_orders(&orders, 0, &state, &map);
+        let result = validate_orders(&orders, 0, &state, &board);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -280,7 +285,8 @@ mod tests {
     #[test]
     fn test_validate_catches_transfer_to_enemy() {
         let map = test_map();
-        let state = setup_state(&map);
+        let board = Board::from_map(map);
+        let state = setup_state(&board);
         let orders = vec![
             Order::Deploy {
                 territory: 1,
@@ -292,7 +298,7 @@ mod tests {
                 armies: 3,
             }, // 2 is owned by player 1
         ];
-        let result = validate_orders(&orders, 0, &state, &map);
+        let result = validate_orders(&orders, 0, &state, &board);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),

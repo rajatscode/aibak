@@ -2,6 +2,7 @@
 
 pub mod ai;
 pub mod analysis;
+pub mod board;
 pub mod cards;
 pub mod combat;
 pub mod fog;

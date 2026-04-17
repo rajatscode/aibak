@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
-use strat_engine::map::Map;
+use strat_engine::board::Board;
+use strat_engine::map::MapFile;
 use strat_engine::orders::Order;
 use strat_engine::picking;
 use strat_engine::state::{GameState, Phase};
@@ -20,7 +21,7 @@ fn main() {
     let map_path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "maps/small_earth.json".to_string());
-    let map = Map::load(&PathBuf::from(&map_path)).unwrap_or_else(|e| {
+    let map = MapFile::load(&PathBuf::from(&map_path)).unwrap_or_else(|e| {
         eprintln!("Failed to load map '{}': {}", map_path, e);
         std::process::exit(1);
     });
@@ -29,6 +30,9 @@ fn main() {
         .nth(2)
         .and_then(|s| s.parse().ok())
         .unwrap_or_else(rand::random);
+
+    let board = Board::from_map(map);
+    let map = &board.map;
 
     println!("\x1b[1mStrat Club — Local Test Game\x1b[0m");
     println!(
@@ -40,26 +44,26 @@ fn main() {
     println!("Seed: {}\n", seed);
 
     let mut rng = StdRng::seed_from_u64(seed);
-    let mut state = GameState::new(&map);
+    let mut state = GameState::new(&board);
 
     // Picking phase.
-    let options = picking::generate_pick_options(&map, &mut rng);
-    display::print_pick_options(&options, &map);
+    let options = picking::generate_pick_options(&board, &mut rng);
+    display::print_pick_options(&options, &board);
 
-    let player_picks = read_picks(&map, &options);
-    let ai_picks = ai::generate_picks(&state, &map);
+    let player_picks = read_picks(&board, &options);
+    let ai_picks = ai::generate_picks(&state, &board);
 
     picking::resolve_picks(
         &mut state,
         [&player_picks, &ai_picks],
-        &map,
+        &board,
         picking::DEFAULT_STARTING_ARMIES,
     );
     println!("\n\x1b[1mPicking complete! Game begins.\x1b[0m");
 
     // Main game loop.
     loop {
-        display::print_state(&state, &map, PLAYER);
+        display::print_state(&state, &board, PLAYER);
 
         if state.phase == Phase::Finished {
             if state.winner == Some(PLAYER) {
@@ -71,13 +75,13 @@ fn main() {
         }
 
         display::print_help();
-        let player_orders = read_orders(&state, &map);
-        let ai_orders = ai::generate_orders(&state, AI, &map);
+        let player_orders = read_orders(&state, &board);
+        let ai_orders = ai::generate_orders(&state, AI, &board);
 
         let old_state = state.clone();
-        let result = resolve_turn(&state, [player_orders, ai_orders], &map, &mut rng);
+        let result = resolve_turn(&state, [player_orders, ai_orders], &board, &mut rng);
         state = result.state;
-        display::print_turn_summary(&old_state, &state, &map);
+        display::print_turn_summary(&old_state, &state, map);
     }
 }
 
@@ -89,9 +93,10 @@ fn prompt(msg: &str) -> String {
     line.trim().to_string()
 }
 
-fn read_picks(map: &Map, _options: &[usize]) -> Vec<usize> {
+fn read_picks(board: &Board, _options: &[usize]) -> Vec<usize> {
+    let map = &board.map;
     let mut picks = Vec::new();
-    let num = map.picking.num_picks;
+    let num = board.picking().num_picks;
     while picks.len() < num {
         let remaining = num - picks.len();
         let line = prompt(&format!("Pick territory ({} remaining): ", remaining));
@@ -115,9 +120,10 @@ fn read_picks(map: &Map, _options: &[usize]) -> Vec<usize> {
     picks
 }
 
-fn read_orders(state: &GameState, map: &Map) -> Vec<Order> {
+fn read_orders(state: &GameState, board: &Board) -> Vec<Order> {
+    let map = &board.map;
     let mut orders = Vec::new();
-    let income = state.income(PLAYER, map);
+    let income = state.income(PLAYER, board);
     let mut deployed = 0u32;
 
     println!("\x1b[33mYou have {} armies to deploy.\x1b[0m", income);
@@ -142,7 +148,7 @@ fn read_orders(state: &GameState, map: &Map) -> Vec<Order> {
                 break;
             }
             "map" | "m" => {
-                display::print_state(state, map, PLAYER);
+                display::print_state(state, board, PLAYER);
                 continue;
             }
             "help" | "h" | "?" => {

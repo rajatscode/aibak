@@ -10,7 +10,7 @@ use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
 use crate::ai;
-use crate::map::Map;
+use crate::board::Board;
 use crate::orders::Order;
 use crate::state::{GameState, NEUTRAL, Phase, PlayerId};
 use crate::turn::resolve_turn;
@@ -72,13 +72,13 @@ const WEIGHT_DEFENSE: f64 = 0.3;
 /// Uses a logistic function over a weighted advantage score derived from
 /// income ratio, territory ratio, army ratio, bonus control, and
 /// defensive position.
-pub fn quick_win_probability(state: &GameState, map: &Map) -> WinProbability {
+pub fn quick_win_probability(state: &GameState, board: &Board) -> WinProbability {
     // Handle terminal and non-play states.
     if let Some(wp) = terminal_check(state) {
         return wp;
     }
 
-    let p = material_evaluation(state, map);
+    let p = material_evaluation(state, board);
     WinProbability {
         player_0: p,
         player_1: 1.0 - p,
@@ -95,7 +95,8 @@ pub fn quick_win_probability(state: &GameState, map: &Map) -> WinProbability {
 /// - 3x income advantage => ~0.90
 /// - All territories => 1.0
 /// - Zero territories => 0.0
-pub fn material_evaluation(state: &GameState, map: &Map) -> f64 {
+pub fn material_evaluation(state: &GameState, board: &Board) -> f64 {
+    let map = &board.map;
     // Terminal states.
     if state.phase == Phase::Finished {
         return match state.winner {
@@ -116,8 +117,8 @@ pub fn material_evaluation(state: &GameState, map: &Map) -> f64 {
     }
 
     // --- Income advantage ---
-    let p0_income = state.income(0, map) as f64;
-    let p1_income = state.income(1, map) as f64;
+    let p0_income = state.income(0, board) as f64;
+    let p1_income = state.income(1, board) as f64;
     // ln(ratio) so that 2x => ln(2) ~ 0.69, 3x => ln(3) ~ 1.10
     let income_advantage = (p0_income / p1_income.max(1.0)).ln();
 
@@ -136,11 +137,11 @@ pub fn material_evaluation(state: &GameState, map: &Map) -> f64 {
     let army_advantage = (p0_armies.max(1) as f64 / p1_armies.max(1) as f64).ln();
 
     // --- Bonus control advantage ---
-    let bonus_advantage = bonus_control_advantage(state, map);
+    let bonus_advantage = bonus_control_advantage(state, board);
 
     // --- Defensive position advantage ---
-    let p0_exposure = border_exposure(state, 0, map);
-    let p1_exposure = border_exposure(state, 1, map);
+    let p0_exposure = border_exposure(state, 0, board);
+    let p1_exposure = border_exposure(state, 1, board);
     let defense_advantage = p1_exposure - p0_exposure; // less exposure = better
 
     // --- Weighted sum ---
@@ -157,7 +158,8 @@ pub fn material_evaluation(state: &GameState, map: &Map) -> f64 {
 
 /// Compute bonus control advantage for player 0 over player 1.
 /// Owning a complete bonus is worth more than partial progress.
-fn bonus_control_advantage(state: &GameState, map: &Map) -> f64 {
+fn bonus_control_advantage(state: &GameState, board: &Board) -> f64 {
+    let map = &board.map;
     let mut p0_bonus_value = 0.0f64;
     let mut p1_bonus_value = 0.0f64;
 
@@ -206,7 +208,8 @@ fn bonus_control_advantage(state: &GameState, map: &Map) -> f64 {
 
 /// Compute border exposure as a fraction in [0, 1].
 /// Higher means more weak borders (bad).
-fn border_exposure(state: &GameState, player: PlayerId, map: &Map) -> f64 {
+fn border_exposure(state: &GameState, player: PlayerId, board: &Board) -> f64 {
+    let map = &board.map;
     let mut weak_borders = 0u32;
     let mut total_borders = 0u32;
 
@@ -252,27 +255,27 @@ fn border_exposure(state: &GameState, player: PlayerId, map: &Map) -> f64 {
 /// (player 0 first and player 1 first) and averages the resulting
 /// material evaluations. This gives a stable estimate because
 /// combat is deterministic; the only randomness is move order.
-pub fn win_probability_with_lookahead(state: &GameState, map: &Map) -> WinProbability {
+pub fn win_probability_with_lookahead(state: &GameState, board: &Board) -> WinProbability {
     // Handle terminal and non-play states.
     if let Some(wp) = terminal_check(state) {
         return wp;
     }
 
-    let p0_orders = ai::generate_orders(state, 0, map);
-    let p1_orders = ai::generate_orders(state, 1, map);
+    let p0_orders = ai::generate_orders(state, 0, board);
+    let p1_orders = ai::generate_orders(state, 1, board);
 
     // Simulate with player 0 moving first.
     let eval_p0_first = {
         let mut rng = FixedOrderRng { first_player: 0 };
-        let result = resolve_turn(state, [p0_orders.clone(), p1_orders.clone()], map, &mut rng);
-        material_evaluation(&result.state, map)
+        let result = resolve_turn(state, [p0_orders.clone(), p1_orders.clone()], board, &mut rng);
+        material_evaluation(&result.state, board)
     };
 
     // Simulate with player 1 moving first.
     let eval_p1_first = {
         let mut rng = FixedOrderRng { first_player: 1 };
-        let result = resolve_turn(state, [p0_orders, p1_orders], map, &mut rng);
-        material_evaluation(&result.state, map)
+        let result = resolve_turn(state, [p0_orders, p1_orders], board, &mut rng);
+        material_evaluation(&result.state, board)
     };
 
     // Average (since move order is 50/50).
@@ -330,7 +333,7 @@ impl rand::RngCore for FixedOrderRng {
 /// Runs AI-vs-AI simulations but evaluates terminal/timeout positions with
 /// the material evaluation function instead of a simple win/loss count.
 /// This produces smoother, more accurate estimates.
-pub fn full_win_probability(state: &GameState, map: &Map, num_sims: u32) -> WinProbability {
+pub fn full_win_probability(state: &GameState, board: &Board, num_sims: u32) -> WinProbability {
     // Handle terminal and non-play states.
     if let Some(wp) = terminal_check(state) {
         return wp;
@@ -341,7 +344,7 @@ pub fn full_win_probability(state: &GameState, map: &Map, num_sims: u32) -> WinP
 
     for i in 0..num_sims {
         let mut rng = SmallRng::seed_from_u64(i as u64 * 7919 + 42);
-        let eval = simulate_game_material(state, map, max_turns, &mut rng);
+        let eval = simulate_game_material(state, board, max_turns, &mut rng);
         total_eval += eval;
     }
 
@@ -356,32 +359,32 @@ pub fn full_win_probability(state: &GameState, map: &Map, num_sims: u32) -> WinP
 
 /// Simulate a single game to completion, returning the material evaluation
 /// of the final position (not just 1.0/0.0).
-fn simulate_game_material(state: &GameState, map: &Map, max_turns: u32, rng: &mut impl Rng) -> f64 {
+fn simulate_game_material(state: &GameState, board: &Board, max_turns: u32, rng: &mut impl Rng) -> f64 {
     let mut current = state.clone();
 
     for _ in 0..max_turns {
         if current.phase == Phase::Finished {
-            return material_evaluation(&current, map);
+            return material_evaluation(&current, board);
         }
         if current.phase != Phase::Play {
             break;
         }
 
-        let p0_orders = perturbed_orders(&current, 0, map, rng);
-        let p1_orders = perturbed_orders(&current, 1, map, rng);
+        let p0_orders = perturbed_orders(&current, 0, board, rng);
+        let p1_orders = perturbed_orders(&current, 1, board, rng);
 
-        let result = resolve_turn(&current, [p0_orders, p1_orders], map, rng);
+        let result = resolve_turn(&current, [p0_orders, p1_orders], board, rng);
         current = result.state;
     }
 
-    material_evaluation(&current, map)
+    material_evaluation(&current, board)
 }
 
 /// Generate orders with a small random perturbation for simulation diversity.
 fn perturbed_orders(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     rng: &mut impl Rng,
 ) -> Vec<Order> {
     if state.territory_count_for(player) == 0 {
@@ -389,9 +392,9 @@ fn perturbed_orders(
     }
 
     if rng.gen_bool(0.8) {
-        ai::generate_orders(state, player, map)
+        ai::generate_orders(state, player, board)
     } else {
-        random_deploy_greedy(state, player, map, rng)
+        random_deploy_greedy(state, player, board, rng)
     }
 }
 
@@ -399,10 +402,11 @@ fn perturbed_orders(
 fn random_deploy_greedy(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     rng: &mut impl Rng,
 ) -> Vec<Order> {
-    let income = state.income(player, map);
+    let map = &board.map;
+    let income = state.income(player, board);
     if income == 0 {
         return Vec::new();
     }
@@ -418,7 +422,7 @@ fn random_deploy_greedy(
         .collect();
 
     if borders.is_empty() {
-        return ai::generate_orders(state, player, map);
+        return ai::generate_orders(state, player, board);
     }
 
     let deploy_target = borders[rng.gen_range(0..borders.len())];
@@ -449,7 +453,7 @@ fn random_deploy_greedy(
         if defenders == 0 || attackers == 0 {
             continue;
         }
-        let result = crate::combat::resolve_attack(attackers, defenders, &map.settings);
+        let result = crate::combat::resolve_attack(attackers, defenders, board.settings());
         if result.captured {
             orders.push(Order::Attack {
                 from: deploy_target,
@@ -471,13 +475,14 @@ fn random_deploy_greedy(
 ///
 /// Records the material evaluation at each turn and tracks who won,
 /// producing a mapping from material evaluation bucket to actual win rate.
-pub fn calibrate_evaluation(map: &Map, num_games: u32) -> EvalCalibration {
+pub fn calibrate_evaluation(board: &Board, num_games: u32) -> EvalCalibration {
+    let map = &board.map;
     let mut bucket_wins = [0.0f64; 10];
     let mut bucket_counts = [0u32; 10];
 
     for game_idx in 0..num_games {
         let mut rng = SmallRng::seed_from_u64(game_idx as u64 * 104729 + 7);
-        let mut state = GameState::new(map);
+        let mut state = GameState::new(board);
 
         // Quick setup: assign territories round-robin for calibration.
         let n = map.territory_count();
@@ -496,12 +501,12 @@ pub fn calibrate_evaluation(map: &Map, num_games: u32) -> EvalCalibration {
                 break;
             }
 
-            let eval = material_evaluation(&state, map);
+            let eval = material_evaluation(&state, board);
             turn_evals.push(eval);
 
-            let p0_orders = ai::generate_orders(&state, 0, map);
-            let p1_orders = ai::generate_orders(&state, 1, map);
-            let result = resolve_turn(&state, [p0_orders, p1_orders], map, &mut rng);
+            let p0_orders = ai::generate_orders(&state, 0, board);
+            let p1_orders = ai::generate_orders(&state, 1, board);
+            let result = resolve_turn(&state, [p0_orders, p1_orders], board, &mut rng);
             state = result.state;
         }
 
@@ -509,7 +514,7 @@ pub fn calibrate_evaluation(map: &Map, num_games: u32) -> EvalCalibration {
         let outcome = if state.phase == Phase::Finished {
             if state.winner == Some(0) { 1.0 } else { 0.0 }
         } else {
-            material_evaluation(&state, map)
+            material_evaluation(&state, board)
         };
 
         // Record each turn's eval and the game outcome.
@@ -549,7 +554,7 @@ pub fn calibrated_eval(raw_eval: f64, calibration: &EvalCalibration) -> f64 {
 /// Kept as `monte_carlo_win_probability` for comparison with the new methods.
 pub fn monte_carlo_win_probability(
     state: &GameState,
-    map: &Map,
+    board: &Board,
     num_simulations: u32,
     max_turns: u32,
 ) -> WinProbability {
@@ -562,7 +567,7 @@ pub fn monte_carlo_win_probability(
 
     for i in 0..num_simulations {
         let mut rng = SmallRng::seed_from_u64(i as u64 * 7919 + 42);
-        let result = simulate_game_legacy(state, map, max_turns, &mut rng);
+        let result = simulate_game_legacy(state, board, max_turns, &mut rng);
         p0_wins += result;
         p1_wins += 1.0 - result;
     }
@@ -578,15 +583,15 @@ pub fn monte_carlo_win_probability(
 /// Legacy: kept as the old `estimate_win_probability` for backward compatibility.
 pub fn estimate_win_probability(
     state: &GameState,
-    map: &Map,
+    board: &Board,
     num_simulations: u32,
     max_turns: u32,
 ) -> WinProbability {
-    monte_carlo_win_probability(state, map, num_simulations, max_turns)
+    monte_carlo_win_probability(state, board, num_simulations, max_turns)
 }
 
 /// Simulate a single game (legacy method using mcts::evaluate_position).
-fn simulate_game_legacy(state: &GameState, map: &Map, max_turns: u32, rng: &mut impl Rng) -> f64 {
+fn simulate_game_legacy(state: &GameState, board: &Board, max_turns: u32, rng: &mut impl Rng) -> f64 {
     let mut current = state.clone();
 
     for _ in 0..max_turns {
@@ -597,17 +602,17 @@ fn simulate_game_legacy(state: &GameState, map: &Map, max_turns: u32, rng: &mut 
             break;
         }
 
-        let p0_orders = perturbed_orders(&current, 0, map, rng);
-        let p1_orders = perturbed_orders(&current, 1, map, rng);
+        let p0_orders = perturbed_orders(&current, 0, board, rng);
+        let p1_orders = perturbed_orders(&current, 1, board, rng);
 
-        let result = resolve_turn(&current, [p0_orders, p1_orders], map, rng);
+        let result = resolve_turn(&current, [p0_orders, p1_orders], board, rng);
         current = result.state;
     }
 
     if current.phase == Phase::Finished {
         if current.winner == Some(0) { 1.0 } else { 0.0 }
     } else {
-        crate::mcts::evaluate_position(&current, 0, map)
+        crate::mcts::evaluate_position(&current, 0, board)
     }
 }
 
@@ -653,10 +658,11 @@ fn terminal_check(state: &GameState) -> Option<WinProbability> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+    use crate::board::Board;
+    use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
 
-    fn test_map() -> Map {
-        Map {
+    fn test_map() -> MapFile {
+        MapFile {
             id: "test".into(),
             name: "Test".into(),
             territories: vec![
@@ -729,8 +735,8 @@ mod tests {
         }
     }
 
-    fn symmetric_state(map: &Map) -> GameState {
-        let mut state = GameState::new(map);
+    fn symmetric_state(board: &Board) -> GameState {
+        let mut state = GameState::new(board);
         state.territory_owners = vec![0, 0, 1, 1];
         state.territory_armies = vec![5, 5, 5, 5];
         state.phase = Phase::Play;
@@ -743,8 +749,9 @@ mod tests {
     #[test]
     fn test_quick_symmetric_position_near_half() {
         let map = test_map();
-        let state = symmetric_state(&map);
-        let wp = quick_win_probability(&state, &map);
+        let board = Board::from_map(map);
+        let state = symmetric_state(&board);
+        let wp = quick_win_probability(&state, &board);
         assert!(
             (wp.player_0 - 0.5).abs() < 0.1,
             "symmetric position should be ~0.5, got {}",
@@ -762,7 +769,8 @@ mod tests {
         // and player 1 only base income (5).
         // To get ~3x, we need an even bigger gap. Let's use a custom map.
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners = vec![0, 0, 0, 1]; // p0 owns A,B,C => bonus Left complete
         state.territory_armies = vec![10, 10, 10, 2];
         state.phase = Phase::Play;
@@ -770,7 +778,7 @@ mod tests {
         // p0 income: 5 (base) + 2 (Left bonus) = 7
         // p1 income: 5 (base)
         // plus army and territory advantage
-        let wp = quick_win_probability(&state, &map);
+        let wp = quick_win_probability(&state, &board);
         assert!(
             wp.player_0 > 0.7,
             "dominant position with income+territory+army advantage should be >0.7, got {}",
@@ -781,11 +789,12 @@ mod tests {
     #[test]
     fn test_quick_finished_game_p0_wins() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.phase = Phase::Finished;
         state.winner = Some(0);
 
-        let wp = quick_win_probability(&state, &map);
+        let wp = quick_win_probability(&state, &board);
         assert_eq!(wp.player_0, 1.0);
         assert_eq!(wp.player_1, 0.0);
     }
@@ -793,11 +802,12 @@ mod tests {
     #[test]
     fn test_quick_finished_game_p1_wins() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.phase = Phase::Finished;
         state.winner = Some(1);
 
-        let wp = quick_win_probability(&state, &map);
+        let wp = quick_win_probability(&state, &board);
         assert_eq!(wp.player_0, 0.0);
         assert_eq!(wp.player_1, 1.0);
     }
@@ -805,8 +815,9 @@ mod tests {
     #[test]
     fn test_quick_picking_phase() {
         let map = test_map();
-        let state = GameState::new(&map);
-        let wp = quick_win_probability(&state, &map);
+        let board = Board::from_map(map);
+        let state = GameState::new(&board);
+        let wp = quick_win_probability(&state, &board);
         assert_eq!(wp.player_0, 0.5);
         assert_eq!(wp.player_1, 0.5);
     }
@@ -814,26 +825,28 @@ mod tests {
     #[test]
     fn test_quick_elimination_p0_has_zero() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners = vec![1, 1, 1, 1];
         state.territory_armies = vec![5, 5, 5, 5];
         state.phase = Phase::Play;
         state.turn = 1;
 
-        let eval = material_evaluation(&state, &map);
+        let eval = material_evaluation(&state, &board);
         assert_eq!(eval, 0.0, "player 0 with zero territories should be 0.0");
     }
 
     #[test]
     fn test_quick_elimination_p1_has_zero() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners = vec![0, 0, 0, 0];
         state.territory_armies = vec![5, 5, 5, 5];
         state.phase = Phase::Play;
         state.turn = 1;
 
-        let eval = material_evaluation(&state, &map);
+        let eval = material_evaluation(&state, &board);
         assert_eq!(eval, 1.0, "player 1 with zero territories should give 1.0");
     }
 
@@ -842,8 +855,9 @@ mod tests {
     #[test]
     fn test_lookahead_symmetric() {
         let map = test_map();
-        let state = symmetric_state(&map);
-        let wp = win_probability_with_lookahead(&state, &map);
+        let board = Board::from_map(map);
+        let state = symmetric_state(&board);
+        let wp = win_probability_with_lookahead(&state, &board);
         // After one turn of greedy play from a symmetric position,
         // should still be roughly balanced.
         assert!(
@@ -860,11 +874,12 @@ mod tests {
     #[test]
     fn test_lookahead_finished_game() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.phase = Phase::Finished;
         state.winner = Some(0);
 
-        let wp = win_probability_with_lookahead(&state, &map);
+        let wp = win_probability_with_lookahead(&state, &board);
         assert_eq!(wp.player_0, 1.0);
     }
 
@@ -873,8 +888,9 @@ mod tests {
     #[test]
     fn test_full_symmetric() {
         let map = test_map();
-        let state = symmetric_state(&map);
-        let wp = full_win_probability(&state, &map, 20);
+        let board = Board::from_map(map);
+        let state = symmetric_state(&board);
+        let wp = full_win_probability(&state, &board, 20);
         assert!(
             wp.player_0 > 0.1 && wp.player_0 < 0.9,
             "full eval of symmetric position should be roughly balanced, got {}",
@@ -886,13 +902,14 @@ mod tests {
     #[test]
     fn test_full_dominant_position() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners = vec![0, 0, 0, 1];
         state.territory_armies = vec![10, 10, 10, 1];
         state.phase = Phase::Play;
         state.turn = 1;
 
-        let wp = full_win_probability(&state, &map, 30);
+        let wp = full_win_probability(&state, &board, 30);
         assert!(
             wp.player_0 > 0.6,
             "dominant position should strongly favor player 0, got {}",
@@ -903,8 +920,9 @@ mod tests {
     #[test]
     fn test_full_sums_to_one() {
         let map = test_map();
-        let state = symmetric_state(&map);
-        let wp = full_win_probability(&state, &map, 10);
+        let board = Board::from_map(map);
+        let state = symmetric_state(&board);
+        let wp = full_win_probability(&state, &board, 10);
         let sum = wp.player_0 + wp.player_1;
         assert!(
             (sum - 1.0).abs() < 0.01,
@@ -918,8 +936,9 @@ mod tests {
     #[test]
     fn test_legacy_estimate_win_probability() {
         let map = test_map();
-        let state = symmetric_state(&map);
-        let wp = estimate_win_probability(&state, &map, 20, 15);
+        let board = Board::from_map(map);
+        let state = symmetric_state(&board);
+        let wp = estimate_win_probability(&state, &board, 20, 15);
         assert!(wp.player_0 >= 0.0 && wp.player_0 <= 1.0);
         assert!((wp.player_0 + wp.player_1 - 1.0).abs() < 0.01);
         assert_eq!(wp.simulations_run, 20);
@@ -928,11 +947,12 @@ mod tests {
     #[test]
     fn test_legacy_finished_game() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.phase = Phase::Finished;
         state.winner = Some(0);
 
-        let wp = estimate_win_probability(&state, &map, 100, 50);
+        let wp = estimate_win_probability(&state, &board, 100, 50);
         assert_eq!(wp.player_0, 1.0);
         assert_eq!(wp.player_1, 0.0);
         assert_eq!(wp.simulations_run, 0);
@@ -943,7 +963,8 @@ mod tests {
     #[test]
     fn test_calibration_produces_valid_buckets() {
         let map = test_map();
-        let cal = calibrate_evaluation(&map, 5);
+        let board = Board::from_map(map);
+        let cal = calibrate_evaluation(&board, 5);
         for &v in &cal.buckets {
             assert!(
                 v >= 0.0 && v <= 1.0,
@@ -974,18 +995,19 @@ mod tests {
     #[test]
     fn test_material_eval_more_income_is_better() {
         let map = test_map();
+        let board = Board::from_map(map);
 
         // Symmetric.
-        let state_sym = symmetric_state(&map);
-        let eval_sym = material_evaluation(&state_sym, &map);
+        let state_sym = symmetric_state(&board);
+        let eval_sym = material_evaluation(&state_sym, &board);
 
         // Player 0 owns 3 territories including full Left bonus.
-        let mut state_adv = GameState::new(&map);
+        let mut state_adv = GameState::new(&board);
         state_adv.territory_owners = vec![0, 0, 0, 1];
         state_adv.territory_armies = vec![5, 5, 5, 5];
         state_adv.phase = Phase::Play;
         state_adv.turn = 1;
-        let eval_adv = material_evaluation(&state_adv, &map);
+        let eval_adv = material_evaluation(&state_adv, &board);
 
         assert!(
             eval_adv > eval_sym,

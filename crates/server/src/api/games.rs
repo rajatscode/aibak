@@ -6,8 +6,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use strat_engine::board::Board;
 use strat_engine::fog;
-use strat_engine::map::Map;
+use strat_engine::map::MapFile;
 use strat_engine::state::GameState;
 
 use crate::AppState;
@@ -125,9 +126,10 @@ pub async fn get_game(
     {
         let game_state: GameState = serde_json::from_value(state_json.clone())
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        let map: Map = serde_json::from_value(map_json.clone())
+        let map_file: MapFile = serde_json::from_value(map_json.clone())
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        let filtered = fog::fog_filter(&game_state, seat, &map);
+        let board = Board::from_map(map_file);
+        let filtered = fog::fog_filter(&game_state, seat, &board);
         Some(
             serde_json::to_value(&filtered)
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,

@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::board::Board;
 use crate::cards::Card;
-use crate::map::Map;
 
 /// Player seat index: 0 or 1.
 pub type PlayerId = u8;
@@ -35,13 +35,13 @@ pub struct GameState {
 }
 
 impl GameState {
-    /// Create initial state from a map. All territories are neutral with default armies.
-    pub fn new(map: &Map) -> Self {
-        let n = map.territory_count();
+    /// Create initial state from a board. All territories are neutral with default armies.
+    pub fn new(board: &Board) -> Self {
+        let n = board.map.territory_count();
         let mut territory_armies = Vec::with_capacity(n);
-        for t in &map.territories {
+        for t in &board.map.territories {
             if t.is_wasteland {
-                territory_armies.push(map.settings.wasteland_armies);
+                territory_armies.push(board.settings().wasteland_armies);
             } else {
                 territory_armies.push(t.default_armies);
             }
@@ -60,9 +60,9 @@ impl GameState {
     }
 
     /// Calculate income for a player: base + sum of completed bonuses.
-    pub fn income(&self, player: PlayerId, map: &Map) -> u32 {
-        let mut income = map.settings.base_income;
-        for bonus in &map.bonuses {
+    pub fn income(&self, player: PlayerId, board: &Board) -> u32 {
+        let mut income = board.settings().base_income;
+        for bonus in &board.map.bonuses {
             let owns_all = bonus
                 .territory_ids
                 .iter()

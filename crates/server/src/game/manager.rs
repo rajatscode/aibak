@@ -8,7 +8,8 @@ use sqlx::PgPool;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use strat_engine::map::Map;
+use strat_engine::board::Board;
+use strat_engine::map::MapFile;
 use strat_engine::orders::Order;
 use strat_engine::picking;
 use strat_engine::state::{GameState, Phase};
@@ -77,9 +78,9 @@ impl GameManager {
     }
 
     /// Load a map template by name.
-    fn load_map(template: &str) -> Result<Map, GameError> {
+    fn load_map(template: &str) -> Result<MapFile, GameError> {
         let path = PathBuf::from(format!("maps/{}.json", template));
-        Map::load(&path).map_err(|_| GameError::MapNotFound(template.to_string()))
+        MapFile::load(&path).map_err(|_| GameError::MapNotFound(template.to_string()))
     }
 
     /// Create a new game in "waiting" status.
@@ -88,12 +89,13 @@ impl GameManager {
         user_id: Uuid,
         template: &str,
     ) -> Result<db::GameRow, GameError> {
-        let map = Self::load_map(template)?;
-        let game_state = GameState::new(&map);
+        let map_file = Self::load_map(template)?;
+        let map_json =
+            serde_json::to_value(&map_file).map_err(|e| GameError::Serialization(e.to_string()))?;
+        let board = Board::from_map(map_file);
+        let game_state = GameState::new(&board);
         let state_json = serde_json::to_value(&game_state)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
-        let map_json =
-            serde_json::to_value(&map).map_err(|e| GameError::Serialization(e.to_string()))?;
         let row = db::create_game(&self.pool, template, user_id, &state_json, &map_json).await?;
         Ok(row)
     }
@@ -119,14 +121,15 @@ impl GameManager {
             return Err(GameError::GameFull);
         }
 
-        // Parse map from stored JSON.
-        let map: Map = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+        // Parse map from stored JSON and wrap in Board.
+        let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let board = Board::from_map(map_file);
 
         // Generate pick options.
         let pick_options = {
             let mut rng = self.rng.lock().await;
-            picking::generate_pick_options(&map, &mut *rng)
+            picking::generate_pick_options(&board, &mut *rng)
         };
         let pick_json = serde_json::to_value(&pick_options)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
@@ -183,13 +186,14 @@ impl GameManager {
 
         let seat = self.player_seat(&game, user_id)?;
 
-        let map: Map = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+        let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let board = Board::from_map(map_file);
 
-        if picks.len() != map.picking.num_picks {
+        if picks.len() != board.picking().num_picks {
             return Err(GameError::InvalidPicks(format!(
                 "need exactly {} picks, got {}",
-                map.picking.num_picks,
+                board.picking().num_picks,
                 picks.len()
             )));
         }
@@ -224,7 +228,7 @@ impl GameManager {
         picking::resolve_picks(
             &mut state,
             [&player_picks[0], &player_picks[1]],
-            &map,
+            &board,
             picking::DEFAULT_STARTING_ARMIES,
         );
 
@@ -333,8 +337,9 @@ impl GameManager {
         game: &db::GameRow,
         all_orders: &[db::OrderRow],
     ) -> Result<(), GameError> {
-        let map: Map = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+        let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let board = Board::from_map(map_file);
 
         let state: GameState =
             serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
@@ -350,7 +355,7 @@ impl GameManager {
 
         let result = {
             let mut rng = self.rng.lock().await;
-            resolve_turn(&state, player_orders, &map, &mut *rng)
+            resolve_turn(&state, player_orders, &board, &mut *rng)
         };
 
         let new_state = result.state;

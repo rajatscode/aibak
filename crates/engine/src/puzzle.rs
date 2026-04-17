@@ -2,8 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::board::Board;
 use crate::combat::resolve_attack;
-use crate::map::{Bonus, Map, MapSettings, PickingConfig, PickingMethod, Territory};
+use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
 use crate::orders::Order;
 use crate::state::{GameState, Phase, PlayerId};
 
@@ -33,7 +34,7 @@ pub enum PuzzleType {
 pub struct Puzzle {
     pub id: u32,
     pub state: GameState,
-    pub map: Map,
+    pub board: Board,
     pub description: String,
     pub hint: String,
     pub optimal_orders: Vec<Order>,
@@ -237,7 +238,7 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
         },
     ];
 
-    let map = Map {
+    let map = MapFile {
         id: format!("puzzle_{}", id),
         name: format!("Puzzle #{}", id),
         territories,
@@ -248,9 +249,10 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
         },
         settings: default_settings(),
     };
+    let board = Board::from_map(map);
 
     // Set up game state: player owns all bonus territories except one.
-    let mut state = GameState::new(&map);
+    let mut state = GameState::new(&board);
     state.phase = Phase::Play;
     state.turn = 1;
 
@@ -276,11 +278,11 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
     }
 
     // Calculate the income player 0 gets.
-    let income = state.income(0, &map);
+    let income = state.income(0, &board);
 
     // Find the optimal deploy territory: the one adjacent to the target.
     let deploy_territory = (0..bonus_size - 1)
-        .find(|&i| map.are_adjacent(i, target_territory))
+        .find(|&i| board.map.are_adjacent(i, target_territory))
         .unwrap_or(0);
 
     // Calculate required attackers: need to kill all defenders.
@@ -303,7 +305,7 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
     ];
 
     // Verify the attack actually works.
-    let result = resolve_attack(total_attackable, target_defenders, &map.settings);
+    let result = resolve_attack(total_attackable, target_defenders, board.settings());
 
     // If it doesn't capture, adjust defenders down so it does.
     let final_defenders = if !result.captured {
@@ -311,7 +313,7 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
         let mut d = target_defenders;
         while d > 1 {
             d -= 1;
-            let r = resolve_attack(total_attackable, d, &map.settings);
+            let r = resolve_attack(total_attackable, d, board.settings());
             if r.captured {
                 break;
             }
@@ -324,22 +326,22 @@ fn generate_capture_bonus(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
 
     let description = format!(
         "Capture {} to complete the {} bonus (+{} income). You have {} armies to deploy.",
-        map.territories[target_territory].name, map.bonuses[0].name, bonus_value, income
+        board.map.territories[target_territory].name, board.map.bonuses[0].name, bonus_value, income
     );
 
     let hint = format!(
         "Deploy all {} armies to {} and attack {} with maximum force. \
          You need to overwhelm {} defenders.",
         income,
-        map.territories[deploy_territory].name,
-        map.territories[target_territory].name,
+        board.map.territories[deploy_territory].name,
+        board.map.territories[target_territory].name,
         final_defenders
     );
 
     Puzzle {
         id,
         state,
-        map,
+        board,
         description,
         hint,
         optimal_orders,
@@ -453,7 +455,7 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
         },
     ];
 
-    let map = Map {
+    let map = MapFile {
         id: format!("puzzle_{}", id),
         name: format!("Puzzle #{}", id),
         territories,
@@ -464,8 +466,9 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
         },
         settings: default_settings(),
     };
+    let board = Board::from_map(map);
 
-    let mut state = GameState::new(&map);
+    let mut state = GameState::new(&board);
     state.phase = Phase::Play;
     state.turn = 1;
 
@@ -492,7 +495,7 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
         };
     }
 
-    let income = state.income(0, &map);
+    let income = state.income(0, &board);
     let border_territory = player_count - 1; // territory 2
 
     // The optimal play: deploy ALL income to the border territory to survive.
@@ -502,14 +505,14 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
     let defenders_after_deploy = state.territory_armies[border_territory] + income;
 
     // Verify: can we survive?
-    let result = resolve_attack(enemy_attackers, defenders_after_deploy, &map.settings);
+    let result = resolve_attack(enemy_attackers, defenders_after_deploy, board.settings());
     // If we can't survive, reduce enemy strength.
     let final_enemy_strength = if result.captured {
         // Find an enemy strength where deploying all to border survives.
         let mut s = enemy_attack_strength;
         while s > 3 {
             s -= 1;
-            let r = resolve_attack(s - 1, defenders_after_deploy, &map.settings);
+            let r = resolve_attack(s - 1, defenders_after_deploy, board.settings());
             if !r.captured {
                 break;
             }
@@ -529,8 +532,8 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
         "The enemy has {} armies at {} ready to strike your border at {}. \
          Deploy your {} income wisely to survive the assault.",
         final_enemy_strength,
-        map.territories[enemy_attack_territory].name,
-        map.territories[border_territory].name,
+        board.map.territories[enemy_attack_territory].name,
+        board.map.territories[border_territory].name,
         income
     );
 
@@ -538,14 +541,14 @@ fn generate_defend_or_die(id: u32, difficulty: PuzzleDifficulty, rng: &mut Simpl
         "Deploy all {} armies to {} to maximize your defense. \
          The enemy will attack with {} armies -- you need enough defenders to hold.",
         income,
-        map.territories[border_territory].name,
+        board.map.territories[border_territory].name,
         final_enemy_strength - 1
     );
 
     Puzzle {
         id,
         state,
-        map,
+        board,
         description,
         hint,
         optimal_orders,
@@ -709,7 +712,7 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
         },
     ];
 
-    let map = Map {
+    let map = MapFile {
         id: format!("puzzle_{}", id),
         name: format!("Puzzle #{}", id),
         territories,
@@ -720,8 +723,9 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
         },
         settings: default_settings(),
     };
+    let board = Board::from_map(map);
 
-    let mut state = GameState::new(&map);
+    let mut state = GameState::new(&board);
     state.phase = Phase::Play;
     state.turn = 1;
 
@@ -755,12 +759,12 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
         }
     }
 
-    let income = state.income(0, &map);
+    let income = state.income(0, &board);
 
     // Calculate optimal split: find minimum armies to capture each target.
     // For left: need attackers such that resolve_attack(attackers, left_defenders) captures.
-    let left_min = min_attackers_to_capture(left_defenders, &map.settings);
-    let right_min = min_attackers_to_capture(right_defenders, &map.settings);
+    let left_min = min_attackers_to_capture(left_defenders, board.settings());
+    let right_min = min_attackers_to_capture(right_defenders, board.settings());
 
     // Deploy armies to make both attacks work.
     // Left arm (territory 1) needs: left_min + 1 - current_armies
@@ -780,8 +784,8 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
     // Recalculate after potential adjustment.
     let left_defenders_final = state.territory_armies[3];
     let right_defenders_final = state.territory_armies[4];
-    let left_min = min_attackers_to_capture(left_defenders_final, &map.settings);
-    let _right_min = min_attackers_to_capture(right_defenders_final, &map.settings);
+    let left_min = min_attackers_to_capture(left_defenders_final, board.settings());
+    let _right_min = min_attackers_to_capture(right_defenders_final, board.settings());
 
     let left_existing = state.territory_armies[1];
     let right_existing = state.territory_armies[2];
@@ -829,9 +833,9 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
     let description = format!(
         "Attack on two fronts! Capture both {} ({} defenders) and {} ({} defenders) \
          in a single turn. You have {} armies to deploy.",
-        map.territories[3].name,
+        board.map.territories[3].name,
         left_defenders_final,
-        map.territories[4].name,
+        board.map.territories[4].name,
         right_defenders_final,
         income
     );
@@ -839,13 +843,13 @@ fn generate_multi_front(id: u32, difficulty: PuzzleDifficulty, rng: &mut SimpleR
     let hint = format!(
         "Split your {} deploy armies between {} and {}. \
          Each attack needs enough force to overwhelm the defenders.",
-        income, map.territories[1].name, map.territories[2].name,
+        income, board.map.territories[1].name, board.map.territories[2].name,
     );
 
     Puzzle {
         id,
         state,
-        map,
+        board,
         description,
         hint,
         optimal_orders,
@@ -873,7 +877,7 @@ fn min_attackers_to_capture(defenders: u32, settings: &MapSettings) -> u32 {
 /// Check whether a player's submitted orders achieve the puzzle objective and match the optimal solution.
 pub fn check_solution(puzzle: &Puzzle, submitted_orders: &[Order]) -> PuzzleResult {
     // Simulate the submitted orders to see the outcome.
-    let settings = &puzzle.map.settings;
+    let settings = puzzle.board.settings();
 
     // First, validate deploy amounts.
     let mut total_deployed = 0u32;
@@ -961,7 +965,7 @@ pub fn check_solution(puzzle: &Puzzle, submitted_orders: &[Order]) -> PuzzleResu
     let objective_met = match puzzle.puzzle_type {
         PuzzleType::CaptureTheBonus => {
             // Check if the target bonus is complete.
-            puzzle.map.bonuses[0]
+            puzzle.board.map.bonuses[0]
                 .territory_ids
                 .iter()
                 .all(|&tid| sim_state.territory_owners[tid] == puzzle.player)

@@ -21,9 +21,10 @@ use tracing::info;
 
 use strat_engine::ai::{self, AiStrength};
 use strat_engine::analysis;
+use strat_engine::board::Board;
 use strat_engine::fog;
 use strat_engine::game_analysis;
-use strat_engine::map::Map;
+use strat_engine::map::{Map, MapFile};
 use strat_engine::openings;
 use strat_engine::orders::Order;
 use strat_engine::picking;
@@ -78,7 +79,7 @@ impl AppState {
 // ── Local play state (preserved from original server) ──
 
 pub struct LocalState {
-    map: Map,
+    board: Board,
     game: GameState,
     rng: StdRng,
     pick_options: Vec<usize>,
@@ -206,16 +207,17 @@ struct ActionResult {
 }
 
 fn build_game_view(app: &LocalState) -> GameView {
-    let visible = fog::visible_territories(&app.game, PLAYER, &app.map);
+    let visible = fog::visible_territories(&app.game, PLAYER, &app.board);
     let is_picking = app.game.phase == Phase::Picking;
 
     let territories: Vec<TerritoryView> = app
+        .board
         .map
         .territories
         .iter()
         .enumerate()
         .map(|(i, t)| {
-            let is_visible = is_picking || visible.contains(&i) || !app.map.settings.fog_of_war;
+            let is_visible = is_picking || visible.contains(&i) || !app.board.config.settings.fog_of_war;
             let (lx, ly) = t
                 .visual
                 .as_ref()
@@ -245,6 +247,7 @@ fn build_game_view(app: &LocalState) -> GameView {
         .collect();
 
     let bonuses: Vec<BonusView> = app
+        .board
         .map
         .bonuses
         .iter()
@@ -266,7 +269,7 @@ fn build_game_view(app: &LocalState) -> GameView {
         .collect();
 
     // Compute win probability using fast material evaluation (< 1ms).
-    let wp = analysis::quick_win_probability(&app.game, &app.map);
+    let wp = analysis::quick_win_probability(&app.game, &app.board);
 
     GameView {
         phase: match app.game.phase {
@@ -275,13 +278,13 @@ fn build_game_view(app: &LocalState) -> GameView {
             Phase::Finished => "finished".into(),
         },
         turn: app.game.turn,
-        income: app.game.income(PLAYER, &app.map),
-        base_income: app.map.settings.base_income,
+        income: app.game.income(PLAYER, &app.board),
+        base_income: app.board.config.settings.base_income,
         my_territories: app.game.territory_count_for(PLAYER) as u32,
         enemy_territories: app.game.territory_count_for(AI_PLAYER) as u32,
         winner: app.game.winner,
         pick_options: app.pick_options.clone(),
-        picks_needed: app.map.picking.num_picks,
+        picks_needed: app.board.config.picking.num_picks,
         territories,
         bonuses,
         history: app.turn_history.clone(),
@@ -337,7 +340,7 @@ async fn submit_local_picks(
         return Err((StatusCode::BAD_REQUEST, "Not in picking phase".into()));
     }
 
-    let needed = app.map.picking.num_picks;
+    let needed = app.board.config.picking.num_picks;
     if body.picks.len() < needed {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -347,7 +350,7 @@ async fn submit_local_picks(
 
     // Track pick choices in local stats.
     for &tid in &body.picks {
-        if let Some(t) = app.map.territories.get(tid) {
+        if let Some(t) = app.board.map.territories.get(tid) {
             let name = t.name.clone();
             if let Some(entry) = app
                 .local_stats
@@ -362,14 +365,14 @@ async fn submit_local_picks(
         }
     }
 
-    let ai_picks = ai::generate_picks(&app.game, &app.map);
-    let map = app.map.clone();
+    let ai_picks = ai::generate_picks(&app.game, &app.board);
+    let board = app.board.clone();
 
     let starting_armies = app.starting_armies;
     picking::resolve_picks(
         &mut app.game,
         [&body.picks, &ai_picks],
-        &map,
+        &board,
         starting_armies,
     );
 
@@ -396,20 +399,20 @@ async fn submit_local_orders(
         return Err((StatusCode::BAD_REQUEST, "Not in play phase".into()));
     }
 
-    let visible_before = fog::visible_territories(&app.game, PLAYER, &app.map);
+    let visible_before = fog::visible_territories(&app.game, PLAYER, &app.board);
 
     // Snapshot the current state before resolving orders (for replay).
     let state_snapshot = app.game.clone();
     app.state_history.push(state_snapshot);
 
     let ai_orders =
-        ai::generate_orders_for_strength(&app.game, AI_PLAYER, &app.map, app.ai_strength);
+        ai::generate_orders_for_strength(&app.game, AI_PLAYER, &app.board, app.ai_strength);
     let game_clone = app.game.clone();
-    let map = app.map.clone();
 
-    let result = resolve_turn(&game_clone, [body.orders, ai_orders], &map, &mut app.rng);
+    let board = app.board.clone();
+    let result = resolve_turn(&game_clone, [body.orders, ai_orders], &board, &mut app.rng);
 
-    let visible_after = fog::visible_territories(&result.state, PLAYER, &app.map);
+    let visible_after = fog::visible_territories(&result.state, PLAYER, &app.board);
     let filtered_events = fog_filter_events(&result.events, &visible_before, &visible_after);
 
     let turn_num = app.game.turn;
@@ -422,6 +425,7 @@ async fn submit_local_orders(
 
     // Track max simultaneous bonuses owned by the player this turn.
     let bonuses_owned_now = app
+        .board
         .map
         .bonuses
         .iter()
@@ -436,7 +440,7 @@ async fn submit_local_orders(
     }
 
     // Record win probability after the turn resolves (1-ply lookahead for history).
-    let wp = analysis::win_probability_with_lookahead(&app.game, &app.map);
+    let wp = analysis::win_probability_with_lookahead(&app.game, &app.board);
     app.win_prob_history.push(wp.player_0);
 
     let mut newly_earned_achievements: Vec<achievements::EarnedAchievement> = Vec::new();
@@ -465,7 +469,7 @@ async fn submit_local_orders(
         let new_rating = app.local_stats.rating.rating;
         app.local_stats.rating_history.push(new_rating);
         // Record per-game metadata.
-        let map_name = app.map.name.clone();
+        let map_name = app.board.map.name.clone();
         let game_turn = app.game.turn;
         let start_wp = app.win_prob_history.first().copied().unwrap_or(0.5);
         app.local_stats.game_maps.push(map_name);
@@ -474,6 +478,7 @@ async fn submit_local_orders(
         app.local_stats.start_win_probs.push(start_wp);
         // Track bonus captures: bonuses fully owned by the player at game end.
         let bonus_data: Vec<(String, bool)> = app
+            .board
             .map
             .bonuses
             .iter()
@@ -594,9 +599,9 @@ async fn new_local_game(
     // Load a different map if requested.
     if !template.is_empty() {
         let map_path = format!("maps/{}.json", template);
-        match Map::load(&PathBuf::from(&map_path)) {
+        match MapFile::load(&PathBuf::from(&map_path)) {
             Ok(new_map) => {
-                app.map = new_map;
+                app.board = Board::from_map(new_map);
             }
             Err(e) => {
                 return Json(ActionResult {
@@ -612,13 +617,13 @@ async fn new_local_game(
     // Apply custom game settings if provided.
     if let Some(ref s) = settings {
         if let Some(fog) = s.fog_of_war {
-            app.map.settings.fog_of_war = fog;
+            app.board.config.settings.fog_of_war = fog;
         }
         if let Some(income) = s.base_income {
-            app.map.settings.base_income = income;
+            app.board.config.settings.base_income = income;
         }
         if let Some(num_picks) = s.num_picks {
-            app.map.picking.num_picks = num_picks;
+            app.board.config.picking.num_picks = num_picks;
         }
         if let Some(ref difficulty) = s.ai_difficulty {
             app.ai_strength = match difficulty.as_str() {
@@ -635,18 +640,19 @@ async fn new_local_game(
         .and_then(|s| s.starting_armies)
         .unwrap_or(picking::DEFAULT_STARTING_ARMIES);
 
-    let map = app.map.clone();
-    app.game = GameState::new(&map);
+    app.game = GameState::new(&app.board);
     app.rng = StdRng::from_entropy();
-    app.pick_options = picking::generate_pick_options(&map, &mut app.rng);
+    let board_ref = app.board.clone();
+    app.pick_options = picking::generate_pick_options(&board_ref, &mut app.rng);
     app.turn_history.clear();
     app.state_history.clear();
     app.win_prob_history.clear();
     app.starting_territories.clear();
     app.max_simultaneous_bonuses = 0;
+    let board_name = app.board.name.clone();
     Json(ActionResult {
         success: true,
-        message: format!("New game on {}", map.name),
+        message: format!("New game on {}", board_name),
         events: Vec::new(),
         new_achievements: Vec::new(),
     })
@@ -674,6 +680,7 @@ async fn get_replay_turn(
 
     // Replay is fog-free — show the full board state for both players.
     let territories: Vec<TerritoryView> = app
+        .board
         .map
         .territories
         .iter()
@@ -867,7 +874,7 @@ async fn auth_me(
 
 async fn get_analysis(State(state): State<AppState>) -> Json<serde_json::Value> {
     let app = state.local.lock().unwrap();
-    let wp = analysis::full_win_probability(&app.game, &app.map, 200);
+    let wp = analysis::full_win_probability(&app.game, &app.board, 200);
     Json(serde_json::json!({
         "win_probability": {
             "player_0": wp.player_0,
@@ -881,10 +888,11 @@ async fn get_analysis(State(state): State<AppState>) -> Json<serde_json::Value> 
 async fn export_game(State(state): State<AppState>) -> impl IntoResponse {
     let app = state.local.lock().unwrap();
 
-    let map_data = serde_json::to_value(&app.map).unwrap_or_default();
+    let map_data = serde_json::to_value(&app.board.map).unwrap_or_default();
 
     // Build territory snapshot for current (final) state.
     let territories_final: Vec<serde_json::Value> = app
+        .board
         .map
         .territories
         .iter()
@@ -950,7 +958,7 @@ async fn export_game(State(state): State<AppState>) -> impl IntoResponse {
     let json_str = serde_json::to_string_pretty(&export).unwrap_or_default();
     let filename = format!(
         "strat-club-{}-turn{}.json",
-        app.map.name.to_lowercase().replace(' ', "-"),
+        app.board.map.name.to_lowercase().replace(' ', "-"),
         app.game.turn
     );
 
@@ -983,12 +991,37 @@ async fn import_game(
         ));
     }
 
-    // Parse the map.
+    // Parse the map and wrap in a Board.
     let map_val = body
         .get("map")
         .ok_or((StatusCode::BAD_REQUEST, "Missing map data".to_string()))?;
-    let map: Map = serde_json::from_value(map_val.clone())
-        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid map data: {}", e)))?;
+    // Try parsing as MapFile first (full format with settings), fall back to Map (geography only).
+    let board = if let Ok(map_file) = serde_json::from_value::<MapFile>(map_val.clone()) {
+        Board::from_map(map_file)
+    } else {
+        let map: Map = serde_json::from_value(map_val.clone())
+            .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid map data: {}", e)))?;
+        Board {
+            id: map.id.clone(),
+            name: map.name.clone(),
+            config: strat_engine::board::BoardConfig {
+                picking: strat_engine::map::PickingConfig {
+                    num_picks: map.bonuses.len(),
+                    method: strat_engine::map::PickingMethod::RandomWarlords,
+                },
+                settings: strat_engine::map::MapSettings {
+                    luck_pct: 0,
+                    base_income: 5,
+                    wasteland_armies: 6,
+                    unpicked_neutral_armies: 2,
+                    fog_of_war: true,
+                    offense_kill_rate: 0.6,
+                    defense_kill_rate: 0.7,
+                },
+            },
+            map,
+        }
+    };
 
     // Parse turn history.
     let turn_history: Vec<TurnLog> = body
@@ -1010,8 +1043,8 @@ async fn import_game(
                 .get("territories")
                 .and_then(|v| v.as_array())
                 .ok_or((StatusCode::BAD_REQUEST, "Invalid state history".to_string()))?;
-            let mut owners: Vec<u8> = vec![NEUTRAL; map.territory_count()];
-            let mut armies: Vec<u32> = vec![0; map.territory_count()];
+            let mut owners: Vec<u8> = vec![NEUTRAL; board.map.territory_count()];
+            let mut armies: Vec<u32> = vec![0; board.map.territory_count()];
             for t in terrs {
                 let id = t.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
                 if id < owners.len() {
@@ -1052,7 +1085,7 @@ async fn import_game(
         .and_then(|v| v.as_str())
         .unwrap_or("finished");
 
-    let mut final_state = GameState::new(&map);
+    let mut final_state = GameState::new(&board);
     final_state.turn = final_turn;
     final_state.phase = match final_phase {
         "picking" => Phase::Picking,
@@ -1079,8 +1112,8 @@ async fn import_game(
 
     // Apply to local state.
     let mut app = state.local.lock().unwrap();
-    let map_name = map.name.clone();
-    app.map = map;
+    let map_name = board.map.name.clone();
+    app.board = board;
     app.game = final_state;
     app.rng = StdRng::from_entropy();
     app.pick_options = Vec::new();
@@ -1112,7 +1145,7 @@ async fn get_post_analysis(State(state): State<AppState>) -> Json<serde_json::Va
         &app.state_history,
         &app.win_prob_history,
         &turn_events,
-        &app.map,
+        &app.board,
     );
 
     Json(serde_json::to_value(&analysis).unwrap_or_default())
@@ -1254,6 +1287,7 @@ async fn get_today_puzzle() -> Json<serde_json::Value> {
     let p = puzzle::daily_puzzle(day_seed);
     // Return puzzle state without the optimal orders (don't spoil it).
     let territories: Vec<serde_json::Value> = p
+        .board
         .map
         .territories
         .iter()
@@ -1271,6 +1305,7 @@ async fn get_today_puzzle() -> Json<serde_json::Value> {
         .collect();
 
     let bonuses: Vec<serde_json::Value> = p
+        .board
         .map
         .bonuses
         .iter()
@@ -1346,24 +1381,25 @@ async fn main() {
     let map_path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| config.default_map_path.clone());
-    let map = Map::load(&PathBuf::from(&map_path)).unwrap_or_else(|e| {
+    let map = MapFile::load(&PathBuf::from(&map_path)).unwrap_or_else(|e| {
         eprintln!("Failed to load map '{}': {}", map_path, e);
         std::process::exit(1);
     });
+    let board = Board::from_map(map);
 
     info!(
-        map = %map.name,
-        territories = map.territory_count(),
-        bonuses = map.bonuses.len(),
+        map = %board.name,
+        territories = board.map.territory_count(),
+        bonuses = board.map.bonuses.len(),
         "loaded map for local play"
     );
 
     let mut rng = StdRng::from_entropy();
-    let game = GameState::new(&map);
-    let pick_options = picking::generate_pick_options(&map, &mut rng);
+    let game = GameState::new(&board);
+    let pick_options = picking::generate_pick_options(&board, &mut rng);
 
     let local_state = LocalState {
-        map,
+        board,
         game,
         rng,
         pick_options,

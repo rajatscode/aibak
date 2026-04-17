@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use strat_engine::analysis;
-use strat_engine::map::Map;
+use strat_engine::board::Board;
+use strat_engine::map::MapFile;
 use strat_engine::state::GameState;
 
 use crate::AppState;
@@ -137,9 +138,10 @@ pub async fn spectate_game(
     // Compute win probability if we have state + map.
     let win_prob = if let (Some(state_json), Some(map_json)) = (&game.state_json, &game.map_json) {
         let game_state: Option<GameState> = serde_json::from_value(state_json.clone()).ok();
-        let map: Option<Map> = serde_json::from_value(map_json.clone()).ok();
+        let map: Option<MapFile> = serde_json::from_value(map_json.clone()).ok();
         if let (Some(gs), Some(m)) = (game_state, map) {
-            let wp = analysis::quick_win_probability(&gs, &m);
+            let board = Board::from_map(m);
+            let wp = analysis::quick_win_probability(&gs, &board);
             Some(WinProbView {
                 player_0: wp.player_0,
                 player_1: wp.player_1,

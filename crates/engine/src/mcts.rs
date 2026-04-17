@@ -11,7 +11,7 @@ use rand::{Rng, SeedableRng};
 
 use crate::ai;
 use crate::combat::resolve_attack;
-use crate::map::Map;
+use crate::board::Board;
 use crate::orders::Order;
 use crate::state::{GameState, NEUTRAL, Phase, PlayerId};
 use crate::turn::resolve_turn;
@@ -92,12 +92,12 @@ impl MctsNode {
 pub fn mcts_generate_orders(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     config: &MctsConfig,
 ) -> Vec<Order> {
     // If the game is not in play phase, fall back to greedy.
     if state.phase != Phase::Play {
-        return ai::generate_orders(state, player, map);
+        return ai::generate_orders(state, player, board);
     }
 
     // If the player has no territories, nothing to do.
@@ -108,10 +108,10 @@ pub fn mcts_generate_orders(
     let mut rng = SmallRng::from_entropy();
 
     // Generate candidate actions (diverse order sets).
-    let actions = generate_candidate_actions(state, player, map, &mut rng);
+    let actions = generate_candidate_actions(state, player, board, &mut rng);
 
     if actions.is_empty() {
-        return ai::generate_orders(state, player, map);
+        return ai::generate_orders(state, player, board);
     }
 
     if actions.len() == 1 {
@@ -136,7 +136,7 @@ pub fn mcts_generate_orders(
         let value = simulate(
             state,
             player,
-            map,
+            board,
             &actions[root.children[child_idx].action_index].orders,
             config.max_rollout_depth,
             &mut rng,
@@ -184,7 +184,7 @@ fn select_child(parent: &MctsNode, c: f64) -> usize {
 fn simulate(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     player_orders: &[Order],
     max_depth: u32,
     rng: &mut impl Rng,
@@ -192,7 +192,7 @@ fn simulate(
     let opponent = 1 - player;
 
     // Generate opponent orders using greedy AI.
-    let opp_orders = ai::generate_orders(state, opponent, map);
+    let opp_orders = ai::generate_orders(state, opponent, board);
 
     // Build the order arrays.
     let mut orders: [Vec<Order>; 2] = [Vec::new(), Vec::new()];
@@ -200,7 +200,7 @@ fn simulate(
     orders[opponent as usize] = opp_orders;
 
     // Resolve the first turn with our chosen orders.
-    let result = resolve_turn(state, orders, map, rng);
+    let result = resolve_turn(state, orders, board, rng);
     let mut current = result.state;
 
     // Continue simulation using greedy AI for both sides.
@@ -212,18 +212,19 @@ fn simulate(
             break;
         }
 
-        let p0_orders = ai::generate_orders(&current, 0, map);
-        let p1_orders = ai::generate_orders(&current, 1, map);
-        let result = resolve_turn(&current, [p0_orders, p1_orders], map, rng);
+        let p0_orders = ai::generate_orders(&current, 0, board);
+        let p1_orders = ai::generate_orders(&current, 1, board);
+        let result = resolve_turn(&current, [p0_orders, p1_orders], board, rng);
         current = result.state;
     }
 
     // Evaluate the final position.
-    evaluate_position(&current, player, map)
+    evaluate_position(&current, player, board)
 }
 
 /// Evaluate a game position from `player`'s perspective. Returns [0, 1].
-pub fn evaluate_position(state: &GameState, player: PlayerId, map: &Map) -> f64 {
+pub fn evaluate_position(state: &GameState, player: PlayerId, board: &Board) -> f64 {
+    let map = &board.map;
     let opponent = 1 - player;
 
     // Terminal states.
@@ -250,13 +251,13 @@ pub fn evaluate_position(state: &GameState, player: PlayerId, map: &Map) -> f64 
     let territory_score = my_territories / total_territories;
 
     // Income comparison.
-    let my_income = state.income(player, map) as f64;
-    let opp_income = state.income(opponent, map) as f64;
+    let my_income = state.income(player, board) as f64;
+    let opp_income = state.income(opponent, board) as f64;
     let income_score = my_income / (my_income + opp_income).max(1.0);
 
     // Bonus completion proximity.
-    let bonus_score = bonus_proximity_score(state, player, map)
-        - bonus_proximity_score(state, opponent, map) * 0.5;
+    let bonus_score = bonus_proximity_score(state, player, board)
+        - bonus_proximity_score(state, opponent, board) * 0.5;
     let bonus_score_norm = (bonus_score + 1.0) / 2.0; // normalize to [0, 1]
 
     // Army count ratio.
@@ -271,7 +272,7 @@ pub fn evaluate_position(state: &GameState, player: PlayerId, map: &Map) -> f64 
     let army_score = my_armies as f64 / (my_armies + opp_armies).max(1) as f64;
 
     // Border exposure penalty: how many of our border territories are weak.
-    let border_penalty = border_exposure_penalty(state, player, map);
+    let border_penalty = border_exposure_penalty(state, player, board);
 
     // Weighted combination.
     let raw =
@@ -282,7 +283,8 @@ pub fn evaluate_position(state: &GameState, player: PlayerId, map: &Map) -> f64 
 }
 
 /// Score how close a player is to completing bonuses. Higher is better.
-fn bonus_proximity_score(state: &GameState, player: PlayerId, map: &Map) -> f64 {
+fn bonus_proximity_score(state: &GameState, player: PlayerId, board: &Board) -> f64 {
+    let map = &board.map;
     let mut score = 0.0;
     for bonus in &map.bonuses {
         if bonus.value == 0 {
@@ -313,7 +315,8 @@ fn bonus_proximity_score(state: &GameState, player: PlayerId, map: &Map) -> f64 
 }
 
 /// Compute a penalty [0, 1] for exposed borders.
-fn border_exposure_penalty(state: &GameState, player: PlayerId, map: &Map) -> f64 {
+fn border_exposure_penalty(state: &GameState, player: PlayerId, board: &Board) -> f64 {
+    let map = &board.map;
     let mut weak_borders = 0u32;
     let mut total_borders = 0u32;
 
@@ -357,17 +360,18 @@ fn border_exposure_penalty(state: &GameState, player: PlayerId, map: &Map) -> f6
 fn generate_candidate_actions(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     rng: &mut impl Rng,
 ) -> Vec<MctsAction> {
+    let map = &board.map;
     let mut actions = Vec::new();
-    let income = state.income(player, map);
+    let income = state.income(player, board);
     if income == 0 {
         return actions;
     }
 
     // Action 0: Greedy AI baseline.
-    let greedy_orders = ai::generate_orders(state, player, map);
+    let greedy_orders = ai::generate_orders(state, player, board);
     if !greedy_orders.is_empty() {
         actions.push(MctsAction {
             orders: greedy_orders,
@@ -395,7 +399,7 @@ fn generate_candidate_actions(
         let orders = generate_variation(
             state,
             player,
-            map,
+            board,
             &border_territories,
             income,
             variation,
@@ -413,7 +417,7 @@ fn generate_candidate_actions(
 
     // Defensive variation: deploy to the most threatened border.
     if let Some(orders) =
-        generate_defensive_variation(state, player, map, &border_territories, income)
+        generate_defensive_variation(state, player, board, &border_territories, income)
         && !actions.iter().any(|a| a.orders == orders)
     {
         actions.push(MctsAction {
@@ -429,12 +433,13 @@ fn generate_candidate_actions(
 fn generate_variation(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     border_territories: &[usize],
     income: u32,
     variation: usize,
     rng: &mut impl Rng,
 ) -> Vec<Order> {
+    let map = &board.map;
     let mut orders = Vec::new();
     let opponent = 1 - player;
 
@@ -454,7 +459,7 @@ fn generate_variation(
         }
         1 => {
             // Deploy to territory adjacent to highest-value uncompleted bonus.
-            best_bonus_border(state, player, map, border_territories)
+            best_bonus_border(state, player, board, border_territories)
         }
         2 => {
             // Deploy to most threatened border.
@@ -509,7 +514,7 @@ fn generate_variation(
     generate_attacks_from(
         deploy_target,
         player,
-        map,
+        board,
         &mut sim_armies,
         &mut sim_owners,
         &mut orders,
@@ -523,7 +528,7 @@ fn generate_variation(
         generate_attacks_from(
             tid,
             player,
-            map,
+            board,
             &mut sim_armies,
             &mut sim_owners,
             &mut orders,
@@ -531,7 +536,7 @@ fn generate_variation(
     }
 
     // Generate transfers for interior armies.
-    generate_transfers(player, map, &mut sim_armies, &sim_owners, &mut orders);
+    generate_transfers(player, board, &mut sim_armies, &sim_owners, &mut orders);
 
     orders
 }
@@ -540,11 +545,12 @@ fn generate_variation(
 fn generate_attacks_from(
     from: usize,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     sim_armies: &mut [u32],
     sim_owners: &mut [PlayerId],
     orders: &mut Vec<Order>,
 ) {
+    let map = &board.map;
     if sim_owners[from] != player || sim_armies[from] <= 1 {
         return;
     }
@@ -567,7 +573,7 @@ fn generate_attacks_from(
         if defenders == 0 || attackers == 0 {
             continue;
         }
-        let result = resolve_attack(attackers, defenders, &map.settings);
+        let result = resolve_attack(attackers, defenders, board.settings());
 
         if result.captured {
             orders.push(Order::Attack {
@@ -585,11 +591,12 @@ fn generate_attacks_from(
 /// Generate transfer orders to move interior armies toward the front.
 fn generate_transfers(
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     sim_armies: &mut [u32],
     sim_owners: &[PlayerId],
     orders: &mut Vec<Order>,
 ) {
+    let map = &board.map;
     for tid in 0..map.territory_count() {
         if sim_owners[tid] != player || sim_armies[tid] <= 1 {
             continue;
@@ -627,9 +634,10 @@ fn generate_transfers(
 fn best_bonus_border(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     border_territories: &[usize],
 ) -> Option<usize> {
+    let map = &board.map;
     let mut best_tid = None;
     let mut best_score = -1.0f64;
 
@@ -675,10 +683,11 @@ fn best_bonus_border(
 fn generate_defensive_variation(
     state: &GameState,
     player: PlayerId,
-    map: &Map,
+    board: &Board,
     border_territories: &[usize],
     income: u32,
 ) -> Option<Vec<Order>> {
+    let map = &board.map;
     let opponent = 1 - player;
 
     // Find the most threatened border territory.
@@ -709,7 +718,7 @@ fn generate_defensive_variation(
         let attackers = sim_armies[deploy_target] - 1;
         let defenders = sim_armies[adj];
         if attackers >= defenders * 3 {
-            let result = resolve_attack(attackers, defenders, &map.settings);
+            let result = resolve_attack(attackers, defenders, board.settings());
             if result.captured {
                 orders.push(Order::Attack {
                     from: deploy_target,
@@ -724,7 +733,7 @@ fn generate_defensive_variation(
 
     // Transfer interior armies toward deploy_target.
     let mut sim_armies_t = sim_armies.clone();
-    generate_transfers(player, map, &mut sim_armies_t, &sim_owners, &mut orders);
+    generate_transfers(player, board, &mut sim_armies_t, &sim_owners, &mut orders);
 
     Some(orders)
 }
@@ -732,10 +741,11 @@ fn generate_defensive_variation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+    use crate::board::Board;
+    use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
 
-    fn test_map() -> Map {
-        Map {
+    fn test_map() -> MapFile {
+        MapFile {
             id: "test".into(),
             name: "Test".into(),
             territories: vec![
@@ -808,8 +818,8 @@ mod tests {
         }
     }
 
-    fn setup_play_state(map: &Map) -> GameState {
-        let mut state = GameState::new(map);
+    fn setup_play_state(board: &Board) -> GameState {
+        let mut state = GameState::new(board);
         state.territory_owners = vec![0, 0, 1, 1];
         state.territory_armies = vec![5, 3, 3, 5];
         state.phase = Phase::Play;
@@ -820,13 +830,14 @@ mod tests {
     #[test]
     fn test_mcts_generates_valid_orders() {
         let map = test_map();
-        let state = setup_play_state(&map);
+        let board = Board::from_map(map);
+        let state = setup_play_state(&board);
         let config = MctsConfig {
             time_budget: Duration::from_millis(100),
             ..Default::default()
         };
 
-        let orders = mcts_generate_orders(&state, 0, &map, &config);
+        let orders = mcts_generate_orders(&state, 0, &board, &config);
 
         // Should have at least a deploy order.
         assert!(!orders.is_empty());
@@ -839,7 +850,7 @@ mod tests {
                 _ => None,
             })
             .sum();
-        assert_eq!(total_deployed, state.income(0, &map));
+        assert_eq!(total_deployed, state.income(0, &board));
 
         // All deploy targets should be owned by player 0.
         for order in &orders {
@@ -852,13 +863,14 @@ mod tests {
     #[test]
     fn test_mcts_generates_orders_for_player_1() {
         let map = test_map();
-        let state = setup_play_state(&map);
+        let board = Board::from_map(map);
+        let state = setup_play_state(&board);
         let config = MctsConfig {
             time_budget: Duration::from_millis(50),
             ..Default::default()
         };
 
-        let orders = mcts_generate_orders(&state, 1, &map, &config);
+        let orders = mcts_generate_orders(&state, 1, &board, &config);
         assert!(!orders.is_empty());
 
         let total_deployed: u32 = orders
@@ -868,18 +880,19 @@ mod tests {
                 _ => None,
             })
             .sum();
-        assert_eq!(total_deployed, state.income(1, &map));
+        assert_eq!(total_deployed, state.income(1, &board));
     }
 
     #[test]
     fn test_evaluate_position_winning() {
         let map = test_map();
-        let mut state = setup_play_state(&map);
+        let board = Board::from_map(map);
+        let mut state = setup_play_state(&board);
         // Player 0 owns 3/4 territories with more armies.
         state.territory_owners = vec![0, 0, 0, 1];
         state.territory_armies = vec![5, 5, 5, 1];
 
-        let score = evaluate_position(&state, 0, &map);
+        let score = evaluate_position(&state, 0, &board);
         assert!(
             score > 0.5,
             "winning position should score > 0.5, got {}",
@@ -890,11 +903,12 @@ mod tests {
     #[test]
     fn test_evaluate_position_losing() {
         let map = test_map();
-        let mut state = setup_play_state(&map);
+        let board = Board::from_map(map);
+        let mut state = setup_play_state(&board);
         state.territory_owners = vec![0, 1, 1, 1];
         state.territory_armies = vec![1, 5, 5, 5];
 
-        let score = evaluate_position(&state, 0, &map);
+        let score = evaluate_position(&state, 0, &board);
         assert!(
             score < 0.5,
             "losing position should score < 0.5, got {}",
@@ -905,21 +919,23 @@ mod tests {
     #[test]
     fn test_evaluate_finished_game() {
         let map = test_map();
-        let mut state = setup_play_state(&map);
+        let board = Board::from_map(map);
+        let mut state = setup_play_state(&board);
         state.phase = Phase::Finished;
         state.winner = Some(0);
 
-        assert_eq!(evaluate_position(&state, 0, &map), 1.0);
-        assert_eq!(evaluate_position(&state, 1, &map), 0.0);
+        assert_eq!(evaluate_position(&state, 0, &board), 1.0);
+        assert_eq!(evaluate_position(&state, 1, &board), 0.0);
     }
 
     #[test]
     fn test_candidate_actions_generated() {
         let map = test_map();
-        let state = setup_play_state(&map);
+        let board = Board::from_map(map);
+        let state = setup_play_state(&board);
         let mut rng = SmallRng::seed_from_u64(42);
 
-        let actions = generate_candidate_actions(&state, 0, &map, &mut rng);
+        let actions = generate_candidate_actions(&state, 0, &board, &mut rng);
         // Should have at least one candidate action.
         assert!(!actions.is_empty(), "expected at least 1 action, got 0");
     }

@@ -1,3 +1,4 @@
+use strat_engine::board::Board;
 use strat_engine::map::Map;
 use strat_engine::state::{GameState, PlayerId};
 
@@ -26,14 +27,15 @@ fn owner_label(owner: PlayerId) -> &'static str {
 }
 
 /// Print the game state as a text-based territory list grouped by bonus.
-pub fn print_state(state: &GameState, map: &Map, player: PlayerId) {
-    let visible = strat_engine::fog::visible_territories(state, player, map);
+pub fn print_state(state: &GameState, board: &Board, player: PlayerId) {
+    let map = &board.map;
+    let visible = strat_engine::fog::visible_territories(state, player, board);
 
     println!("\n{BOLD}═══ Turn {} ═══{RESET}", state.turn);
     println!(
         "{BLUE}You:{RESET} {} territories, income {GREEN}{}{RESET}  |  {RED}AI:{RESET} {} territories",
         state.territory_count_for(player),
-        state.income(player, map),
+        state.income(player, board),
         state.territory_count_for(1 - player),
     );
     println!();
@@ -85,11 +87,12 @@ pub fn print_help() {
 }
 
 /// Print picking options.
-pub fn print_pick_options(options: &[usize], map: &Map) {
+pub fn print_pick_options(options: &[usize], board: &Board) {
+    let map = &board.map;
     println!("\n{BOLD}═══ Territory Picking ═══{RESET}");
     println!(
         "Pick {} territories (enter IDs one per line):\n",
-        map.picking.num_picks
+        board.picking().num_picks
     );
     for &tid in options {
         let t = &map.territories[tid];

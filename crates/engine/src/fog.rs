@@ -2,14 +2,15 @@
 
 use std::collections::HashSet;
 
-use crate::map::Map;
+use crate::board::Board;
 use crate::state::{GameState, NEUTRAL, PlayerId};
 
 /// Compute the set of territory IDs visible to a player.
 /// A territory is visible if:
 /// - Owned by the player, OR
 /// - Adjacent to any territory owned by the player.
-pub fn visible_territories(state: &GameState, player: PlayerId, map: &Map) -> HashSet<usize> {
+pub fn visible_territories(state: &GameState, player: PlayerId, board: &Board) -> HashSet<usize> {
+    let map = &board.map;
     let mut visible = HashSet::new();
 
     for (tid, &owner) in state.territory_owners.iter().enumerate() {
@@ -26,15 +27,16 @@ pub fn visible_territories(state: &GameState, player: PlayerId, map: &Map) -> Ha
 
 /// Create a fog-filtered copy of the game state for a player.
 /// Non-visible territories show as neutral with unknown army counts.
-pub fn fog_filter(state: &GameState, player: PlayerId, map: &Map) -> GameState {
-    if !map.settings.fog_of_war {
+pub fn fog_filter(state: &GameState, player: PlayerId, board: &Board) -> GameState {
+    if !board.settings().fog_of_war {
         return state.clone();
     }
 
-    let visible = visible_territories(state, player, map);
+    let map = &board.map;
+    let visible = visible_territories(state, player, board);
     let mut filtered = state.clone();
 
-    for tid in 0..map.territory_count() {
+    for tid in 0..board.map.territory_count() {
         if !visible.contains(&tid) {
             filtered.territory_owners[tid] = NEUTRAL;
             // Show default army count for fogged territories.
@@ -53,11 +55,12 @@ pub fn fog_filter(state: &GameState, player: PlayerId, map: &Map) -> GameState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+    use crate::board::Board;
+    use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
 
-    fn test_map() -> Map {
+    fn test_map() -> MapFile {
         // Simple 4-territory map: 0-1-2-3 in a line.
-        Map {
+        MapFile {
             id: "test".into(),
             name: "Test".into(),
             territories: vec![
@@ -133,17 +136,18 @@ mod tests {
     #[test]
     fn test_visibility() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners[0] = 0;
         state.territory_owners[3] = 1;
 
-        let vis0 = visible_territories(&state, 0, &map);
+        let vis0 = visible_territories(&state, 0, &board);
         assert!(vis0.contains(&0)); // owns it
         assert!(vis0.contains(&1)); // adjacent
         assert!(!vis0.contains(&2)); // not adjacent
         assert!(!vis0.contains(&3)); // not adjacent
 
-        let vis1 = visible_territories(&state, 1, &map);
+        let vis1 = visible_territories(&state, 1, &board);
         assert!(vis1.contains(&3));
         assert!(vis1.contains(&2));
         assert!(!vis1.contains(&1));
@@ -153,13 +157,14 @@ mod tests {
     #[test]
     fn test_fog_filter_hides_enemy() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners[0] = 0;
         state.territory_armies[0] = 5;
         state.territory_owners[3] = 1;
         state.territory_armies[3] = 8;
 
-        let filtered = fog_filter(&state, 0, &map);
+        let filtered = fog_filter(&state, 0, &board);
         // Player 0 can't see territory 3.
         assert_eq!(filtered.territory_owners[3], NEUTRAL);
         assert_eq!(filtered.territory_armies[3], 2); // default
@@ -174,12 +179,13 @@ mod tests {
     #[test]
     fn test_visibility_union_of_owned_territories() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         // Player 0 owns territories 0 and 3 (opposite ends of the line).
         state.territory_owners[0] = 0;
         state.territory_owners[3] = 0;
 
-        let vis = visible_territories(&state, 0, &map);
+        let vis = visible_territories(&state, 0, &board);
         // From 0: sees 0, 1. From 3: sees 2, 3. Union = all 4.
         assert!(vis.contains(&0));
         assert!(vis.contains(&1));
@@ -191,14 +197,15 @@ mod tests {
     #[test]
     fn test_fog_filter_hides_opponent_cards() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners[0] = 0;
         state.territory_owners[3] = 1;
         // Give opponent cards and card pieces.
         state.hands[1] = vec![Card::Reinforcement(5), Card::Blockade];
         state.card_pieces[1] = 2;
 
-        let filtered = fog_filter(&state, 0, &map);
+        let filtered = fog_filter(&state, 0, &board);
         // Opponent's hand should be empty in the filtered view.
         assert!(filtered.hands[1].is_empty());
         assert_eq!(filtered.card_pieces[1], 0);
@@ -215,20 +222,20 @@ mod tests {
             .parent()
             .unwrap()
             .join("maps");
-        let map = Map::load(&maps_dir.join("small_earth.json")).expect("load map");
+        let board = Board::from_map(MapFile::load(&maps_dir.join("small_earth.json")).expect("load map"));
 
-        let mut state = GameState::new(&map);
+        let mut state = GameState::new(&board);
         // Player 0 owns Alaska (0) and NW Territory (1).
         state.territory_owners[0] = 0;
         state.territory_owners[1] = 0;
 
-        let vis = visible_territories(&state, 0, &map);
+        let vis = visible_territories(&state, 0, &board);
         // Should see owned territories.
         assert!(vis.contains(&0));
         assert!(vis.contains(&1));
         // Should see all neighbors of both.
         for &owned in &[0, 1] {
-            for &adj in &map.territories[owned].adjacent {
+            for &adj in &board.map.territories[owned].adjacent {
                 assert!(
                     vis.contains(&adj),
                     "should see neighbor {} of territory {}",

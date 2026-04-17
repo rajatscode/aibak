@@ -3,8 +3,19 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// Pure geography: territories and bonuses, no gameplay config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Map {
+    pub id: String,
+    pub name: String,
+    pub territories: Vec<Territory>,
+    pub bonuses: Vec<Bonus>,
+}
+
+/// On-disk JSON format: geography + picking + settings.
+/// Used only for loading map files; gameplay code uses `Board`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MapFile {
     pub id: String,
     pub name: String,
     pub territories: Vec<Territory>,
@@ -79,7 +90,7 @@ fn default_defense_kill_rate() -> f64 {
     0.7
 }
 
-impl Map {
+impl MapFile {
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
@@ -88,7 +99,9 @@ impl Map {
         let json = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&json)?)
     }
+}
 
+impl Map {
     pub fn are_adjacent(&self, a: usize, b: usize) -> bool {
         self.territories[a].adjacent.contains(&b)
     }

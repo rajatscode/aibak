@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::map::Map;
+use crate::board::Board;
 use crate::state::{GameState, Phase, PlayerId};
 use crate::turn::TurnEvent;
 
@@ -90,8 +90,9 @@ pub fn analyze_game(
     state_history: &[GameState],
     win_prob_history: &[f64],
     turn_events: &[Vec<TurnEvent>],
-    map: &Map,
+    board: &Board,
 ) -> GameAnalysis {
+    let map = &board.map;
     let turns_played = state_history.len() as u32;
 
     // Territory control over time.
@@ -108,7 +109,7 @@ pub fn analyze_game(
     // Income over time.
     let income_over_time: Vec<(u32, u32)> = state_history
         .iter()
-        .map(|s| (s.income(0, map), s.income(1, map)))
+        .map(|s| (s.income(0, board), s.income(1, board)))
         .collect();
 
     // Bonus control timeline.
@@ -132,7 +133,7 @@ pub fn analyze_game(
         win_prob_history,
         &bonus_control_timeline,
         turn_events,
-        map,
+        board,
     );
 
     // Player efficiency: total armies deployed by player 0 / territories captured.
@@ -144,7 +145,7 @@ pub fn analyze_game(
     };
 
     // Biggest attack across all turns.
-    let biggest_attack = find_biggest_attack(turn_events, map);
+    let biggest_attack = find_biggest_attack(turn_events, board);
 
     GameAnalysis {
         turns_played,
@@ -163,8 +164,9 @@ fn find_key_moments(
     win_prob_history: &[f64],
     bonus_timeline: &[Vec<bool>],
     _turn_events: &[Vec<TurnEvent>],
-    map: &Map,
+    board: &Board,
 ) -> Vec<KeyMoment> {
+    let map = &board.map;
     let mut moments = Vec::new();
 
     // Win probability-based moments.
@@ -345,7 +347,8 @@ fn compute_player_efficiency(turn_events: &[Vec<TurnEvent>]) -> (u32, u32) {
 }
 
 /// Find the biggest attack across all turns (by army count).
-fn find_biggest_attack(turn_events: &[Vec<TurnEvent>], map: &Map) -> Option<AttackSummary> {
+fn find_biggest_attack(turn_events: &[Vec<TurnEvent>], board: &Board) -> Option<AttackSummary> {
+    let map = &board.map;
     let mut biggest: Option<AttackSummary> = None;
 
     for (turn_idx, events) in turn_events.iter().enumerate() {
@@ -390,11 +393,12 @@ fn find_biggest_attack(turn_events: &[Vec<TurnEvent>], map: &Map) -> Option<Atta
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+    use crate::board::Board;
+    use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
     use crate::state::NEUTRAL;
 
-    fn test_map() -> Map {
-        Map {
+    fn test_map() -> MapFile {
+        MapFile {
             id: "test".into(),
             name: "Test".into(),
             territories: vec![
@@ -470,7 +474,8 @@ mod tests {
     #[test]
     fn test_analyze_empty_game() {
         let map = test_map();
-        let analysis = analyze_game(&[], &[], &[], &map);
+        let board = Board::from_map(map);
+        let analysis = analyze_game(&[], &[], &[], &board);
         assert_eq!(analysis.turns_played, 0);
         assert!(analysis.territory_control_over_time.is_empty());
         assert!(analysis.income_over_time.is_empty());
@@ -481,14 +486,15 @@ mod tests {
     #[test]
     fn test_analyze_territory_control() {
         let map = test_map();
-        let mut s1 = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut s1 = GameState::new(&board);
         s1.territory_owners = vec![0, 0, 1, 1];
         s1.phase = Phase::Play;
 
         let mut s2 = s1.clone();
         s2.territory_owners = vec![0, 0, 0, 1]; // player captured C
 
-        let analysis = analyze_game(&[s1, s2], &[0.5, 0.65], &[vec![]], &map);
+        let analysis = analyze_game(&[s1, s2], &[0.5, 0.65], &[vec![]], &board);
         assert_eq!(analysis.turns_played, 2);
         assert_eq!(analysis.territory_control_over_time[0], (2, 2));
         assert_eq!(analysis.territory_control_over_time[1], (3, 1));
@@ -497,14 +503,15 @@ mod tests {
     #[test]
     fn test_analyze_detects_bonus_completion() {
         let map = test_map();
-        let mut s1 = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut s1 = GameState::new(&board);
         s1.territory_owners = vec![0, NEUTRAL, 1, 1];
         s1.phase = Phase::Play;
 
         let mut s2 = s1.clone();
         s2.territory_owners = vec![0, 0, 1, 1]; // player now owns both Left bonus territories
 
-        let analysis = analyze_game(&[s1, s2], &[0.4, 0.55], &[vec![]], &map);
+        let analysis = analyze_game(&[s1, s2], &[0.4, 0.55], &[vec![]], &board);
         let bonus_moments: Vec<_> = analysis
             .key_moments
             .iter()
@@ -517,6 +524,7 @@ mod tests {
     #[test]
     fn test_analyze_biggest_attack() {
         let map = test_map();
+        let board = Board::from_map(map);
         let events = vec![vec![
             TurnEvent::Attack {
                 player: 0,
@@ -542,8 +550,8 @@ mod tests {
             },
         ]];
 
-        let s = GameState::new(&map);
-        let analysis = analyze_game(&[s], &[0.5], &events, &map);
+        let s = GameState::new(&board);
+        let analysis = analyze_game(&[s], &[0.5], &events, &board);
         let biggest = analysis.biggest_attack.unwrap();
         assert_eq!(biggest.armies, 8);
         assert_eq!(biggest.from_name, "B");
@@ -554,6 +562,7 @@ mod tests {
     #[test]
     fn test_player_efficiency() {
         let map = test_map();
+        let board = Board::from_map(map);
         let events = vec![vec![
             TurnEvent::Deploy {
                 player: 0,
@@ -575,8 +584,8 @@ mod tests {
             },
         ]];
 
-        let s = GameState::new(&map);
-        let analysis = analyze_game(&[s], &[0.5], &events, &map);
+        let s = GameState::new(&board);
+        let analysis = analyze_game(&[s], &[0.5], &events, &board);
         // 8 armies deployed, 2 territories captured => 4.0 efficiency
         assert!((analysis.player_efficiency - 4.0).abs() < 0.01);
     }
@@ -584,9 +593,10 @@ mod tests {
     #[test]
     fn test_turning_point_detection() {
         let map = test_map();
-        let s = GameState::new(&map);
+        let board = Board::from_map(map);
+        let s = GameState::new(&board);
         // Win prob goes from 0.45 to 0.55 (crosses 50%).
-        let analysis = analyze_game(&[s], &[0.45, 0.55], &[vec![]], &map);
+        let analysis = analyze_game(&[s], &[0.45, 0.55], &[vec![]], &board);
         let turning = analysis
             .key_moments
             .iter()
@@ -597,9 +607,10 @@ mod tests {
     #[test]
     fn test_big_swing_detection() {
         let map = test_map();
-        let s = GameState::new(&map);
+        let board = Board::from_map(map);
+        let s = GameState::new(&board);
         // Win prob drops from 0.8 to 0.6 (20% swing, doesn't cross 50%).
-        let analysis = analyze_game(&[s], &[0.8, 0.6], &[vec![]], &map);
+        let analysis = analyze_game(&[s], &[0.8, 0.6], &[vec![]], &board);
         let swing = analysis
             .key_moments
             .iter()

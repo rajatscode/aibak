@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cards::{Card, apply_blockade, award_card_pieces};
 use crate::combat::resolve_attack;
-use crate::map::Map;
+use crate::board::Board;
 use crate::orders::Order;
 use crate::state::{GameState, PlayerId};
 
@@ -61,7 +61,7 @@ pub struct TurnResult {
 pub fn resolve_turn(
     state: &GameState,
     orders: [Vec<Order>; 2],
-    map: &Map,
+    board: &Board,
     rng: &mut impl Rng,
 ) -> TurnResult {
     let mut new_state = state.clone();
@@ -182,7 +182,7 @@ pub fn resolve_turn(
                             });
                         } else {
                             let defenders = new_state.territory_armies[*to];
-                            let result = resolve_attack(actual_armies, defenders, &map.settings);
+                            let result = resolve_attack(actual_armies, defenders, board.settings());
 
                             new_state.territory_armies[*from] -= actual_armies;
 
@@ -286,12 +286,13 @@ pub fn resolve_turn(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+    use crate::board::Board;
+    use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    fn test_map() -> Map {
-        Map {
+    fn test_map() -> MapFile {
+        MapFile {
             id: "test".into(),
             name: "Test".into(),
             territories: vec![
@@ -367,7 +368,8 @@ mod tests {
     #[test]
     fn test_deploy_and_attack() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners = vec![0, 0, 1, 1];
         state.territory_armies = vec![1, 1, 1, 1];
         state.phase = crate::state::Phase::Play;
@@ -390,7 +392,7 @@ mod tests {
             armies: 5,
         }];
 
-        let result = resolve_turn(&state, [p0_orders, p1_orders], &map, &mut rng);
+        let result = resolve_turn(&state, [p0_orders, p1_orders], &board, &mut rng);
         let new_state = &result.state;
 
         // Verify events were generated.
@@ -401,7 +403,8 @@ mod tests {
     #[test]
     fn test_transfer() {
         let map = test_map();
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         state.territory_owners = vec![0, 0, 1, 1];
         state.territory_armies = vec![5, 1, 1, 1];
         state.phase = crate::state::Phase::Play;
@@ -424,7 +427,7 @@ mod tests {
             armies: 5,
         }];
 
-        let result = resolve_turn(&state, [p0_orders, p1_orders], &map, &mut rng);
+        let result = resolve_turn(&state, [p0_orders, p1_orders], &board, &mut rng);
         let new_state = &result.state;
 
         assert_eq!(new_state.territory_armies[0], 1);

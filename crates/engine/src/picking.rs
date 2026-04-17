@@ -3,12 +3,13 @@
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::map::Map;
+use crate::board::Board;
 use crate::state::{GameState, NEUTRAL, Phase};
 
 /// Generate Random Warlords pick options.
 /// Selects exactly one random territory from each bonus that has value > 0.
-pub fn generate_pick_options(map: &Map, rng: &mut impl Rng) -> Vec<usize> {
+pub fn generate_pick_options(board: &Board, rng: &mut impl Rng) -> Vec<usize> {
+    let map = &board.map;
     let mut options = Vec::new();
 
     for bonus in &map.bonuses {
@@ -45,9 +46,10 @@ pub const DEFAULT_STARTING_ARMIES: u32 = 5;
 /// they receive a random unclaimed pickable territory.
 ///
 /// `starting_armies` controls how many armies are placed on each picked territory.
-pub fn resolve_picks(state: &mut GameState, picks: [&Picks; 2], map: &Map, starting_armies: u32) {
-    let num_picks = map.picking.num_picks;
-    let mut claimed: Vec<bool> = vec![false; map.territory_count()];
+pub fn resolve_picks(state: &mut GameState, picks: [&Picks; 2], board: &Board, starting_armies: u32) {
+    let map = &board.map;
+    let num_picks = board.picking().num_picks;
+    let mut claimed: Vec<bool> = vec![false; board.map.territory_count()];
     let mut player_assigned: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
     let mut pick_indices: [usize; 2] = [0, 0]; // track position in each player's pick list
 
@@ -56,7 +58,7 @@ pub fn resolve_picks(state: &mut GameState, picks: [&Picks; 2], map: &Map, start
     let draft_order = snake_draft_order(total_picks);
 
     // All pickable territory IDs (for random fallback)
-    let all_pickable: Vec<usize> = (0..map.territory_count())
+    let all_pickable: Vec<usize> = (0..board.map.territory_count())
         .filter(|&tid| !map.territories[tid].is_wasteland)
         .collect();
 
@@ -72,7 +74,7 @@ pub fn resolve_picks(state: &mut GameState, picks: [&Picks; 2], map: &Map, start
         while pick_indices[seat] < picks[seat].len() {
             let tid = picks[seat][pick_indices[seat]];
             pick_indices[seat] += 1;
-            if !claimed[tid] && tid < map.territory_count() {
+            if !claimed[tid] && tid < board.map.territory_count() {
                 claimed[tid] = true;
                 player_assigned[seat].push(tid);
                 found = true;
@@ -104,7 +106,7 @@ pub fn resolve_picks(state: &mut GameState, picks: [&Picks; 2], map: &Map, start
     }
 
     // Neutral territories keep their default armies
-    for tid in 0..map.territory_count() {
+    for tid in 0..board.map.territory_count() {
         if state.territory_owners[tid] == NEUTRAL && !map.territories[tid].is_wasteland {
             state.territory_armies[tid] = map.territories[tid].default_armies;
         }
@@ -171,9 +173,10 @@ mod tests {
 
     #[test]
     fn test_resolve_picks_contested() {
-        use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
+        use crate::board::Board;
+        use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
         // Map with 6 territories, 2 bonuses, num_picks=2.
-        let map = Map {
+        let map = MapFile {
             id: "contest".into(),
             name: "Contest".into(),
             territories: (0..6)
@@ -224,10 +227,11 @@ mod tests {
             },
         };
 
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         // Both players submit identical pick lists.
         let picks = vec![0, 1, 2, 3, 4, 5];
-        resolve_picks(&mut state, [&picks, &picks], &map, DEFAULT_STARTING_ARMIES);
+        resolve_picks(&mut state, [&picks, &picks], &board, DEFAULT_STARTING_ARMIES);
 
         // Each player should get exactly 2 territories.
         assert_eq!(state.territory_count_for(0), 2);
@@ -243,8 +247,9 @@ mod tests {
 
     #[test]
     fn test_all_assigned_get_starting_armies() {
-        use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
-        let map = Map {
+        use crate::board::Board;
+        use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
+        let map = MapFile {
             id: "test".into(),
             name: "Test".into(),
             territories: (0..8)
@@ -295,13 +300,14 @@ mod tests {
             },
         };
 
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         let picks_a = vec![0, 1, 2];
         let picks_b = vec![4, 5, 6];
         resolve_picks(
             &mut state,
             [&picks_a, &picks_b],
-            &map,
+            &board,
             DEFAULT_STARTING_ARMIES,
         );
 
@@ -323,8 +329,9 @@ mod tests {
 
     #[test]
     fn test_random_fallback_for_insufficient_picks() {
-        use crate::map::{Bonus, MapSettings, PickingConfig, PickingMethod, Territory};
-        let map = Map {
+        use crate::board::Board;
+        use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
+        let map = MapFile {
             id: "fallback".into(),
             name: "Fallback".into(),
             territories: (0..6)
@@ -375,14 +382,15 @@ mod tests {
             },
         };
 
-        let mut state = GameState::new(&map);
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
         // Player A submits only 1 pick, player B submits 0 picks.
         let picks_a: Vec<usize> = vec![0];
         let picks_b: Vec<usize> = vec![];
         resolve_picks(
             &mut state,
             [&picks_a, &picks_b],
-            &map,
+            &board,
             DEFAULT_STARTING_ARMIES,
         );
 
