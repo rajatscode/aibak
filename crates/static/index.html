@@ -88,6 +88,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .pick-rank{pointer-events:none;font-size:16px;font-weight:900;fill:var(--gold);text-anchor:middle;dominant-baseline:central;text-shadow:0 0 4px rgba(0,0,0,1),0 0 8px rgba(0,0,0,.8)}
 .pick-ring-anim{animation:pulse-ring 1.2s ease-in-out infinite}
 @keyframes pulse-ring{0%,100%{r:22;opacity:1}50%{r:28;opacity:.4}}
+.pick-option-pulse{animation:pick-pulse 1.8s ease-in-out infinite}
+@keyframes pick-pulse{0%,100%{stroke-opacity:1;stroke-width:3}50%{stroke-opacity:.5;stroke-width:2}}
 .selected-ring{fill:none;stroke:var(--gold);stroke-width:3;pointer-events:none}
 .selected-highlight{animation:pulse-gold 1.2s ease-in-out infinite}
 @keyframes pulse-gold{0%,100%{stroke-width:3;stroke:var(--gold)}50%{stroke-width:5;stroke:#fbbf24}}
@@ -245,6 +247,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #game-over .go-social .btn-export:hover{background:rgba(227,179,65,0.15)}
 #game-over .go-social .btn-import{border-color:var(--text3);color:var(--text2)}
 #game-over .go-social .btn-import:hover{background:rgba(110,118,129,0.15)}
+#game-over .go-links{display:flex;gap:12px;justify-content:center;margin-top:8px}
+#game-over .go-links a{color:var(--text2);font-size:13px;text-decoration:none;padding:6px 16px;border:1px solid var(--border);border-radius:6px;transition:color .15s,border-color .15s}
+#game-over .go-links a:hover{color:var(--text);border-color:var(--text3)}
 #import-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1001}
 #import-overlay.show{display:flex}
 #import-overlay .import-box{background:var(--bg2);border:2px dashed var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:480px;cursor:pointer;transition:border-color .2s}
@@ -509,8 +514,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <div class="stats">
       <span>Turn <strong id="turn-num">1</strong></span>
       <span>Income <strong id="income-num">5</strong></span>
-      <span><span class="dot" style="background:var(--blue)"></span> <strong id="my-terr">0</strong></span>
-      <span><span class="dot" style="background:var(--red)"></span> <strong id="enemy-terr">0</strong></span>
+      <span><span class="dot" style="background:var(--blue)"></span> You: <strong id="my-terr">0</strong></span>
+      <span><span class="dot" style="background:var(--red)"></span> Enemy: <strong id="enemy-terr">0</strong></span>
     </div>
     <div class="session-info">
       <span class="game-counter" id="game-counter"></span>
@@ -598,9 +603,13 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <div id="go-stats"></div>
     <div id="go-analysis"></div>
     <div class="go-actions">
-      <button class="btn-rematch" id="go-rematch-btn" onclick="rematch()">Rematch</button>
+      <button class="btn-rematch" id="go-rematch-btn" onclick="rematch()">Play Again</button>
       <button class="btn btn-gold" style="width:auto;padding:12px 32px" onclick="newGame()">New Board</button>
       <button class="btn btn-primary" style="width:auto;padding:12px 32px" id="go-review-btn" onclick="enterReplayMode()">Review Game</button>
+    </div>
+    <div class="go-links">
+      <a href="/ladder">View Ladder</a>
+      <a href="/games">View Games</a>
     </div>
     <div class="go-social">
       <button class="btn-share" onclick="shareGameResult()">&#128203; Share Result</button>
@@ -1614,7 +1623,7 @@ function updateMap() {
 
     // Highlight for selection/pick state
     if (highlightEl) {
-      highlightEl.classList.remove('selected-highlight');
+      highlightEl.classList.remove('selected-highlight', 'pick-option-pulse');
       if (selectedSource === t.id) {
         highlightEl.setAttribute('stroke', 'var(--gold)');
         highlightEl.setAttribute('stroke-width', '4');
@@ -1624,8 +1633,9 @@ function updateMap() {
         highlightEl.setAttribute('stroke-width', '3');
       } else if (phase === 'picking' && G.pick_options && G.pick_options.includes(t.id)) {
         highlightEl.setAttribute('stroke', 'var(--gold)');
-        highlightEl.setAttribute('stroke-width', '2');
+        highlightEl.setAttribute('stroke-width', '3');
         highlightEl.setAttribute('stroke-dasharray', '6,3');
+        highlightEl.classList.add('pick-option-pulse');
       } else {
         highlightEl.setAttribute('stroke', 'none');
         highlightEl.setAttribute('stroke-dasharray', 'none');
@@ -1985,7 +1995,8 @@ function fetchOpeningBook(mapId) {
 function renderPickingPanel(pp, cp) {
   const needed = G.picks_needed || 4;
   const totalOptions = (G.pick_options || []).length;
-  pp.innerHTML = '<div class="sb-phase">Picking Phase</div>' +
+  var howToPlay = (G.turn || 1) <= 1 ? '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;line-height:1.4">Pick territories \u2192 Deploy armies \u2192 Attack neighbors \u2192 Conquer the map</div>' : '';
+  pp.innerHTML = howToPlay + '<div class="sb-phase">Picking Phase</div>' +
     '<div class="sb-sub">Rank all territories by priority (you\'ll receive ' + needed + ')</div>' +
     '<div style="margin-top:6px;font-size:12px;color:#6b7280;line-height:1.4">Click territories on the map to rank them. You\'ll get ' + needed + ' picks in ABBA draft order. Territories in smaller bonuses with fewer neighbors are usually stronger picks.</div>' +
     '<div style="margin-top:8px;font-size:13px;color:var(--gold)">' + picks.length + ' / ' + totalOptions + ' ranked</div>' +
@@ -2858,10 +2869,9 @@ function showGameOver(winner) {
 
   // Build post-game stats
   let statsHtml = '<div class="stats-grid">' +
-    '<div class="stat-item"><div class="stat-label">Turns Played</div><div class="stat-value">' + gameStats.turnsPlayed + '</div></div>' +
-    '<div class="stat-item"><div class="stat-label">Territories Captured</div><div class="stat-value" style="color:var(--green)">' + gameStats.captured + '</div></div>' +
-    '<div class="stat-item"><div class="stat-label">Territories Lost</div><div class="stat-value" style="color:var(--red)">' + gameStats.lost + '</div></div>' +
-    '<div class="stat-item"><div class="stat-label">Final Win %</div><div class="stat-value">' + (winProbHistory.length > 0 ? Math.round(winProbHistory[winProbHistory.length-1]*100) + '%' : 'N/A') + '</div></div>' +
+    '<div class="stat-item"><div class="stat-label">Turns</div><div class="stat-value">' + gameStats.turnsPlayed + '</div></div>' +
+    '<div class="stat-item"><div class="stat-label">Territories Held</div><div class="stat-value">' + (G.my_territories || 0) + '</div></div>' +
+    '<div class="stat-item"><div class="stat-label">Final Income</div><div class="stat-value">' + (G.income || 0) + '</div></div>' +
   '</div>';
 
   // Build sparkline if we have data
