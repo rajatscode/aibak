@@ -694,25 +694,30 @@ footer {
 <script>
 // Intersection Observer for scroll reveal
 const observer = new IntersectionObserver((entries) => {
-  entries.forEach((entry, i) => {
+  entries.forEach(entry => {
     if (entry.isIntersecting) {
-      // Stagger animations for siblings
+      // Reveal all sibling .reveal elements with staggered delay
       const siblings = entry.target.parentElement.querySelectorAll('.reveal');
       let delay = 0;
-      siblings.forEach((el) => {
-        if (el === entry.target) {
+      siblings.forEach(el => {
+        if (!el.classList.contains('visible')) {
           setTimeout(() => el.classList.add('visible'), delay);
+          delay += 120;
+          observer.unobserve(el);
         }
-        delay += 100;
       });
-      // Fallback: ensure the element becomes visible
-      setTimeout(() => entry.target.classList.add('visible'), 400);
-      observer.unobserve(entry.target);
     }
   });
-}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+}, { threshold: 0.1 });
 
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Fallback: ensure all reveals become visible even if observer fails
+setTimeout(() => {
+  document.querySelectorAll('.reveal:not(.visible)').forEach((el, i) => {
+    setTimeout(() => el.classList.add('visible'), i * 60);
+  });
+}, 2000);
 </script>
 </body>
 </html>
