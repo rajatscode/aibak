@@ -372,7 +372,13 @@ async function submitPicks(picksArr) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({picks: picksArr})
     });
-    const data = await r.json();
+    let data;
+    try {
+      data = await r.json();
+    } catch (e) {
+      // Fallback if response is not JSON
+      data = { success: false, message: 'Server error: invalid response' };
+    }
     if (!r.ok || data.success === false) {
       toast(data.message || 'Failed to submit picks', 'error');
       return false;
@@ -395,7 +401,13 @@ async function submitOrders(apiOrders) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({orders: apiOrders})
     });
-    const data = await r.json();
+    let data;
+    try {
+      data = await r.json();
+    } catch (e) {
+      // Fallback if response is not JSON
+      data = { success: false, message: 'Server error: invalid response' };
+    }
     if (!r.ok || data.success === false) {
       toast(data.message || 'Failed to submit orders', 'error');
       return false;

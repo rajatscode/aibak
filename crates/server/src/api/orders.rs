@@ -2,6 +2,7 @@ use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -27,18 +28,43 @@ pub struct ActionResponse {
     pub message: String,
 }
 
+/// JSON error response for API endpoints.
+#[derive(Serialize)]
+struct ErrorResponse {
+    success: bool,
+    message: String,
+}
+
+/// Wrapper for returning JSON errors from API handlers.
+pub struct JsonError(pub StatusCode, pub String);
+
+impl IntoResponse for JsonError {
+    fn into_response(self) -> Response {
+        let (status, msg) = (self.0, self.1);
+        let error_response = ErrorResponse {
+            success: false,
+            message: msg,
+        };
+        (status, Json(error_response)).into_response()
+    }
+}
+
 /// POST /api/games/:id/picks -- submit picks during picking phase.
 pub async fn submit_picks(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(game_id): Path<Uuid>,
     Json(body): Json<SubmitPicksRequest>,
-) -> Result<Json<ActionResponse>, (StatusCode, String)> {
-    let manager = state.require_game_manager()?;
+) -> Result<Json<ActionResponse>, JsonError> {
+    let manager = state.require_game_manager()
+        .map_err(|(status, msg)| JsonError(status, msg))?;
     manager
         .submit_picks(game_id, auth.user_id, body.picks)
         .await
-        .map_err(<_ as Into<(StatusCode, String)>>::into)?;
+        .map_err(|err| {
+            let (status, msg) = <_ as Into<(StatusCode, String)>>::into(err);
+            JsonError(status, msg)
+        })?;
 
     Ok(Json(ActionResponse {
         success: true,
@@ -52,12 +78,16 @@ pub async fn submit_orders(
     State(state): State<AppState>,
     Path(game_id): Path<Uuid>,
     Json(body): Json<SubmitOrdersRequest>,
-) -> Result<Json<ActionResponse>, (StatusCode, String)> {
-    let manager = state.require_game_manager()?;
+) -> Result<Json<ActionResponse>, JsonError> {
+    let manager = state.require_game_manager()
+        .map_err(|(status, msg)| JsonError(status, msg))?;
     manager
         .submit_orders(game_id, auth.user_id, body.orders)
         .await
-        .map_err(<_ as Into<(StatusCode, String)>>::into)?;
+        .map_err(|err| {
+            let (status, msg) = <_ as Into<(StatusCode, String)>>::into(err);
+            JsonError(status, msg)
+        })?;
 
     Ok(Json(ActionResponse {
         success: true,
