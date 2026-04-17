@@ -522,7 +522,7 @@ function onStateUpdate() {
     }
   }
   document.getElementById('my-terr').textContent = myCount;
-  document.getElementById('enemy-terr').textContent = enemyCount;
+  document.getElementById('enemy-terr').textContent = enemyCount > 0 ? enemyCount : 'fog';
 
   // Determine phase
   var status = GAME.status;
@@ -938,12 +938,14 @@ function renderSidebar() {
   if (submitted) {
     pp.innerHTML = '<div class="sb-phase">Waiting...</div><div class="sb-sub">Waiting for opponent to submit</div>';
     cp.innerHTML = '';
+    var sa = document.getElementById('sidebar-actions');
+    if (sa) sa.innerHTML = '';
     return;
   }
 
   if (phase === 'picking') renderPickingSidebar(pp, cp);
   else if (phase === 'orders') renderOrdersSidebar(pp, cp);
-  else if (phase === 'finished') { pp.innerHTML = '<div class="sb-phase">Game Over</div>'; cp.innerHTML = ''; }
+  else if (phase === 'finished') { pp.innerHTML = '<div class="sb-phase">Game Over</div>'; cp.innerHTML = ''; var sa2 = document.getElementById('sidebar-actions'); if (sa2) sa2.innerHTML = ''; }
   else { pp.innerHTML = '<div class="sb-phase">Loading...</div>'; cp.innerHTML = ''; }
 }
 
