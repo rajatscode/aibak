@@ -217,7 +217,7 @@ impl GameManager {
             }
         }
 
-        let seat = self.player_seat(&game, user_id)?;
+        let seat = self.player_seat_by_id(&game, user_id)?;
 
         let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
@@ -358,7 +358,7 @@ impl GameManager {
             }
         }
 
-        let seat = self.player_seat(&game, user_id)?;
+        let seat = self.player_seat_by_id(&game, user_id)?;
 
         let orders_json =
             serde_json::to_value(&orders).map_err(|e| GameError::Serialization(e.to_string()))?;
@@ -794,7 +794,7 @@ impl GameManager {
             });
         }
 
-        let seat = self.player_seat(&game, user_id)?;
+        let seat = self.player_seat_by_id(&game, user_id)?;
         let winner_seat: u8 = 1 - seat;
         let winner_id = if winner_seat == 0 {
             game.player_a.ok_or(GameError::NotFound)?
@@ -828,11 +828,6 @@ impl GameManager {
         Ok(())
     }
 
-    /// Determine which seat (0 or 1) a user occupies in a game.
-    fn player_seat(&self, game: &db::GameRow, user_id: Uuid) -> Result<u8, GameError> {
-        self.player_seat_by_id(game, user_id)
-    }
-
     fn player_seat_by_id(&self, game: &db::GameRow, user_id: Uuid) -> Result<u8, GameError> {
         if game.player_a == Some(user_id) {
             Ok(0)
@@ -852,6 +847,9 @@ fn generate_boot_orders(
     board: &Board,
     rng: &mut impl Rng,
 ) -> Vec<Order> {
+    if state.territory_count_for(player) == 0 {
+        return Vec::new();
+    }
     let income = state.income(player, board);
     if income == 0 {
         return Vec::new();
