@@ -238,7 +238,6 @@ pub fn evaluate_position(state: &GameState, player: PlayerId, board: &Board) -> 
 
     let my_territories = state.territory_count_for(player) as f64;
     let opp_territories = state.territory_count_for(opponent) as f64;
-    let total_territories = map.territory_count() as f64;
 
     if my_territories == 0.0 {
         return 0.0;
@@ -247,18 +246,13 @@ pub fn evaluate_position(state: &GameState, player: PlayerId, board: &Board) -> 
         return 1.0;
     }
 
-    // Territory ratio [0, 1].
-    let territory_score = my_territories / total_territories;
+    // Territory ratio [0, 1] — our share vs opponent (ignoring neutrals).
+    let territory_score = my_territories / (my_territories + opp_territories);
 
     // Income comparison.
     let my_income = state.income(player, board) as f64;
     let opp_income = state.income(opponent, board) as f64;
     let income_score = my_income / (my_income + opp_income).max(1.0);
-
-    // Bonus completion proximity.
-    let bonus_score = bonus_proximity_score(state, player, board)
-        - bonus_proximity_score(state, opponent, board) * 0.5;
-    let bonus_score_norm = (bonus_score + 1.0) / 2.0; // normalize to [0, 1]
 
     // Army count ratio.
     let my_armies: u32 = (0..map.territory_count())
@@ -271,13 +265,20 @@ pub fn evaluate_position(state: &GameState, player: PlayerId, board: &Board) -> 
         .sum();
     let army_score = my_armies as f64 / (my_armies + opp_armies).max(1) as f64;
 
-    // Border exposure penalty: how many of our border territories are weak.
-    let border_penalty = border_exposure_penalty(state, player, board);
+    // Border strength: ratio of our border armies to enemy border armies.
+    let border_score = border_strength_score(state, player, board);
 
-    // Weighted combination.
-    let raw =
-        territory_score * 0.20 + income_score * 0.35 + bonus_score_norm * 0.15 + army_score * 0.20
-            - border_penalty * 0.10;
+    // Bonus completion proximity (linear).
+    let bonus_score = bonus_proximity_score(state, player, board)
+        - bonus_proximity_score(state, opponent, board) * 0.5;
+    let bonus_score_norm = (bonus_score + 1.0) / 2.0;
+
+    // Weighted combination — territory control is king.
+    let raw = territory_score * 0.35
+        + income_score * 0.25
+        + army_score * 0.15
+        + border_score * 0.15
+        + bonus_score_norm * 0.10;
 
     raw.clamp(0.01, 0.99)
 }
@@ -302,7 +303,7 @@ fn bonus_proximity_score(state: &GameState, player: PlayerId, board: &Board) -> 
         } else if owned > 0 {
             let completion = owned as f64 / total as f64;
             let efficiency = bonus.value as f64 / total as f64;
-            score += completion * completion * efficiency;
+            score += completion * efficiency;
         }
     }
     // Normalize by total possible bonus value.
@@ -314,43 +315,38 @@ fn bonus_proximity_score(state: &GameState, player: PlayerId, board: &Board) -> 
     }
 }
 
-/// Compute a penalty [0, 1] for exposed borders.
-fn border_exposure_penalty(state: &GameState, player: PlayerId, board: &Board) -> f64 {
+/// Compute border strength score [0, 1].
+/// Ratio of our border armies to total border armies (ours + enemy's).
+fn border_strength_score(state: &GameState, player: PlayerId, board: &Board) -> f64 {
     let map = &board.map;
-    let mut weak_borders = 0u32;
-    let mut total_borders = 0u32;
+    let mut my_border_armies = 0u32;
+    let mut enemy_border_armies = 0u32;
+    let mut counted_enemies = vec![false; map.territory_count()];
 
     for tid in 0..map.territory_count() {
         if state.territory_owners[tid] != player {
             continue;
         }
-        let is_border = map.territories[tid]
-            .adjacent
-            .iter()
-            .any(|&adj| state.territory_owners[adj] != player);
-
-        if is_border {
-            total_borders += 1;
-            // Check if any adjacent enemy has more armies.
-            let enemy_threat: u32 = map.territories[tid]
-                .adjacent
-                .iter()
-                .filter(|&&adj| {
-                    state.territory_owners[adj] != player && state.territory_owners[adj] != NEUTRAL
-                })
-                .map(|&adj| state.territory_armies[adj])
-                .sum();
-
-            if enemy_threat > state.territory_armies[tid] {
-                weak_borders += 1;
+        let mut is_border = false;
+        for &adj in &map.territories[tid].adjacent {
+            if state.territory_owners[adj] != player && state.territory_owners[adj] != NEUTRAL {
+                is_border = true;
+                if !counted_enemies[adj] {
+                    counted_enemies[adj] = true;
+                    enemy_border_armies += state.territory_armies[adj];
+                }
             }
+        }
+        if is_border {
+            my_border_armies += state.territory_armies[tid];
         }
     }
 
-    if total_borders == 0 {
-        0.0
+    let total = my_border_armies + enemy_border_armies;
+    if total == 0 {
+        0.5
     } else {
-        weak_borders as f64 / total_borders as f64
+        my_border_armies as f64 / total as f64
     }
 }
 
@@ -395,7 +391,7 @@ fn generate_candidate_actions(
     }
 
     // Generate several deployment variations with different attack plans.
-    for variation in 0..6 {
+    for variation in 0..12 {
         let orders = generate_variation(
             state,
             player,
@@ -423,6 +419,39 @@ fn generate_candidate_actions(
         actions.push(MctsAction {
             orders,
             label: "defensive".into(),
+        });
+    }
+
+    // Hold variation: deploy only, no attacks (sometimes holding is best).
+    if let Some(orders) =
+        generate_hold_variation(state, player, board, &border_territories, income)
+        && !actions.iter().any(|a| a.orders == orders)
+    {
+        actions.push(MctsAction {
+            orders,
+            label: "hold".into(),
+        });
+    }
+
+    // Attack only the single weakest neighbor.
+    if let Some(orders) =
+        generate_attack_weakest_variation(state, player, board, &border_territories, income)
+        && !actions.iter().any(|a| a.orders == orders)
+    {
+        actions.push(MctsAction {
+            orders,
+            label: "attack_weakest".into(),
+        });
+    }
+
+    // Bonus focus: deploy and attack to complete a specific bonus.
+    if let Some(orders) =
+        generate_bonus_focus_variation(state, player, board, &border_territories, income)
+        && !actions.iter().any(|a| a.orders == orders)
+    {
+        actions.push(MctsAction {
+            orders,
+            label: "bonus_focus".into(),
         });
     }
 
@@ -489,8 +518,45 @@ fn generate_variation(
                 .copied()
                 .max_by_key(|&tid| state.territory_armies[tid])
         }
+        5 => {
+            // Deploy adjacent to a territory that completes a bonus (1-away).
+            one_away_bonus_border(state, player, board, border_territories)
+                .or_else(|| best_bonus_border(state, player, board, border_territories))
+        }
+        6 => {
+            // Deploy to weakest border territory (shore up weakness).
+            border_territories
+                .iter()
+                .copied()
+                .min_by_key(|&tid| state.territory_armies[tid])
+        }
+        7 => {
+            // Deploy to border territory in our most complete partial bonus.
+            let mut best = None;
+            let mut best_frac = 0.0f64;
+            for bonus in &map.bonuses {
+                if bonus.value == 0 { continue; }
+                let total = bonus.territory_ids.len();
+                let owned = bonus.territory_ids.iter().filter(|&&t| state.territory_owners[t] == player).count();
+                if owned == 0 || owned == total { continue; }
+                let frac = owned as f64 / total as f64;
+                if frac > best_frac {
+                    // Find a border territory in or adjacent to this bonus.
+                    let missing: Vec<usize> = bonus.territory_ids.iter().copied()
+                        .filter(|&t| state.territory_owners[t] != player).collect();
+                    for &bt in border_territories {
+                        if missing.iter().any(|&m| map.are_adjacent(bt, m)) {
+                            best_frac = frac;
+                            best = Some(bt);
+                            break;
+                        }
+                    }
+                }
+            }
+            best
+        }
         _ => {
-            // Random border territory.
+            // Random border territory (diversity).
             border_territories.choose(rng).copied()
         }
     };
@@ -741,6 +807,250 @@ fn generate_defensive_variation(
     // Transfer interior armies toward deploy_target.
     let mut sim_armies_t = sim_armies.clone();
     generate_transfers(player, board, &mut sim_armies_t, &sim_owners, &mut orders);
+
+    Some(orders)
+}
+
+/// Find the border territory adjacent to a bonus missing exactly 1 territory.
+fn one_away_bonus_border(
+    state: &GameState,
+    player: PlayerId,
+    board: &Board,
+    border_territories: &[usize],
+) -> Option<usize> {
+    let map = &board.map;
+    let mut best_tid = None;
+    let mut best_value = 0u32;
+
+    for bonus in &map.bonuses {
+        if bonus.value == 0 {
+            continue;
+        }
+        let total = bonus.territory_ids.len();
+        let owned = bonus
+            .territory_ids
+            .iter()
+            .filter(|&&tid| state.territory_owners[tid] == player)
+            .count();
+        // Missing exactly 1 territory.
+        if owned + 1 != total {
+            continue;
+        }
+        let missing = match bonus
+            .territory_ids
+            .iter()
+            .copied()
+            .find(|&tid| state.territory_owners[tid] != player)
+        {
+            Some(m) => m,
+            None => continue,
+        };
+        for &bt in border_territories {
+            if map.are_adjacent(bt, missing) && bonus.value > best_value {
+                best_value = bonus.value;
+                best_tid = Some(bt);
+            }
+        }
+    }
+
+    best_tid
+}
+
+/// Generate a hold variation: deploy but make no attacks.
+fn generate_hold_variation(
+    state: &GameState,
+    player: PlayerId,
+    board: &Board,
+    border_territories: &[usize],
+    income: u32,
+) -> Option<Vec<Order>> {
+    let map = &board.map;
+    let opponent = 1 - player;
+
+    // Deploy to most threatened border.
+    let deploy_target = border_territories.iter().copied().max_by_key(|&tid| {
+        map.territories[tid]
+            .adjacent
+            .iter()
+            .filter(|&&adj| state.territory_owners[adj] == opponent)
+            .map(|&adj| state.territory_armies[adj])
+            .sum::<u32>()
+    })?;
+
+    let mut orders = vec![Order::Deploy {
+        territory: deploy_target,
+        armies: income,
+    }];
+
+    // Transfers only, no attacks.
+    let mut sim_armies = state.territory_armies.clone();
+    sim_armies[deploy_target] += income;
+    generate_transfers(
+        player,
+        board,
+        &mut sim_armies,
+        &state.territory_owners,
+        &mut orders,
+    );
+
+    Some(orders)
+}
+
+/// Generate a variation that only attacks the single weakest neighbor.
+fn generate_attack_weakest_variation(
+    state: &GameState,
+    player: PlayerId,
+    board: &Board,
+    border_territories: &[usize],
+    income: u32,
+) -> Option<Vec<Order>> {
+    let map = &board.map;
+
+    // Find the weakest enemy territory adjacent to any of our borders.
+    let mut best_from = None;
+    let mut best_target = None;
+    let mut min_defenders = u32::MAX;
+
+    for &bt in border_territories {
+        for &adj in &map.territories[bt].adjacent {
+            if state.territory_owners[adj] != player
+                && state.territory_owners[adj] != NEUTRAL
+                && state.territory_armies[adj] < min_defenders
+            {
+                min_defenders = state.territory_armies[adj];
+                best_from = Some(bt);
+                best_target = Some(adj);
+            }
+        }
+    }
+
+    let from = best_from?;
+    let target = best_target?;
+
+    let mut orders = vec![Order::Deploy {
+        territory: from,
+        armies: income,
+    }];
+
+    let attackers = state.territory_armies[from] + income - 1;
+    let defenders = state.territory_armies[target];
+    if attackers > 0 && defenders > 0 {
+        let result = resolve_attack(attackers, defenders, board.settings());
+        if result.captured {
+            orders.push(Order::Attack {
+                from,
+                to: target,
+                armies: attackers,
+            });
+        }
+    }
+
+    let mut sim_armies = state.territory_armies.clone();
+    sim_armies[from] += income;
+    generate_transfers(
+        player,
+        board,
+        &mut sim_armies,
+        &state.territory_owners,
+        &mut orders,
+    );
+
+    Some(orders)
+}
+
+/// Generate a variation focused on completing a specific bonus.
+fn generate_bonus_focus_variation(
+    state: &GameState,
+    player: PlayerId,
+    board: &Board,
+    border_territories: &[usize],
+    income: u32,
+) -> Option<Vec<Order>> {
+    let map = &board.map;
+
+    // Find the best bonus to complete: high value, few territories missing.
+    let mut best_bonus_idx = None;
+    let mut best_score = -1.0f64;
+
+    for (idx, bonus) in map.bonuses.iter().enumerate() {
+        if bonus.value == 0 {
+            continue;
+        }
+        let total = bonus.territory_ids.len();
+        let owned = bonus
+            .territory_ids
+            .iter()
+            .filter(|&&tid| state.territory_owners[tid] == player)
+            .count();
+        if owned == 0 || owned == total {
+            continue;
+        }
+        let missing = total - owned;
+        // Score: bonus value / missing territories (efficiency of completing it).
+        let score = bonus.value as f64 / missing as f64;
+        if score > best_score {
+            best_score = score;
+            best_bonus_idx = Some(idx);
+        }
+    }
+
+    let bonus_idx = best_bonus_idx?;
+    let bonus = &map.bonuses[bonus_idx];
+    let missing: Vec<usize> = bonus
+        .territory_ids
+        .iter()
+        .copied()
+        .filter(|&tid| state.territory_owners[tid] != player)
+        .collect();
+
+    // Find the best border territory to deploy to for attacking missing territories.
+    let deploy_target = border_territories
+        .iter()
+        .copied()
+        .filter(|&bt| missing.iter().any(|&m| map.are_adjacent(bt, m)))
+        .max_by_key(|&bt| state.territory_armies[bt])?;
+
+    let mut orders = vec![Order::Deploy {
+        territory: deploy_target,
+        armies: income,
+    }];
+
+    // Attack only the missing bonus territories.
+    let mut sim_armies = state.territory_armies.clone();
+    let mut sim_owners = state.territory_owners.clone();
+    sim_armies[deploy_target] += income;
+
+    let mut targets: Vec<usize> = map.territories[deploy_target]
+        .adjacent
+        .iter()
+        .copied()
+        .filter(|&adj| missing.contains(&adj))
+        .collect();
+    targets.sort_by_key(|&t| sim_armies[t]);
+
+    for target in targets {
+        if sim_armies[deploy_target] <= 1 {
+            break;
+        }
+        let attackers = sim_armies[deploy_target] - 1;
+        let defenders = sim_armies[target];
+        if defenders == 0 || attackers == 0 {
+            continue;
+        }
+        let result = resolve_attack(attackers, defenders, board.settings());
+        if result.captured {
+            orders.push(Order::Attack {
+                from: deploy_target,
+                to: target,
+                armies: attackers,
+            });
+            sim_armies[deploy_target] = 1;
+            sim_armies[target] = result.surviving_attackers;
+            sim_owners[target] = player;
+        }
+    }
+
+    generate_transfers(player, board, &mut sim_armies, &sim_owners, &mut orders);
 
     Some(orders)
 }

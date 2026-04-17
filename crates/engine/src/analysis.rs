@@ -54,16 +54,17 @@ impl Default for EvalCalibration {
 
 /// Logistic steepness parameter. Calibrated so that:
 /// - advantage = 0 => P = 0.5
-/// - advantage ~ 1.1 => P ~ 0.75 (2x income)
-/// - advantage ~ 2.2 => P ~ 0.90 (3x income)
-const LOGISTIC_K: f64 = 2.0;
+/// - 60% territory (all else equal) => P ~ 0.62
+/// - 80% of everything => P ~ 0.93
+const LOGISTIC_K: f64 = 4.0;
 
 /// Weights for the material advantage components.
-const WEIGHT_INCOME: f64 = 1.6;
-const WEIGHT_TERRITORY: f64 = 0.5;
-const WEIGHT_ARMY: f64 = 0.4;
-const WEIGHT_BONUS: f64 = 0.8;
-const WEIGHT_DEFENSE: f64 = 0.3;
+/// All features are normalized to [-0.5, 0.5] range before weighting.
+const WEIGHT_TERRITORY: f64 = 1.2;
+const WEIGHT_INCOME: f64 = 1.0;
+const WEIGHT_ARMY: f64 = 0.8;
+const WEIGHT_DEFENSE: f64 = 0.5;
+const WEIGHT_BONUS: f64 = 0.4;
 
 // ── Layer 1: Material evaluation ──
 
@@ -116,14 +117,13 @@ pub fn material_evaluation(state: &GameState, board: &Board) -> f64 {
         return 1.0;
     }
 
+    // --- Territory advantage (linear ratio, centered at 0) ---
+    let territory_advantage = p0_territories / (p0_territories + p1_territories) - 0.5;
+
     // --- Income advantage ---
     let p0_income = state.income(0, board) as f64;
     let p1_income = state.income(1, board) as f64;
-    // ln(ratio) so that 2x => ln(2) ~ 0.69, 3x => ln(3) ~ 1.10
-    let income_advantage = (p0_income / p1_income.max(1.0)).ln();
-
-    // --- Territory advantage ---
-    let territory_advantage = (p0_territories / p1_territories).ln();
+    let income_advantage = p0_income / (p0_income + p1_income).max(1.0) - 0.5;
 
     // --- Army advantage ---
     let p0_armies: u32 = (0..map.territory_count())
@@ -134,19 +134,19 @@ pub fn material_evaluation(state: &GameState, board: &Board) -> f64 {
         .filter(|&t| state.territory_owners[t] == 1)
         .map(|t| state.territory_armies[t])
         .sum();
-    let army_advantage = (p0_armies.max(1) as f64 / p1_armies.max(1) as f64).ln();
+    let army_advantage = p0_armies as f64 / (p0_armies + p1_armies).max(1) as f64 - 0.5;
 
-    // --- Bonus control advantage ---
-    let bonus_advantage = bonus_control_advantage(state, board);
+    // --- Bonus control advantage (scaled to [-0.5, 0.5]) ---
+    let bonus_advantage = bonus_control_advantage(state, board) / 2.0;
 
-    // --- Defensive position advantage ---
+    // --- Defensive position advantage (scaled to [-0.5, 0.5]) ---
     let p0_exposure = border_exposure(state, 0, board);
     let p1_exposure = border_exposure(state, 1, board);
-    let defense_advantage = p1_exposure - p0_exposure; // less exposure = better
+    let defense_advantage = (p1_exposure - p0_exposure) / 2.0;
 
     // --- Weighted sum ---
-    let advantage = income_advantage * WEIGHT_INCOME
-        + territory_advantage * WEIGHT_TERRITORY
+    let advantage = territory_advantage * WEIGHT_TERRITORY
+        + income_advantage * WEIGHT_INCOME
         + army_advantage * WEIGHT_ARMY
         + bonus_advantage * WEIGHT_BONUS
         + defense_advantage * WEIGHT_DEFENSE;
@@ -186,14 +186,14 @@ fn bonus_control_advantage(state: &GameState, board: &Board) -> f64 {
             p0_bonus_value += bv * 1.5;
         } else if p0_owned > 0 {
             let frac = p0_owned as f64 / total as f64;
-            p0_bonus_value += bv * frac * frac; // quadratic: partial is worth less
+            p0_bonus_value += bv * frac; // linear: partial progress valued proportionally
         }
 
         if p1_owned == total {
             p1_bonus_value += bv * 1.5;
         } else if p1_owned > 0 {
             let frac = p1_owned as f64 / total as f64;
-            p1_bonus_value += bv * frac * frac;
+            p1_bonus_value += bv * frac;
         }
     }
 
