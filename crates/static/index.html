@@ -767,8 +767,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         <div class="setting-row">
           <label>Number of Picks</label>
           <select id="set-picks">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
             <option value="3">3</option>
-            <option value="4" selected>4</option>
+            <option value="4">4</option>
             <option value="5">5</option>
             <option value="6">6</option>
           </select>
@@ -1315,7 +1317,7 @@ function showTemplateModal() {
   document.getElementById('fog-label').textContent = 'On';
   document.getElementById('set-armies').value = '5';
   document.getElementById('set-income').value = '5';
-  document.getElementById('set-picks').value = '4';
+  document.getElementById('set-picks').value = '2';
   document.getElementById('set-ai').value = 'hard';
   document.getElementById('set-timer').value = '90';
   document.getElementById('template-modal').classList.add('show');
