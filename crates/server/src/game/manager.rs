@@ -400,7 +400,8 @@ impl GameManager {
         if state.territory_count_for(opponent_seat) == 0 {
             let opponent_id = if opponent_seat == 0 { game.player_a } else { game.player_b };
             if let Some(opp_id) = opponent_id {
-                let empty_json = serde_json::to_value::<Vec<Order>>(& Vec::new())
+                let empty: Vec<Order> = Vec::new();
+                let empty_json = serde_json::to_value(&empty)
                     .map_err(|e| GameError::Serialization(e.to_string()))?;
                 db::insert_orders_tx(&mut tx, game_id, opp_id, current_turn, &empty_json).await?;
             }
