@@ -9,6 +9,12 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::auth::{AuthUser, MaybeAuthUser};
 
+const ADMIN_USERNAMES: &[&str] = &["minisoldr"];
+
+fn is_admin(username: &str) -> bool {
+    ADMIN_USERNAMES.contains(&username)
+}
+
 #[derive(Serialize, sqlx::FromRow)]
 pub struct FeedbackRow {
     pub id: Uuid,
@@ -224,7 +230,7 @@ pub async fn delete_feedback(
 ) -> Result<Json<DeleteResponse>, (StatusCode, String)> {
     let pool = state.require_db()?;
 
-    // Check ownership.
+    // Check ownership (admins can delete any feedback).
     let owner_id = sqlx::query_scalar::<_, Uuid>("SELECT user_id FROM feedback WHERE id = $1")
         .bind(feedback_id)
         .fetch_optional(pool)
@@ -232,7 +238,7 @@ pub async fn delete_feedback(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "feedback not found".to_string()))?;
 
-    if owner_id != auth.user_id {
+    if owner_id != auth.user_id && !is_admin(&auth.username) {
         return Err((
             StatusCode::FORBIDDEN,
             "you can only delete your own feedback".to_string(),
@@ -263,7 +269,7 @@ pub async fn resolve_feedback(
 ) -> Result<Json<ResolveResponse>, (StatusCode, String)> {
     let pool = state.require_db()?;
 
-    // Check ownership.
+    // Check ownership (admins can resolve any feedback).
     let owner_id = sqlx::query_scalar::<_, Uuid>("SELECT user_id FROM feedback WHERE id = $1")
         .bind(feedback_id)
         .fetch_optional(pool)
@@ -271,7 +277,7 @@ pub async fn resolve_feedback(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "feedback not found".to_string()))?;
 
-    if owner_id != auth.user_id {
+    if owner_id != auth.user_id && !is_admin(&auth.username) {
         return Err((
             StatusCode::FORBIDDEN,
             "you can only resolve your own feedback".to_string(),

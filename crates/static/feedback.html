@@ -114,6 +114,7 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 
 <script>
 let currentUser = null;
+const ADMIN_USERNAMES = ['minisoldr'];
 
 async function checkAuth() {
   try {
@@ -192,6 +193,8 @@ async function loadFeedback() {
     function renderItem(item) {
       const score = item.upvotes - item.downvotes;
       const isOwner = currentUser && currentUser.id === item.user_id;
+      const isAdmin = currentUser && ADMIN_USERNAMES.includes(currentUser.username);
+      const canManage = isOwner || isAdmin;
       return `<div class="feedback-item${item.resolved ? ' resolved' : ''}" data-id="${item.id}">
         <div class="vote-col">
           <button class="vote-btn up" onclick="vote('${item.id}',1)" title="Upvote">&#9650;</button>
@@ -204,8 +207,8 @@ async function loadFeedback() {
             <span class="author">${escapeHtml(item.username)}</span>
             <span>${timeAgo(item.created_at)}</span>
             ${item.resolved ? '<span class="resolved-badge">Resolved</span>' : ''}
-            ${isOwner ? `<button class="resolve-btn" onclick="resolveFeedback('${item.id}')">${item.resolved ? 'unresolve' : 'resolve'}</button>` : ''}
-            ${isOwner ? `<button class="delete-btn" onclick="deleteFeedback('${item.id}')">delete</button>` : ''}
+            ${canManage ? `<button class="resolve-btn" onclick="resolveFeedback('${item.id}')">${item.resolved ? 'unresolve' : 'resolve'}</button>` : ''}
+            ${canManage ? `<button class="delete-btn" onclick="deleteFeedback('${item.id}')">delete</button>` : ''}
           </div>
         </div>
       </div>`;
