@@ -488,8 +488,24 @@ function onStateUpdate() {
 
   // Waiting overlay
   var waitingEl = document.getElementById('waiting-overlay');
-  if (GAME.status === 'waiting') { waitingEl.classList.add('show'); return; }
-  else { waitingEl.classList.remove('show'); }
+  if (GAME.status === 'waiting') {
+    var card = waitingEl.querySelector('.card');
+    if (mySeat !== null) {
+      // Creator: show waiting spinner with shareable link
+      card.innerHTML = '<div class="spinner"></div>' +
+        '<h2>Waiting for opponent...</h2>' +
+        '<p>Share this link to invite a player</p>' +
+        '<p style="margin-top:12px;color:var(--gold);font-family:monospace;font-size:12px;word-break:break-all" id="game-link">' + window.location.href + '</p>' +
+        '<button id="copy-link-btn" onclick="copyInviteLink()" style="margin-top:12px;background:transparent;border:1px solid var(--gold);color:var(--gold);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Copy Link</button>';
+    } else {
+      // Non-player: show join button
+      card.innerHTML = '<h2 style="color:var(--gold)">Join Game</h2>' +
+        '<p style="margin-top:8px;color:var(--text2)">This game is waiting for an opponent. Join and play!</p>' +
+        '<button onclick="joinThisGame()" style="margin-top:16px;background:var(--blue);color:#fff;border:none;border-radius:6px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer">Join Game</button>';
+    }
+    waitingEl.classList.add('show');
+    return;
+  } else { waitingEl.classList.remove('show'); }
 
   var turn = STATE ? STATE.turn : GAME.turn;
   document.getElementById('turn-num').textContent = turn || 0;
@@ -1311,6 +1327,22 @@ function updateDeadlineDisplay() {
   if (diff < 300000) el.className = 'deadline-timer critical';
   else if (diff < 3600000) el.className = 'deadline-timer urgent';
   else el.className = 'deadline-timer';
+}
+
+// ========== JOIN THIS GAME ==========
+async function joinThisGame() {
+  try {
+    var r = await fetch('/api/games/' + GAME_ID + '/join', { method: 'POST' });
+    if (!r.ok) {
+      var err = await r.text();
+      toast(err || 'Could not join game', 'error');
+      return;
+    }
+    toast('Joined!', 'success');
+    await fetchGameState();
+  } catch (e) {
+    toast('Network error: ' + e.message, 'error');
+  }
 }
 
 // ========== COPY INVITE LINK ==========

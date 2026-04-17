@@ -27,7 +27,10 @@ pub struct GameResponse {
     pub status: String,
     pub player_a: Option<Uuid>,
     pub player_b: Option<Uuid>,
+    pub player_a_name: Option<String>,
+    pub player_b_name: Option<String>,
     pub winner_id: Option<Uuid>,
+    pub winner_name: Option<String>,
     pub turn: i32,
     pub created_at: String,
     pub finished_at: Option<String>,
@@ -41,12 +44,35 @@ impl From<db::GameRow> for GameResponse {
             status: row.status,
             player_a: row.player_a,
             player_b: row.player_b,
+            player_a_name: None,
+            player_b_name: None,
             winner_id: row.winner_id,
+            winner_name: None,
             turn: row.turn,
             created_at: row.created_at.to_rfc3339(),
             finished_at: row.finished_at.map(|t| t.to_rfc3339()),
         }
     }
+}
+
+async fn resolve_username(pool: &sqlx::PgPool, user_id: Option<Uuid>) -> Option<String> {
+    let uid = user_id?;
+    db::get_user(pool, uid)
+        .await
+        .ok()
+        .flatten()
+        .map(|u| u.username)
+}
+
+async fn game_response_with_names(pool: &sqlx::PgPool, row: db::GameRow) -> GameResponse {
+    let player_a_name = resolve_username(pool, row.player_a).await;
+    let player_b_name = resolve_username(pool, row.player_b).await;
+    let winner_name = resolve_username(pool, row.winner_id).await;
+    let mut resp = GameResponse::from(row);
+    resp.player_a_name = player_a_name;
+    resp.player_b_name = player_b_name;
+    resp.winner_name = winner_name;
+    resp
 }
 
 #[derive(Serialize)]
@@ -107,7 +133,11 @@ pub async fn list_games(
     };
 
     let rows = rows.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(rows.into_iter().map(GameResponse::from).collect()))
+    let mut entries = Vec::with_capacity(rows.len());
+    for row in rows {
+        entries.push(game_response_with_names(pool, row).await);
+    }
+    Ok(Json(entries))
 }
 
 /// GET /api/games/:id -- get game state (fog-filtered for the requesting player).
