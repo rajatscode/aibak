@@ -89,6 +89,16 @@ Spectate:  GET /api/games/:id/spectate
 WebSocket: GET /ws
 ```
 
+## Production Checklist
+
+Before real user traffic, set these on Fly.io:
+```bash
+flyctl secrets set JWT_SECRET=$(openssl rand -hex 32)
+flyctl secrets set DISCORD_CLIENT_ID=<from Discord dev portal>
+flyctl secrets set DISCORD_CLIENT_SECRET=<from Discord dev portal>
+flyctl secrets set DISCORD_REDIRECT_URI=https://strat.club/api/auth/discord/callback
+```
+
 ## Legal
 
 NEVER reference competing products. Use "Deploy" and "Move" phases.
