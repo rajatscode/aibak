@@ -135,6 +135,14 @@ pub async fn spectate_game(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "game not found".to_string()))?;
 
+    // Disable spectation for in-progress games to prevent fog-of-war bypass.
+    if game.status == "active" || game.status == "picking" {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "spectation is not available for in-progress games".to_string(),
+        ));
+    }
+
     // Compute win probability if we have state + map.
     let win_prob = if let (Some(state_json), Some(map_json)) = (&game.state_json, &game.map_json) {
         let game_state: Option<GameState> = serde_json::from_value(state_json.clone()).ok();

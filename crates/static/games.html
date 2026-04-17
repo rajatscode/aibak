@@ -381,9 +381,9 @@ function renderGameList(listId, emptyId, games, type) {
     var p2 = g.player_b_name || (g.status === 'waiting' ? 'Waiting...' : 'Player 2');
     var statusClass = 'status-' + g.status;
     var actionBtn = '';
-    if (type === 'active') {
+    if (type === 'active' && g.status === 'finished') {
       actionBtn = '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Watch</button>';
-    } else {
+    } else if (type === 'recent') {
       actionBtn = '<button class="btn btn-replay" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Replay</button>';
     }
     var created = new Date(g.created_at);
@@ -824,7 +824,6 @@ function renderMyGameList(games) {
       '</div>' +
       '<div class="game-actions">' +
         '<a href="/game/' + g.id + '" class="btn btn-play">Play</a>' +
-        '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Watch</button>' +
       '</div>';
     list.appendChild(card);
   });
