@@ -1858,8 +1858,14 @@ function showTooltip(id, e) {
     const tBonus = G.bonuses.find(b => b.territories && b.territories.includes(t.id));
     if (tBonus) {
       const bColor = BONUS_COLORS[tBonus.id % BONUS_COLORS.length];
-      html += '<div class="tip-bonus"><span class="bonus-dot" style="background:' + bColor + '"></span>' + tBonus.name + ' (+' + tBonus.value + ')</div>';
+      html += '<div class="tip-bonus"><span class="bonus-dot" style="background:' + bColor + '"></span>' + tBonus.name + ' (+' + tBonus.value + ', ' + (tBonus.territories || []).length + ' terr)</div>';
     }
+  }
+
+  // Picking hint: show neighbor count
+  if (phase === 'picking' && G && G.adjacency) {
+    const neighbors = (G.adjacency[t.id] || []).length;
+    html += '<div class="tip-hint">' + neighbors + ' neighbor' + (neighbors !== 1 ? 's' : '') + '</div>';
   }
 
   // Deploy hint
@@ -2047,6 +2053,7 @@ function renderPickingPanel(pp, cp) {
   const totalOptions = (G.pick_options || []).length;
   pp.innerHTML = '<div class="sb-phase">Picking Phase</div>' +
     '<div class="sb-sub">Rank all territories by priority (you\'ll receive ' + needed + ')</div>' +
+    '<div style="margin-top:6px;font-size:12px;color:#6b7280;line-height:1.4">Click territories on the map to rank them. You\'ll get ' + needed + ' picks in ABBA draft order. Territories in smaller bonuses with fewer neighbors are usually stronger picks.</div>' +
     '<div style="margin-top:8px;font-size:13px;color:var(--gold)">' + picks.length + ' / ' + totalOptions + ' ranked</div>' +
     '<div style="margin-top:8px" id="pick-list-container">' +
       picks.map(function(id, idx) {
@@ -2091,6 +2098,12 @@ function renderOrdersPanel(pp, cp) {
 
   let headerHtml = '<div class="sb-phase">Orders</div>' +
     '<div class="sb-sub">' + subText + '</div>';
+
+  if (deployLeft > 0 && G.turn === 1) {
+    headerHtml += '<div style="margin-top:4px;font-size:12px;color:#6b7280;line-height:1.4">Place your armies on territories you own. Click a territory to add armies.</div>';
+  } else if (deployLeft <= 0 && G.turn === 1) {
+    headerHtml += '<div style="margin-top:4px;font-size:12px;color:#6b7280;line-height:1.4">Click a source territory, then click an adjacent target to attack or transfer. Attacks need more armies than the defender.</div>';
+  }
 
   if (deployLeft > 0) {
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
