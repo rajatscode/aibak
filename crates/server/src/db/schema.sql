@@ -154,3 +154,6 @@ ALTER TABLE feedback ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_feedback_upvotes ON feedback(upvotes DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feedback_votes_feedback ON feedback_votes(feedback_id);
+
+-- Idempotency constraint: prevent duplicate rating entries per user per game.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rating_history_user_game ON rating_history(user_id, game_id);

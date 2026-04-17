@@ -277,26 +277,6 @@ pub async fn finish_game_tx(
     Ok(())
 }
 
-/// Finish a game (non-transactional).
-pub async fn finish_game(
-    pool: &PgPool,
-    game_id: Uuid,
-    winner_id: Uuid,
-    state_json: &serde_json::Value,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        UPDATE games SET status = 'finished', winner_id = $2, state_json = $3, finished_at = now()
-        WHERE id = $1
-        "#,
-    )
-    .bind(game_id)
-    .bind(winner_id)
-    .bind(state_json)
-    .execute(pool)
-    .await?;
-    Ok(())
-}
 
 /// Set a turn deadline (non-transactional).
 pub async fn set_turn_deadline(
@@ -905,6 +885,7 @@ pub async fn insert_rating_history(
         r#"
         INSERT INTO rating_history (user_id, game_id, old_rating, new_rating)
         VALUES ($1, $2, $3, $4)
+        ON CONFLICT (user_id, game_id) DO NOTHING
         "#,
     )
     .bind(user_id)

@@ -782,12 +782,16 @@ impl GameManager {
     }
 
     /// Resign: forfeit the game, opponent wins.
+    /// Uses FOR UPDATE to prevent races with boot timer and concurrent submissions.
     pub async fn resign(&self, game_id: Uuid, user_id: Uuid) -> Result<(), GameError> {
-        let game = db::get_game(&self.pool, game_id)
+        let mut tx = self.pool.begin().await?;
+
+        let game = db::get_game_for_update(&mut tx, game_id)
             .await?
             .ok_or(GameError::NotFound)?;
 
         if game.status != "active" && game.status != "picking" {
+            tx.rollback().await?;
             return Err(GameError::WrongStatus {
                 expected: "active".to_string(),
                 actual: game.status,
@@ -814,7 +818,9 @@ impl GameManager {
         let state_json = serde_json::to_value(&final_state)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
 
-        db::finish_game(&self.pool, game_id, winner_id, &state_json).await?;
+        db::finish_game_tx(&mut tx, game_id, winner_id, &state_json).await?;
+
+        tx.commit().await?;
 
         if let Err(e) = self.update_ratings(game_id, winner_id, user_id).await {
             tracing::error!("Rating update failed after resign: {e}");
