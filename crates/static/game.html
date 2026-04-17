@@ -49,7 +49,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* SVG MAP */
 #map-svg{width:100%;height:100%}
 .territory-path{cursor:pointer;transition:fill .2s ease,stroke .2s ease,opacity .2s ease,filter .2s ease}
-.territory-path:hover{filter:brightness(1.12)}
+.territory-path:hover{filter:brightness(1.12);stroke-width:2 !important}
 .territory-highlight{pointer-events:none;transition:stroke .2s ease,stroke-width .2s ease}
 .army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
 .army-text.large-army{font-size:15px}
@@ -273,6 +273,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <h2>Waiting for opponent...</h2>
     <p>Share this link to invite a player</p>
     <p style="margin-top:12px;color:var(--gold);font-family:monospace;font-size:12px;word-break:break-all" id="game-link"></p>
+    <button id="copy-link-btn" onclick="copyInviteLink()" style="margin-top:12px;background:transparent;border:1px solid var(--gold);color:var(--gold);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Copy Link</button>
   </div>
 </div>
 <div id="toast-container"></div>
@@ -599,13 +600,13 @@ function buildMap() {
     }
 
     if (t.visual && t.visual.path) {
-      g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#080c12', 'stroke-width':2, 'stroke-linejoin':'round', filter:'url(#territory-shadow)'}));
+      g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#1a2744', 'stroke-width':1, 'stroke-linejoin':'round', filter:'url(#territory-shadow)'}));
       if (t.is_wasteland) {
         g.appendChild(svgEl('path', {d:t.visual.path, id:'wasteland-hatch-'+t.id, fill:'url(#wasteland-hatch)', stroke:'none', 'pointer-events':'none', opacity:'0.5'}));
       }
       g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-highlight', id:'highlight-'+t.id, fill:'none', stroke:'none', 'stroke-width':3, 'pointer-events':'none'}));
     } else {
-      g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#080c12', 'stroke-width':2, filter:'url(#territory-shadow)'}));
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#1a2744', 'stroke-width':1, filter:'url(#territory-shadow)'}));
       if (t.is_wasteland) {
         g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, id:'wasteland-hatch-'+t.id, fill:'url(#wasteland-hatch)', stroke:'none', 'pointer-events':'none', opacity:'0.5'}));
       }
@@ -683,12 +684,13 @@ function updateMap() {
     var isThem = owner !== mySeat && owner !== 255;
 
     var fill, strokeColor, borderColor;
-    if (isMe) { fill='url(#grad-me)'; strokeColor='#152a5e'; borderColor='rgba(96,165,250,0.6)'; }
-    else if (isThem) { fill='url(#grad-them)'; strokeColor='#5a1010'; borderColor='rgba(239,68,68,0.6)'; }
-    else if (t.is_wasteland) { fill='url(#grad-wasteland)'; strokeColor='#3d1f00'; borderColor='rgba(251,191,36,0.4)'; }
-    else { fill='url(#grad-neutral)'; strokeColor='#1a1f2a'; borderColor='rgba(255,255,255,0.15)'; }
+    if (isMe) { fill='url(#grad-me)'; strokeColor='#1a2744'; borderColor='rgba(96,165,250,0.6)'; }
+    else if (isThem) { fill='url(#grad-them)'; strokeColor='#1a2744'; borderColor='rgba(239,68,68,0.6)'; }
+    else if (t.is_wasteland) { fill='url(#grad-wasteland)'; strokeColor='#3d2f00'; borderColor='rgba(251,191,36,0.4)'; }
+    else { fill='url(#grad-neutral)'; strokeColor='#1a2744'; borderColor='rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
+    pathEl.setAttribute('stroke-width', '1');
     if (armyBgEl) armyBgEl.setAttribute('stroke', borderColor);
     // Wasteland hatch visibility
     var hatchEl = document.getElementById('wasteland-hatch-'+t.id);
@@ -1256,6 +1258,15 @@ function updateDeadlineDisplay() {
   if (diff < 300000) el.className = 'deadline-timer critical';
   else if (diff < 3600000) el.className = 'deadline-timer urgent';
   else el.className = 'deadline-timer';
+}
+
+// ========== COPY INVITE LINK ==========
+async function copyInviteLink() {
+  const url = document.getElementById('game-link').textContent;
+  await navigator.clipboard.writeText(url);
+  const btn = document.getElementById('copy-link-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy Link', 2000);
 }
 
 // ========== KEYBOARD SHORTCUTS ==========
