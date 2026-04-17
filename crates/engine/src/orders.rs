@@ -28,6 +28,8 @@ pub enum OrderError {
     TransferToEnemy(usize),
     #[error("deployed {deployed} armies but only {available} available")]
     OverDeploy { deployed: u32, available: u32 },
+    #[error("must deploy all {required} armies (only deployed {deployed})")]
+    UnderDeploy { deployed: u32, required: u32 },
     #[error("must deploy at least 1 army")]
     ZeroDeploy,
     #[error("must attack/transfer with at least 1 army")]
@@ -98,6 +100,13 @@ pub fn validate_orders(
         return Err(OrderError::OverDeploy {
             deployed: total_deployed,
             available: income,
+        });
+    }
+
+    if total_deployed < income {
+        return Err(OrderError::UnderDeploy {
+            deployed: total_deployed,
+            required: income,
         });
     }
 
@@ -206,6 +215,37 @@ mod tests {
         state.phase = crate::state::Phase::Play;
         state.turn = 1;
         state
+    }
+
+    #[test]
+    fn test_validate_catches_under_deployment() {
+        let map = test_map();
+        let board = Board::from_map(map);
+        let state = setup_state(&board);
+        let orders = vec![Order::Deploy {
+            territory: 0,
+            armies: 3, // income is 7
+        }];
+        let result = validate_orders(&orders, 0, &state, &board);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            OrderError::UnderDeploy { .. }
+        ));
+    }
+
+    #[test]
+    fn test_validate_rejects_empty_orders() {
+        let map = test_map();
+        let board = Board::from_map(map);
+        let state = setup_state(&board);
+        let orders: Vec<Order> = Vec::new();
+        let result = validate_orders(&orders, 0, &state, &board);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            OrderError::UnderDeploy { .. }
+        ));
     }
 
     #[test]

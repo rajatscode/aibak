@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use serde_json;
@@ -419,13 +420,24 @@ impl GameManager {
             return Ok(());
         }
 
-        self.resolve_turn_inner_tx(&mut tx, game_id, &game, &all_orders)
+        let rating_update = self.resolve_turn_inner_tx(&mut tx, game_id, &game, &all_orders)
             .await?;
 
         tx.commit().await?;
 
         self.hub
             .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat }).await;
+
+        // Update ratings after commit to avoid deadlock from pool contention.
+        if let Some((winner_id, loser_id)) = rating_update {
+            if let Err(e) = self.update_ratings(game_id, winner_id, loser_id).await {
+                error!("Rating update failed for game {game_id}, retrying: {e}");
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                if let Err(e2) = self.update_ratings(game_id, winner_id, loser_id).await {
+                    error!("Rating update retry failed for game {game_id}: {e2}");
+                }
+            }
+        }
 
         Ok(())
     }
@@ -455,26 +467,48 @@ impl GameManager {
             return Ok(()); // Already resolved.
         }
 
-        // Submit empty orders for missing players.
+        // Generate valid deploy orders for missing players.
+        let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+            .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let board = Board::from_map(map_file);
+        let state: GameState = serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
+            .map_err(|e| GameError::Serialization(e.to_string()))?;
+
         let players = [game.player_a, game.player_b];
         let submitted_users: Vec<Uuid> = existing.iter().map(|o| o.user_id).collect();
         for pid in players.iter().flatten() {
             if !submitted_users.contains(pid) {
-                let empty: Vec<Order> = Vec::new();
-                let empty_json = serde_json::to_value(&empty)
+                let seat = self.player_seat_by_id(&game, *pid)?;
+                let boot_orders = {
+                    let mut rng = self.rng.lock().await;
+                    generate_boot_orders(&state, seat, &board, &mut *rng)
+                };
+                let orders_json = serde_json::to_value(&boot_orders)
                     .map_err(|e| GameError::Serialization(e.to_string()))?;
-                db::insert_orders_tx(&mut tx, game_id, *pid, turn, &empty_json).await?;
+                db::insert_orders_tx(&mut tx, game_id, *pid, turn, &orders_json).await?;
             }
         }
 
         // Re-fetch and resolve.
         let all_orders = db::get_orders_for_turn_tx(&mut tx, game_id, turn).await?;
-        if all_orders.len() >= 2 {
+        let rating_update = if all_orders.len() >= 2 {
             self.resolve_turn_inner_tx(&mut tx, game_id, &game, &all_orders)
-                .await?;
-        }
+                .await?
+        } else {
+            None
+        };
 
         tx.commit().await?;
+
+        if let Some((winner_id, loser_id)) = rating_update {
+            if let Err(e) = self.update_ratings(game_id, winner_id, loser_id).await {
+                error!("Rating update failed for game {game_id}, retrying: {e}");
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                if let Err(e2) = self.update_ratings(game_id, winner_id, loser_id).await {
+                    error!("Rating update retry failed for game {game_id}: {e2}");
+                }
+            }
+        }
 
         Ok(())
     }
@@ -566,13 +600,15 @@ impl GameManager {
     }
 
     /// Internal: resolve a turn once both players' orders are in (within a transaction).
+    /// Returns Some((winner_id, loser_id)) if the game finished, for the caller
+    /// to update ratings AFTER committing the transaction.
     async fn resolve_turn_inner_tx(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         game_id: Uuid,
         game: &db::GameRow,
         all_orders: &[db::OrderRow],
-    ) -> Result<(), GameError> {
+    ) -> Result<Option<(Uuid, Uuid)>, GameError> {
         let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
         let board = Board::from_map(map_file);
@@ -622,19 +658,10 @@ impl GameManager {
 
                 db::finish_game_tx(tx, game_id, winner_id, &state_json).await?;
 
-                // Update ratings (uses pool directly, outside the row lock).
-                // Best-effort with retry — don't fail the game resolution
-                // if ratings can't be updated right now.
-                if let Err(e) = self.update_ratings(game_id, winner_id, loser_id).await {
-                    error!("Rating update failed for game {game_id}, retrying: {e}");
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    if let Err(e2) = self.update_ratings(game_id, winner_id, loser_id).await {
-                        error!("Rating update retry failed for game {game_id}: {e2}");
-                    }
-                }
-
                 self.hub
                     .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id }).await;
+
+                return Ok(Some((winner_id, loser_id)));
             } else {
                 // Simultaneous elimination (no winner) — still mark game as finished.
                 error!("Game {game_id} finished with no winner (simultaneous elimination)");
@@ -662,7 +689,7 @@ impl GameManager {
             ).await;
         }
 
-        Ok(())
+        Ok(None)
     }
 
     /// Update ratings for winner and loser after a game.
@@ -815,4 +842,39 @@ impl GameManager {
             Err(GameError::NotParticipant)
         }
     }
+}
+
+/// Generate valid deploy-only orders for a player on boot timer timeout.
+/// Randomly distributes all income across owned territories.
+fn generate_boot_orders(
+    state: &GameState,
+    player: u8,
+    board: &Board,
+    rng: &mut impl Rng,
+) -> Vec<Order> {
+    let income = state.income(player, board);
+    if income == 0 {
+        return Vec::new();
+    }
+
+    let owned: Vec<usize> = (0..board.map.territory_count())
+        .filter(|&t| state.territory_owners[t] == player)
+        .collect();
+
+    if owned.is_empty() {
+        return Vec::new();
+    }
+
+    let mut deploy_amounts: Vec<u32> = vec![0; owned.len()];
+    for _ in 0..income {
+        let idx = rng.gen_range(0..owned.len());
+        deploy_amounts[idx] += 1;
+    }
+
+    deploy_amounts
+        .into_iter()
+        .zip(owned.iter())
+        .filter(|&(amount, _)| amount > 0)
+        .map(|(armies, &territory)| Order::Deploy { territory, armies })
+        .collect()
 }
