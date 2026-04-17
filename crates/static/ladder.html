@@ -43,6 +43,21 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+  nav{flex-wrap:wrap}
+  .ladder-table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .ladder-table th,.ladder-table td{white-space:nowrap;padding:8px 8px}
+  .tier-badge{display:none}
+  h2{font-size:18px}
+}
+@media (max-width: 480px) {
+  .ladder-table{font-size:12px}
+  .ladder-table th,.ladder-table td{padding:6px}
+  .ladder-table .rank-col{width:36px}
+  .pagination button{padding:6px 10px;font-size:11px}
+}
 </style>
 </head>
 <body>

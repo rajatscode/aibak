@@ -107,6 +107,25 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 .local-game-card{padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
 .local-game-card h3{font-size:14px;font-weight:600;margin-bottom:8px}
 .local-game-card .meta{font-size:12px;color:var(--text2);margin-bottom:12px}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+  nav{flex-wrap:wrap}
+  .tabs{padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tab{padding:10px 14px;font-size:12px;white-space:nowrap}
+  .game-card{flex-direction:column;align-items:flex-start;gap:10px}
+  .game-actions{width:100%;justify-content:flex-start}
+  .spec-stats{flex-direction:column}
+  .stat-card{min-width:unset}
+  .turn-stepper{flex-wrap:wrap}
+}
+@media (max-width: 480px) {
+  #mp-actions > div:first-child{flex-direction:column}
+  #mp-actions #map-select{width:100%}
+  #mp-actions #btn-find-game,#mp-actions #btn-create-game{width:100%}
+  #join-game-id{max-width:unset !important}
+  .tab{padding:8px 10px;font-size:11px}
+}
 </style>
 </head>
 <body>

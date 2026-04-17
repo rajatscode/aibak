@@ -49,6 +49,19 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+  nav{flex-wrap:wrap}
+  .feedback-item{flex-direction:column;gap:8px}
+  .vote-col{flex-direction:row;min-width:unset}
+}
+@media (max-width: 480px) {
+  .submit-box textarea{min-height:60px;font-size:14px}
+  .feedback-content{font-size:14px}
+  .submit-row{flex-direction:column;align-items:stretch;gap:8px}
+  .submit-row .btn{width:100%}
+}
 </style>
 </head>
 <body>
