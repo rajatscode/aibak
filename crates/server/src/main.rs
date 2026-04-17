@@ -1473,6 +1473,10 @@ async fn ladder_page() -> Html<&'static str> {
     Html(include_str!("../../static/ladder.html"))
 }
 
+async fn history_page() -> Html<&'static str> {
+    Html(include_str!("../../static/history.html"))
+}
+
 async fn not_found() -> Html<String> {
     Html(r#"<!DOCTYPE html>
 <html><head><title>strat.club — Not Found</title>
@@ -1699,6 +1703,8 @@ async fn main() {
         )
         // Ladder.
         .route("/ladder", get(ladder_page))
+        // Match history.
+        .route("/history", get(history_page))
         // Feedback.
         .route("/feedback", get(feedback_page))
         .route("/api/feedback", post(api::feedback::submit_feedback))
