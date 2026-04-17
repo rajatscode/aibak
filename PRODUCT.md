@@ -1,10 +1,36 @@
 # Product — strat.club
 
+## Vision
+
+**strat.club is the competitive 1v1 territory strategy ladder where skill determines rank — deterministic, asynchronous, and designed for players who want ranked progression without time pressure.**
+
 ## Core User Story
 
 **Play competitive 1v1 territory strategy games on a ranked ladder.**
 
 That's it. Everything else is a distraction until this works perfectly.
+
+## User Stories
+
+### New Player
+- As a new player, I want a quick tutorial explaining the core turn structure (pick → deploy → attack → resolve) so I can understand the game flow in under 5 minutes.
+- As a new player, I want to play offline against AI on Easy before entering ranked so I can practice without risking my rating.
+- As a new player, I want tooltips on bonuses, card rewards, and fog of war so I don't need external wikis to understand the rules.
+
+### Casual Player
+- As a casual player, I want asynchronous games with a 24-hour turn timer so I can play 2-3 games per week without time pressure.
+- As a casual player, I want to see a leaderboard showing my rank relative to other players so I feel part of a community without grinding.
+- As a casual player, I want to replay completed games so I can learn from losses without needing a separate study mode.
+
+### Competitive Player
+- As a competitive player, I want a public Glicko-2 rating and seasonal leaderboard so my skill is objectively measured and I know what I need to climb.
+- As a competitive player, I want frequent matchmaking against similarly skilled opponents so every game is a meaningful test of my ability, not a stomp.
+- As a competitive player, I want access to opening theory and post-game analysis so I can optimize play and discover new strategies.
+
+### Returning Player
+- As a returning player, I want to see my rating history and previous season rank so I know where I left off and what to chase.
+- As a returning player, I want new maps or rule variants available so the meta feels fresh.
+- As a returning player, I want to jump straight into ranked matchmaking without mandatory tutorials so I can return frictionlessly.
 
 ## Current State: ALPHA
 
