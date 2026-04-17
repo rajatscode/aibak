@@ -36,6 +36,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .player-bar .player.active{background:rgba(255,255,255,0.05);border-radius:6px;padding:4px 10px}
 .player-bar .vs{color:var(--text3);font-weight:700}
 .player-bar .turn-info{margin-left:auto;color:var(--text2)}
+.deadline-timer{font-size:12px;font-weight:600;color:var(--text2);margin-left:8px}
+.deadline-timer.urgent{color:#f87171}
+.deadline-timer.critical{color:#f87171;animation:pulse-deadline 1s ease-in-out infinite}
+@keyframes pulse-deadline{0%,100%{opacity:1}50%{opacity:.5}}
 
 /* MAIN LAYOUT */
 #main{display:flex;flex:1;overflow:hidden}
@@ -228,6 +232,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <span class="rating" id="pb-rating"></span>
     </div>
     <div class="turn-info" id="turn-info"></div>
+    <span class="deadline-timer" id="deadline-timer"></span>
   </div>
   <div id="main">
     <div id="map-container">
@@ -299,6 +304,8 @@ let pendingType = '';
 let submitted = false;
 let ws = null;
 let lastTurn = -1;        // track turn transitions
+let turnDeadline = null;  // ISO string from API
+let deadlineInterval = null;
 
 // ========== INIT ==========
 (async function init() {
@@ -336,6 +343,8 @@ async function fetchGameState() {
     MAP = data.map;
     mySeat = data.my_seat;
     pickOptions = data.pick_options || [];
+    turnDeadline = data.turn_deadline || null;
+    startDeadlineTimer();
 
     if (data.player_a_info) {
       document.getElementById('pa-name').textContent = data.player_a_info.username;
@@ -1207,6 +1216,32 @@ function moveTooltip(e) {
   tip.style.top = (e.clientY-rect.top-30)+'px';
 }
 function hideTooltip() { document.getElementById('tooltip').classList.remove('show'); }
+
+// ========== DEADLINE TIMER ==========
+function startDeadlineTimer() {
+  if (deadlineInterval) clearInterval(deadlineInterval);
+  updateDeadlineDisplay();
+  deadlineInterval = setInterval(updateDeadlineDisplay, 1000);
+}
+
+function updateDeadlineDisplay() {
+  var el = document.getElementById('deadline-timer');
+  if (!el) return;
+  if (!turnDeadline || phase === 'finished') { el.textContent = ''; el.className = 'deadline-timer'; return; }
+  var deadline = new Date(turnDeadline);
+  var now = new Date();
+  var diff = deadline - now;
+  if (diff <= 0) { el.textContent = 'Time expired'; el.className = 'deadline-timer critical'; return; }
+  var hours = Math.floor(diff / 3600000);
+  var mins = Math.floor((diff % 3600000) / 60000);
+  var secs = Math.floor((diff % 60000) / 1000);
+  if (hours > 0) el.textContent = hours + 'h ' + mins + 'm';
+  else if (mins > 0) el.textContent = mins + 'm ' + secs + 's';
+  else el.textContent = secs + 's';
+  if (diff < 300000) el.className = 'deadline-timer critical';
+  else if (diff < 3600000) el.className = 'deadline-timer urgent';
+  else el.className = 'deadline-timer';
+}
 
 // ========== KEYBOARD SHORTCUTS ==========
 document.addEventListener('keydown', function(e) {

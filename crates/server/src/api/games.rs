@@ -64,6 +64,7 @@ pub struct GameStateResponse {
     pub map: Option<serde_json::Value>,
     pub player_a_info: Option<PlayerInfo>,
     pub player_b_info: Option<PlayerInfo>,
+    pub turn_deadline: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -180,6 +181,17 @@ pub async fn get_game(
 
     let map_data = game.map_json.clone();
 
+    // Fetch turn deadline for active games.
+    let turn_deadline = if game.status == "active" || game.status == "picking" {
+        db::get_turn_deadline(pool, game_id, game.turn)
+            .await
+            .ok()
+            .flatten()
+            .map(|dt| dt.to_rfc3339())
+    } else {
+        None
+    };
+
     Ok(Json(GameStateResponse {
         game: GameResponse::from(game),
         state: filtered_state,
@@ -188,6 +200,7 @@ pub async fn get_game(
         map: map_data,
         player_a_info,
         player_b_info,
+        turn_deadline,
     }))
 }
 

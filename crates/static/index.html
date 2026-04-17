@@ -302,6 +302,20 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .template-card .template-icon{font-size:36px;margin-bottom:12px}
 .template-card.selected{border-color:var(--gold)}
 
+/* RULES MODAL */
+#rules-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:1001}
+#rules-modal.show{display:flex}
+#rules-modal .modal-content{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:16px;max-width:420px;width:90%;padding:28px 24px;text-align:left}
+#rules-modal .modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
+#rules-modal .modal-close:hover{color:var(--text)}
+#rules-modal h2{font-size:20px;font-weight:700;color:var(--gold);margin-bottom:16px;text-align:center}
+#rules-modal ol{list-style:none;counter-reset:rules;padding:0;margin:0 0 16px}
+#rules-modal ol li{counter-increment:rules;margin-bottom:10px;font-size:13px;color:var(--text);line-height:1.5;padding-left:8px}
+#rules-modal ol li strong{color:var(--blue);text-transform:uppercase}
+#rules-modal .rules-note{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:20px;padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
+#rules-modal .rules-btn{display:block;width:100%;padding:10px;background:var(--gold);color:var(--bg);border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .2s}
+#rules-modal .rules-btn:hover{opacity:.85}
+
 /* GAME SETTINGS */
 #game-settings{margin-top:24px;text-align:left;max-width:520px;margin-left:auto;margin-right:auto}
 #game-settings h3{font-size:14px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;text-align:center}
@@ -730,6 +744,23 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       </div>
       <button id="start-game-btn" onclick="startGameWithSettings()">Start Game</button>
     </div>
+  </div>
+</div>
+<div id="rules-modal" onclick="if(event.target===this)hideRulesModal()">
+  <div class="modal-content">
+    <button class="modal-close" onclick="hideRulesModal()">&times;</button>
+    <h2>How to Play strat.club</h2>
+    <ol>
+      <li><strong>Pick</strong> &mdash; Select 4 territories in priority order (ABBA draft with your opponent)</li>
+      <li><strong>Deploy</strong> &mdash; Place your income armies on territories you own</li>
+      <li><strong>Attack</strong> &mdash; Click source &rarr; target to attack adjacent enemies (60% offense / 70% defense kill rates)</li>
+      <li><strong>Conquer</strong> &mdash; Capture all enemy territories to win</li>
+    </ol>
+    <div class="rules-note">
+      <strong>Bonuses:</strong> Control all territories in a region for extra income each turn.<br>
+      <strong>Fog of War:</strong> You can only see territories adjacent to yours.
+    </div>
+    <button class="rules-btn" onclick="hideRulesModal()">Got it</button>
   </div>
 </div>
 <div id="kb-help-overlay">
@@ -1206,6 +1237,15 @@ function toggleTheme() {
 // ========== DIFFICULTY ==========
 async function setDifficulty(level) {
   await api('POST', '/api/difficulty', {level: level});
+}
+
+// ========== RULES MODAL ==========
+function showRulesModal() {
+  document.getElementById('rules-modal').classList.add('show');
+}
+function hideRulesModal() {
+  document.getElementById('rules-modal').classList.remove('show');
+  localStorage.setItem('hasSeenRules', 'true');
 }
 
 // ========== BOARD SELECTION ==========
@@ -3336,6 +3376,7 @@ document.addEventListener('keydown', e => {
 
   // Escape closes modals
   if (e.key === 'Escape') {
+    if (document.getElementById('rules-modal').classList.contains('show')) { hideRulesModal(); e.preventDefault(); return; }
     if (document.getElementById('template-modal').classList.contains('show')) { hideTemplateModal(); e.preventDefault(); return; }
     if (document.getElementById('game-over').classList.contains('show')) { hideGameOver(); e.preventDefault(); return; }
   }
@@ -4530,6 +4571,7 @@ startSessionTimer();
 buildMap();
 if (isLightTheme()) applyThemeGradients();
 checkAuth();
+if (!localStorage.getItem('hasSeenRules')) { showRulesModal(); }
 fetchState();
 </script>
 <div id="session-stats-bar"></div>
