@@ -350,6 +350,7 @@ async function fetchGameState() {
     pickOptions = data.pick_options || [];
     picksNeeded = data.picks_needed || pickOptions.length;
     turnDeadline = data.turn_deadline || null;
+    if (data.has_submitted) submitted = true;
     startDeadlineTimer();
 
     if (data.player_a_info) {
