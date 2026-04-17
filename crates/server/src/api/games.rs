@@ -50,11 +50,20 @@ impl From<db::GameRow> for GameResponse {
 }
 
 #[derive(Serialize)]
+pub struct PlayerInfo {
+    pub username: String,
+    pub rating: f64,
+}
+
+#[derive(Serialize)]
 pub struct GameStateResponse {
     pub game: GameResponse,
     pub state: Option<serde_json::Value>,
     pub pick_options: Option<Vec<usize>>,
     pub my_seat: Option<u8>,
+    pub map: Option<serde_json::Value>,
+    pub player_a_info: Option<PlayerInfo>,
+    pub player_b_info: Option<PlayerInfo>,
 }
 
 #[derive(Deserialize)]
@@ -143,11 +152,42 @@ pub async fn get_game(
         .as_ref()
         .and_then(|v| serde_json::from_value(v.clone()).ok());
 
+    // Look up player names.
+    let player_a_info = if let Some(uid) = game.player_a {
+        db::get_user(pool, uid)
+            .await
+            .ok()
+            .flatten()
+            .map(|u| PlayerInfo {
+                username: u.username,
+                rating: u.rating,
+            })
+    } else {
+        None
+    };
+    let player_b_info = if let Some(uid) = game.player_b {
+        db::get_user(pool, uid)
+            .await
+            .ok()
+            .flatten()
+            .map(|u| PlayerInfo {
+                username: u.username,
+                rating: u.rating,
+            })
+    } else {
+        None
+    };
+
+    let map_data = game.map_json.clone();
+
     Ok(Json(GameStateResponse {
         game: GameResponse::from(game),
         state: filtered_state,
         pick_options,
         my_seat,
+        map: map_data,
+        player_a_info,
+        player_b_info,
     }))
 }
 

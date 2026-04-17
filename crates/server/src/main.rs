@@ -365,7 +365,7 @@ async fn submit_local_picks(
         }
     }
 
-    let ai_picks = ai::generate_picks(&app.game, &app.board);
+    let ai_picks = ai::generate_picks(&app.game, &app.board, &app.pick_options);
     let board = app.board.clone();
 
     let starting_armies = app.starting_armies;
@@ -833,7 +833,7 @@ async fn auth_discord_callback(
     );
     Ok((
         [(axum::http::header::SET_COOKIE, cookie)],
-        Redirect::temporary("/app"),
+        Redirect::temporary("/"),
     ))
 }
 
@@ -1278,6 +1278,10 @@ async fn app_placeholder() -> Html<&'static str> {
     Html("<html><body><h1>strat-club multiplayer</h1><p>Frontend coming soon.</p></body></html>")
 }
 
+async fn multiplayer_game_page() -> Html<&'static str> {
+    Html(include_str!("../../static/game.html"))
+}
+
 // ── Puzzle routes ──
 
 async fn puzzle_page() -> Html<&'static str> {
@@ -1529,6 +1533,8 @@ async fn main() {
         )
         // Multiplayer app placeholder.
         .route("/app", get(app_placeholder))
+        // Multiplayer game board.
+        .route("/game/{id}", get(multiplayer_game_page))
         // Auth routes.
         .route("/api/auth/discord", get(auth_discord_redirect))
         .route("/api/auth/discord/callback", get(auth_discord_callback))

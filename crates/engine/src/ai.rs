@@ -1116,9 +1116,12 @@ fn find_best_stack_border(
 }
 
 /// Generate picks for the AI. Prefers territories in small, high-value bonuses.
-pub fn generate_picks(state: &GameState, board: &Board) -> Vec<usize> {
+/// Only picks from the same `pick_options` available to the human player.
+pub fn generate_picks(state: &GameState, board: &Board, pick_options: &[usize]) -> Vec<usize> {
     let map = &board.map;
-    let mut scored: Vec<(usize, f64)> = (0..map.territory_count())
+    let mut scored: Vec<(usize, f64)> = pick_options
+        .iter()
+        .copied()
         .filter(|&tid| !map.territories[tid].is_wasteland && state.territory_owners[tid] == NEUTRAL)
         .map(|tid| {
             let bonus = &map.bonuses[map.territories[tid].bonus_id];

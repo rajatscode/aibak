@@ -51,7 +51,7 @@ fn main() {
     display::print_pick_options(&options, &board);
 
     let player_picks = read_picks(&board, &options);
-    let ai_picks = ai::generate_picks(&state, &board);
+    let ai_picks = ai::generate_picks(&state, &board, &options);
 
     picking::resolve_picks(
         &mut state,

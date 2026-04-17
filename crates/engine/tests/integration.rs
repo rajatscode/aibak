@@ -247,7 +247,7 @@ fn test_picked_territories_get_starting_armies() {
 
     let options = picking::generate_pick_options(&board, &mut rng);
     let picks: Vec<usize> = options.iter().take(4).copied().collect();
-    let ai_picks = ai::generate_picks(&state, &board);
+    let ai_picks = ai::generate_picks(&state, &board, &options);
 
     picking::resolve_picks(
         &mut state,
@@ -430,7 +430,7 @@ fn test_ai_generates_valid_orders() {
     // Set up a realistic game state
     let options = picking::generate_pick_options(&board, &mut rng);
     let picks: Vec<usize> = options.iter().take(4).copied().collect();
-    let ai_picks = ai::generate_picks(&state, &board);
+    let ai_picks = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks, &ai_picks],
@@ -475,7 +475,7 @@ fn test_ai_expands_over_multiple_turns() {
 
     let options = picking::generate_pick_options(&board, &mut rng);
     let picks: Vec<usize> = options.iter().take(4).copied().collect();
-    let ai_picks = ai::generate_picks(&state, &board);
+    let ai_picks = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks, &ai_picks],
@@ -516,7 +516,7 @@ fn test_full_game_terminates() {
 
     let options = picking::generate_pick_options(&board, &mut rng);
     let picks: Vec<usize> = options.iter().take(4).copied().collect();
-    let ai_picks = ai::generate_picks(&state, &board);
+    let ai_picks = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks, &ai_picks],
@@ -713,7 +713,7 @@ fn test_fog_consistency() {
 
     let options = picking::generate_pick_options(&board, &mut rng);
     let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
-    let picks_b = ai::generate_picks(&state, &board);
+    let picks_b = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks_a, &picks_b],
@@ -758,7 +758,7 @@ fn test_game_10_turns() {
 
     let options = picking::generate_pick_options(&board, &mut rng);
     let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
-    let picks_b = ai::generate_picks(&state, &board);
+    let picks_b = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks_a, &picks_b],
@@ -812,7 +812,7 @@ fn test_mme_full_game() {
 
     let options = picking::generate_pick_options(&board, &mut rng);
     let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
-    let picks_b = ai::generate_picks(&state, &board);
+    let picks_b = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks_a, &picks_b],
@@ -878,7 +878,7 @@ fn test_income_never_negative() {
 
     let options = picking::generate_pick_options(&board, &mut rng);
     let picks_a: Vec<usize> = options.iter().take(4).copied().collect();
-    let picks_b = ai::generate_picks(&state, &board);
+    let picks_b = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks_a, &picks_b],
@@ -962,9 +962,9 @@ fn test_random_games_invariants() {
         let mut state = GameState::new(&board);
         let mut rng = StdRng::seed_from_u64(seed);
 
-        let _options = picking::generate_pick_options(&board, &mut rng);
-        let picks_a = ai::generate_picks(&state, &board);
-        let picks_b = ai::generate_picks(&state, &board);
+        let options = picking::generate_pick_options(&board, &mut rng);
+        let picks_a = ai::generate_picks(&state, &board, &options);
+        let picks_b = ai::generate_picks(&state, &board, &options);
         picking::resolve_picks(
             &mut state,
             [&picks_a, &picks_b],
@@ -1057,9 +1057,9 @@ fn test_mcts_beats_random() {
         let mut state = GameState::new(&board);
         let mut rng = StdRng::seed_from_u64(seed * 31337);
 
-        let _options = picking::generate_pick_options(&board, &mut rng);
-        let picks_a = ai::generate_picks(&state, &board);
-        let picks_b = ai::generate_picks(&state, &board);
+        let options = picking::generate_pick_options(&board, &mut rng);
+        let picks_a = ai::generate_picks(&state, &board, &options);
+        let picks_b = ai::generate_picks(&state, &board, &options);
         picking::resolve_picks(
             &mut state,
             [&picks_a, &picks_b],
@@ -1097,9 +1097,9 @@ fn test_mcts_time_budget() {
     let mut state = GameState::new(&board);
     let mut rng = StdRng::seed_from_u64(42);
 
-    let _options = picking::generate_pick_options(&board, &mut rng);
-    let picks_a = ai::generate_picks(&state, &board);
-    let picks_b = ai::generate_picks(&state, &board);
+    let options = picking::generate_pick_options(&board, &mut rng);
+    let picks_a = ai::generate_picks(&state, &board, &options);
+    let picks_b = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks_a, &picks_b],
@@ -1149,9 +1149,9 @@ fn test_win_prob_correlates_with_outcome() {
         let mut state = GameState::new(&board);
         let mut rng = StdRng::seed_from_u64(seed * 7919 + 101);
 
-        let _options = picking::generate_pick_options(&board, &mut rng);
-        let picks_a = ai::generate_picks(&state, &board);
-        let picks_b = ai::generate_picks(&state, &board);
+        let options = picking::generate_pick_options(&board, &mut rng);
+        let picks_a = ai::generate_picks(&state, &board, &options);
+        let picks_b = ai::generate_picks(&state, &board, &options);
         picking::resolve_picks(
             &mut state,
             [&picks_a, &picks_b],
@@ -1270,9 +1270,9 @@ fn test_analysis_detects_key_moments() {
     let mut state = GameState::new(&board);
     let mut rng = StdRng::seed_from_u64(42);
 
-    let _options = picking::generate_pick_options(&board, &mut rng);
-    let picks_a = ai::generate_picks(&state, &board);
-    let picks_b = ai::generate_picks(&state, &board);
+    let options = picking::generate_pick_options(&board, &mut rng);
+    let picks_a = ai::generate_picks(&state, &board, &options);
+    let picks_b = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks_a, &picks_b],
@@ -1458,9 +1458,9 @@ fn test_100_random_games_all_maps() {
             let mut state = GameState::new(&board);
             let mut rng = StdRng::seed_from_u64(seed * 104729 + 7);
 
-            let _options = picking::generate_pick_options(&board, &mut rng);
-            let picks_a = ai::generate_picks(&state, &board);
-            let picks_b = ai::generate_picks(&state, &board);
+            let options = picking::generate_pick_options(&board, &mut rng);
+            let picks_a = ai::generate_picks(&state, &board, &options);
+            let picks_b = ai::generate_picks(&state, &board, &options);
             picking::resolve_picks(
                 &mut state,
                 [&picks_a, &picks_b],
@@ -1542,9 +1542,9 @@ fn test_turn_resolution_under_1ms() {
     let mut rng = StdRng::seed_from_u64(42);
 
     // Set up a realistic mid-game state
-    let _options = picking::generate_pick_options(&board, &mut rng);
-    let picks_a = ai::generate_picks(&state, &board);
-    let picks_b = ai::generate_picks(&state, &board);
+    let options = picking::generate_pick_options(&board, &mut rng);
+    let picks_a = ai::generate_picks(&state, &board, &options);
+    let picks_b = ai::generate_picks(&state, &board, &options);
     picking::resolve_picks(
         &mut state,
         [&picks_a, &picks_b],
