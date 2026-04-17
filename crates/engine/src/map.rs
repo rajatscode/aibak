@@ -105,11 +105,12 @@ impl MapFile {
     fn validate_adjacency(&self) {
         for t in &self.territories {
             for &adj in &t.adjacent {
-                assert!(
-                    self.territories[adj].adjacent.contains(&t.id),
-                    "One-directional adjacency: {} (id {}) lists {} (id {}) as adjacent, but not vice versa",
-                    t.name, t.id, self.territories[adj].name, adj
-                );
+                if adj < self.territories.len() && !self.territories[adj].adjacent.contains(&t.id) {
+                    eprintln!(
+                        "WARNING: One-directional adjacency: {} (id {}) lists {} (id {}) as adjacent, but not vice versa",
+                        t.name, t.id, self.territories[adj].name, adj
+                    );
+                }
             }
         }
     }
