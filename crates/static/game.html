@@ -1291,9 +1291,30 @@ var editingOrders = false;
 function editSubmittedOrders() {
   editingOrders = true;
   submitted = false;
+  // Restore submitted orders into editable state
+  deploys = {};
+  orders = [];
+  if (window._mySubmittedOrders) {
+    window._mySubmittedOrders.forEach(function(o) {
+      if (o.Deploy) {
+        deploys[o.Deploy.territory] = (deploys[o.Deploy.territory] || 0) + o.Deploy.armies;
+      } else if (o.Attack) {
+        orders.push({type:'attack', from:o.Attack.from, to:o.Attack.to, armies:o.Attack.armies});
+      } else if (o.Transfer) {
+        orders.push({type:'transfer', from:o.Transfer.from, to:o.Transfer.to, armies:o.Transfer.armies});
+      }
+    });
+  }
   window._mySubmittedOrders = null;
   hideSubmitted();
-  onStateUpdate();
+  // Recalculate deployLeft
+  var income = STATE ? STATE.income || 5 : 5;
+  var totalDeployed = 0;
+  Object.values(deploys).forEach(function(v) { totalDeployed += v; });
+  deployLeft = income - totalDeployed;
+  phase = 'orders';
+  renderSidebar();
+  updateMap();
 }
 
 // ========== END TURN ==========
