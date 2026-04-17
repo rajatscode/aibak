@@ -141,13 +141,20 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 
 /* MAP ARMY POPUP */
 #map-army-popup{position:absolute;display:none;background:var(--bg2);border:2px solid var(--gold);border-radius:8px;padding:6px 10px;z-index:200;white-space:nowrap}
+#map-army-popup.popup-attack{border-color:#ef4444}
+#map-army-popup.popup-transfer{border-color:#3b82f6}
 #map-army-popup .popup-label{font-size:11px;color:var(--text2);margin-bottom:4px;text-align:center}
 #map-army-popup .popup-row{display:flex;align-items:center;gap:6px}
 #map-army-popup button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
 #map-army-popup button:hover{background:var(--border)}
 #map-army-popup .popup-count{font-size:18px;font-weight:700;min-width:32px;text-align:center;color:var(--text)}
-#map-army-popup .popup-go{background:var(--blue);color:#fff;border:none;border-radius:4px;padding:4px 14px;cursor:pointer;font-size:13px;font-weight:600;width:auto}
-#map-army-popup .popup-go:hover{background:#3b82f6}
+#map-army-popup .popup-max{font-size:11px;width:auto;padding:0 6px}
+#map-army-popup .popup-go{border:none;border-radius:4px;padding:4px 14px;cursor:pointer;font-size:13px;font-weight:600;width:auto;color:#fff}
+#map-army-popup .popup-go.go-attack{background:#ef4444}
+#map-army-popup .popup-go.go-attack:hover{background:#dc2626}
+#map-army-popup .popup-go.go-transfer{background:#3b82f6}
+#map-army-popup .popup-go.go-transfer:hover{background:#2563eb}
+#map-army-popup .popup-preview{font-size:10px;color:var(--text2);text-align:center;margin-top:3px}
 
 /* TERRITORY FLASH */
 .flash-deploy{animation:flash-green .4s ease-out}
@@ -598,8 +605,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <button onclick="popupAdjust(-1)">-</button>
           <span class="popup-count" id="popup-count">0</span>
           <button onclick="popupAdjust(1)">+</button>
-          <button class="popup-go" onclick="popupConfirm()">Go</button>
+          <button class="popup-max" onclick="popupSetMax()">Max</button>
+          <button class="popup-go" id="popup-go-btn" onclick="popupConfirm()">Go</button>
         </div>
+        <div class="popup-preview" id="popup-preview"></div>
       </div>
       <div class="phase-flash" id="phase-flash"><span id="flash-text"></span></div>
       <div class="tooltip" id="tooltip"></div>
@@ -2728,10 +2737,20 @@ function showMapArmyPopup(territoryId) {
   const popup = document.getElementById('map-army-popup');
   const label = document.getElementById('popup-label');
   const countEl = document.getElementById('popup-count');
+  const goBtn = document.getElementById('popup-go-btn');
   const tgt = terr(territoryId);
-  const actionLabel = pendingType === 'attack' ? 'Attack' : 'Move';
+  const isAttack = pendingType === 'attack';
+  const actionLabel = isAttack ? 'Attack' : 'Transfer';
   label.textContent = actionLabel + ' ' + (tgt ? tgt.name : territoryId);
   countEl.textContent = pendingArmies;
+
+  // Visual distinction: border + button color
+  popup.className = isAttack ? 'popup-attack' : 'popup-transfer';
+  goBtn.className = 'popup-go ' + (isAttack ? 'go-attack' : 'go-transfer');
+  goBtn.textContent = isAttack ? 'Attack' : 'Transfer';
+
+  // Combat preview
+  updateCombatPreview();
 
   // Position near the territory using SVG coordinates
   const svgEl = document.getElementById('map-svg');
@@ -2763,6 +2782,28 @@ function hideMapArmyPopup() {
 function popupAdjust(delta) {
   pendingArmies = Math.max(1, Math.min(pendingMax, pendingArmies + delta));
   document.getElementById('popup-count').textContent = pendingArmies;
+  updateCombatPreview();
+}
+
+function popupSetMax() {
+  pendingArmies = pendingMax;
+  document.getElementById('popup-count').textContent = pendingArmies;
+  updateCombatPreview();
+}
+
+function updateCombatPreview() {
+  const preview = document.getElementById('popup-preview');
+  if (pendingType !== 'attack' || pendingTarget === null) {
+    preview.textContent = '';
+    return;
+  }
+  const tgt = terr(pendingTarget);
+  const def = tgt ? tgt.armies : 0;
+  const att = pendingArmies;
+  const attLost = Math.ceil(def * 0.7);
+  const defLost = Math.ceil(att * 0.6);
+  const survive = Math.max(0, att - attLost);
+  preview.textContent = att + ' vs ' + def + ' \u2192 ~' + survive + ' survive';
 }
 
 function popupConfirm() {
