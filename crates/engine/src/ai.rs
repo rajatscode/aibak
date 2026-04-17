@@ -471,6 +471,9 @@ pub fn generate_orders_with_profile(
     let mut sim_owners = state.territory_owners.clone();
     sim_armies[deploy_target] += income;
 
+    // Only attack from territories owned at turn start (no chain attacks).
+    let start_owners = state.territory_owners.clone();
+
     let mut used_sources = vec![false; map.territory_count()];
     // Cap total attack orders to prevent unreasonably long chains (Bug 4).
     let max_attacks = map.territory_count().min(20);
@@ -491,11 +494,12 @@ pub fn generate_orders_with_profile(
             if sim_owners[target] == player {
                 continue;
             }
+            // Only attack from territories owned at turn start (no chaining).
             let source = map.territories[target]
                 .adjacent
                 .iter()
                 .copied()
-                .filter(|&adj| sim_owners[adj] == player && !used_sources[adj])
+                .filter(|&adj| sim_owners[adj] == player && start_owners[adj] == player && !used_sources[adj])
                 .max_by_key(|&adj| sim_armies[adj]);
 
             if let Some(src) = source {
@@ -533,11 +537,12 @@ pub fn generate_orders_with_profile(
         if sim_owners[target] == player {
             continue; // Already own it
         }
+        // Only attack from territories owned at turn start (no chaining).
         let source = map.territories[target]
             .adjacent
             .iter()
             .copied()
-            .filter(|&adj| sim_owners[adj] == player && !used_sources[adj])
+            .filter(|&adj| sim_owners[adj] == player && start_owners[adj] == player && !used_sources[adj])
             .max_by_key(|&adj| sim_armies[adj]);
 
         if let Some(src) = source {
@@ -596,12 +601,13 @@ pub fn generate_orders_with_profile(
             if !dominant && !endgame && sim_armies[tid] > weak_threshold {
                 continue;
             }
+            // Only attack from territories owned at turn start (no chaining).
             let source = map.territories[tid]
                 .adjacent
                 .iter()
                 .copied()
                 .filter(|&adj| {
-                    sim_owners[adj] == player && !used_sources[adj] && sim_armies[adj] > 1
+                    sim_owners[adj] == player && start_owners[adj] == player && !used_sources[adj] && sim_armies[adj] > 1
                 })
                 .max_by_key(|&adj| sim_armies[adj]);
 
@@ -637,7 +643,8 @@ pub fn generate_orders_with_profile(
             if attack_count >= max_attacks {
                 break;
             }
-            if sim_owners[tid] != player || used_sources[tid] || sim_armies[tid] <= 1 {
+            // Only attack from territories owned at turn start (no chaining).
+            if sim_owners[tid] != player || start_owners[tid] != player || used_sources[tid] || sim_armies[tid] <= 1 {
                 continue;
             }
             // Find an enemy neighbor to attack
@@ -800,6 +807,8 @@ fn generate_cleanup_orders(state: &GameState, player: PlayerId, board: &Board) -
     }
 
     // 2. Attack every adjacent non-owned territory where capture is possible
+    // Only attack from territories owned at turn start (no chaining).
+    let start_owners = state.territory_owners.clone();
     let max_attacks = map.territory_count().min(30);
     let mut attack_count = 0usize;
     let mut used_sources = vec![false; map.territory_count()];
@@ -808,7 +817,7 @@ fn generate_cleanup_orders(state: &GameState, player: PlayerId, board: &Board) -
         if attack_count >= max_attacks {
             break;
         }
-        if used_sources[tid] || sim_armies[tid] <= 1 {
+        if start_owners[tid] != player || used_sources[tid] || sim_armies[tid] <= 1 {
             continue;
         }
         // Attack the weakest adjacent enemy

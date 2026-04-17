@@ -68,6 +68,10 @@ pub fn resolve_turn(
     let mut events = Vec::new();
     let mut territories_captured: [u32; 2] = [0; 2];
 
+    // Snapshot ownership at turn start — attacks are only valid from
+    // territories the player owned at the START of the turn (no chaining).
+    let start_owners = state.territory_owners.clone();
+
     // Track available armies per territory.
     let mut available: Vec<u32> = new_state.territory_armies.clone();
 
@@ -159,6 +163,12 @@ pub fn resolve_turn(
 
                 match order {
                     Order::Attack { from, to, armies } => {
+                        // Only allow attacks from territories owned at turn
+                        // start — prevents "chain attacks" from mid-turn
+                        // captures.
+                        if start_owners[*from] != player {
+                            continue;
+                        }
                         if new_state.territory_owners[*from] != player {
                             continue;
                         }
@@ -432,5 +442,56 @@ mod tests {
 
         assert_eq!(new_state.territory_armies[0], 1);
         assert_eq!(new_state.territory_armies[1], 10);
+    }
+
+    #[test]
+    fn test_no_chain_attack_from_captured_territory() {
+        // Setup: A(0)—B(0)—C(1)—D(1), linear map.
+        // Player 0 deploys on B, attacks C, then tries to chain-attack D from C.
+        // The second attack should be SKIPPED because C was not owned at turn start.
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
+        state.territory_owners = vec![0, 0, 1, 1];
+        state.territory_armies = vec![1, 1, 1, 1];
+        state.phase = crate::state::Phase::Play;
+        state.turn = 1;
+
+        let mut rng = StdRng::seed_from_u64(42);
+
+        // Give player 0 enough armies to capture C and attempt to chain to D.
+        let p0_orders = vec![
+            Order::Deploy {
+                territory: 1,
+                armies: 20,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 10,
+            },
+            // Chain attack: from territory 2 (captured mid-turn) to territory 3.
+            // This should be rejected by the engine.
+            Order::Attack {
+                from: 2,
+                to: 3,
+                armies: 5,
+            },
+        ];
+        let p1_orders = vec![Order::Deploy {
+            territory: 3,
+            armies: 5,
+        }];
+
+        let result = resolve_turn(&state, [p0_orders, p1_orders], &board, &mut rng);
+        let new_state = &result.state;
+
+        // Territory 2 should be captured by player 0.
+        assert_eq!(new_state.territory_owners[2], 0, "C should be captured");
+        // Territory 3 should STILL belong to player 1 (chain attack rejected).
+        assert_eq!(
+            new_state.territory_owners[3], 1,
+            "D should still belong to player 1 — chain attack must be rejected"
+        );
     }
 }

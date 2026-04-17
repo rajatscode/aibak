@@ -508,6 +508,7 @@ fn generate_variation(
     // Simulate deployment and generate attacks.
     let mut sim_armies = state.territory_armies.clone();
     let mut sim_owners = state.territory_owners.clone();
+    let start_owners = state.territory_owners.clone();
     sim_armies[deploy_target] += income;
 
     // Attack from deploy target first.
@@ -518,6 +519,7 @@ fn generate_variation(
         &mut sim_armies,
         &mut sim_owners,
         &mut orders,
+        &start_owners,
     );
 
     // Then try attacks from other border territories.
@@ -532,6 +534,7 @@ fn generate_variation(
             &mut sim_armies,
             &mut sim_owners,
             &mut orders,
+            &start_owners,
         );
     }
 
@@ -542,6 +545,8 @@ fn generate_variation(
 }
 
 /// Generate attacks from a single territory.
+/// `start_owners` is the ownership snapshot at turn start — only attack from
+/// territories the player owned before any mid-turn captures.
 fn generate_attacks_from(
     from: usize,
     player: PlayerId,
@@ -549,9 +554,11 @@ fn generate_attacks_from(
     sim_armies: &mut [u32],
     sim_owners: &mut [PlayerId],
     orders: &mut Vec<Order>,
+    start_owners: &[PlayerId],
 ) {
     let map = &board.map;
-    if sim_owners[from] != player || sim_armies[from] <= 1 {
+    // Only attack from territories owned at turn start (no chaining).
+    if start_owners[from] != player || sim_owners[from] != player || sim_armies[from] <= 1 {
         return;
     }
 
