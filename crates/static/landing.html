@@ -490,17 +490,17 @@ footer {
   <div class="steps-grid">
     <div class="step-card reveal">
       <div class="step-number">1</div>
-      <h3>Deploy</h3>
-      <p>Place your armies strategically each turn. Every territory you control generates income for reinforcements.</p>
+      <h3>Pick Your Territories</h3>
+      <p>Draft warlords in a snake pick across the map. Every choice shapes your opening strategy.</p>
     </div>
     <div class="step-card reveal">
       <div class="step-number">2</div>
-      <h3>Move</h3>
-      <p>Attack enemy territories and reinforce your borders. Deterministic combat means the better plan always wins.</p>
+      <h3>Deploy &amp; Attack</h3>
+      <p>Place armies and strike. Deterministic combat means the better plan always wins — no dice, no luck.</p>
     </div>
     <div class="step-card reveal">
       <div class="step-number">3</div>
-      <h3>Conquer</h3>
+      <h3>Conquer the Map</h3>
       <p>Control bonuses for extra income. Eliminate your opponent to claim victory and climb the ranked ladder.</p>
     </div>
   </div>
@@ -539,26 +539,35 @@ footer {
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
       </div>
       <div>
-        <h3>MCTS AI</h3>
-        <p>Train against a Monte Carlo Tree Search opponent that evaluates thousands of possible futures each turn.</p>
+        <h3>AI Opponents</h3>
+        <p>Three difficulty levels from casual to competitive. Hard mode uses Monte Carlo Tree Search to plan thousands of moves ahead.</p>
       </div>
     </div>
     <div class="feature-card reveal">
       <div class="feature-icon gold">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      </div>
+      <div>
+        <h3>Multiplayer &amp; Matchmaking</h3>
+        <p>Find opponents through rated matchmaking or create custom games. Live play over WebSocket with spectator mode.</p>
+      </div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon blue">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
       </div>
       <div>
-        <h3>Glicko Rated</h3>
+        <h3>Glicko-2 Rated Ladder</h3>
         <p>Skill-based matchmaking with a competitive ladder. Your rating reflects your true strength with confidence intervals.</p>
       </div>
     </div>
     <div class="feature-card reveal">
       <div class="feature-icon gold">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/><line x1="19" y1="3" x2="19" y2="21"/></svg>
       </div>
       <div>
-        <h3>Live Win Probability</h3>
-        <p>Watch the odds shift as you play. Real-time analysis powered by Monte Carlo simulation shows who is ahead.</p>
+        <h3>Replay System</h3>
+        <p>Step through any completed game turn by turn. Study your decisions, learn from mistakes, and improve your play.</p>
       </div>
     </div>
   </div>
@@ -577,11 +586,11 @@ footer {
     <div class="rank-item">
       <div class="rank-shield">
         <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
-          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#8B4513" stroke="#CD853F" stroke-width="2"/>
-          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#CD853F" font-weight="900" font-family="sans-serif">B</text>
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#3d2410" stroke="#cd7f32" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#cd7f32" font-weight="900" font-family="sans-serif">B</text>
         </svg>
       </div>
-      <div class="rank-name" style="color:#CD853F">Bronze</div>
+      <div class="rank-name" style="color:#cd7f32">Bronze</div>
       <div class="rank-range">&lt; 1200</div>
     </div>
     <div class="rank-item">
@@ -607,47 +616,41 @@ footer {
     <div class="rank-item">
       <div class="rank-shield">
         <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
-          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#1a4a4a" stroke="#40E0D0" stroke-width="2"/>
-          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#40E0D0" font-weight="900" font-family="sans-serif">P</text>
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#2a2e35" stroke="#94a3b8" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#94a3b8" font-weight="900" font-family="sans-serif">P</text>
         </svg>
       </div>
-      <div class="rank-name" style="color:#40E0D0">Platinum</div>
+      <div class="rank-name" style="color:#94a3b8">Platinum</div>
       <div class="rank-range">1600+</div>
     </div>
     <div class="rank-item">
       <div class="rank-shield">
         <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
-          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#1a2a5a" stroke="#5b9dff" stroke-width="2"/>
-          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#5b9dff" font-weight="900" font-family="sans-serif">D</text>
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#0a2a2e" stroke="#22d3ee" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#22d3ee" font-weight="900" font-family="sans-serif">D</text>
         </svg>
       </div>
-      <div class="rank-name" style="color:#5b9dff">Diamond</div>
+      <div class="rank-name" style="color:#22d3ee">Diamond</div>
       <div class="rank-range">1800+</div>
     </div>
     <div class="rank-item">
       <div class="rank-shield">
         <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
-          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#3a1a4a" stroke="#c084fc" stroke-width="2"/>
-          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#c084fc" font-weight="900" font-family="sans-serif">M</text>
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#2a1040" stroke="#a855f7" stroke-width="2"/>
+          <text x="26" y="36" text-anchor="middle" font-size="16" fill="#a855f7" font-weight="900" font-family="sans-serif">M</text>
         </svg>
       </div>
-      <div class="rank-name" style="color:#c084fc">Master</div>
+      <div class="rank-name" style="color:#a855f7">Master</div>
       <div class="rank-range">2000+</div>
     </div>
     <div class="rank-item">
       <div class="rank-shield">
         <svg viewBox="0 0 52 60" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="gm-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#e3b341"/>
-              <stop offset="1" stop-color="#f59e0b"/>
-            </linearGradient>
-          </defs>
-          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#3a2a00" stroke="url(#gm-grad)" stroke-width="2.5"/>
-          <text x="26" y="34" text-anchor="middle" font-size="13" fill="#e3b341" font-weight="900" font-family="sans-serif">GM</text>
+          <path d="M26 2 L48 12 L48 30 Q48 50 26 58 Q4 50 4 30 L4 12Z" fill="#3a0a0a" stroke="#dc2626" stroke-width="2.5"/>
+          <text x="26" y="34" text-anchor="middle" font-size="13" fill="#dc2626" font-weight="900" font-family="sans-serif">GM</text>
         </svg>
       </div>
-      <div class="rank-name" style="color:#e3b341">Grandmaster</div>
+      <div class="rank-name" style="color:#dc2626">Grandmaster</div>
       <div class="rank-range">2200+</div>
     </div>
   </div>
