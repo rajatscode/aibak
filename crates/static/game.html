@@ -1227,7 +1227,8 @@ function startDeadlineTimer() {
 function updateDeadlineDisplay() {
   var el = document.getElementById('deadline-timer');
   if (!el) return;
-  if (!turnDeadline || phase === 'finished') { el.textContent = ''; el.className = 'deadline-timer'; return; }
+  var gameOver = !turnDeadline || phase === 'finished' || (GAME && (GAME.status === 'finished' || GAME.winner_id));
+  if (gameOver) { el.textContent = ''; el.className = 'deadline-timer'; if (deadlineInterval) { clearInterval(deadlineInterval); deadlineInterval = null; } return; }
   var deadline = new Date(turnDeadline);
   var now = new Date();
   var diff = deadline - now;
