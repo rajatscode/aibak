@@ -256,26 +256,6 @@ pub async fn set_game_player_b(
     Ok(())
 }
 
-pub async fn finish_game(
-    pool: &PgPool,
-    game_id: Uuid,
-    winner_id: Uuid,
-    state_json: &serde_json::Value,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        UPDATE games SET status = 'finished', winner_id = $2, state_json = $3, finished_at = now()
-        WHERE id = $1
-        "#,
-    )
-    .bind(game_id)
-    .bind(winner_id)
-    .bind(state_json)
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
 /// Finish a game within an existing transaction.
 pub async fn finish_game_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
@@ -354,43 +334,6 @@ pub async fn list_user_games(
 
 // ── Orders queries ──
 
-pub async fn insert_orders(
-    pool: &PgPool,
-    game_id: Uuid,
-    user_id: Uuid,
-    turn: i32,
-    orders_json: &serde_json::Value,
-) -> Result<OrderRow, sqlx::Error> {
-    sqlx::query_as::<_, OrderRow>(
-        r#"
-        INSERT INTO orders (game_id, user_id, turn, orders_json)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (game_id, user_id, turn) DO UPDATE
-            SET orders_json = EXCLUDED.orders_json,
-                submitted_at = now()
-        RETURNING *
-        "#,
-    )
-    .bind(game_id)
-    .bind(user_id)
-    .bind(turn)
-    .bind(orders_json)
-    .fetch_one(pool)
-    .await
-}
-
-pub async fn get_orders_for_turn(
-    pool: &PgPool,
-    game_id: Uuid,
-    turn: i32,
-) -> Result<Vec<OrderRow>, sqlx::Error> {
-    sqlx::query_as::<_, OrderRow>("SELECT * FROM orders WHERE game_id = $1 AND turn = $2")
-        .bind(game_id)
-        .bind(turn)
-        .fetch_all(pool)
-        .await
-}
-
 /// Insert orders within an existing transaction.
 pub async fn insert_orders_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
@@ -431,27 +374,6 @@ pub async fn get_orders_for_turn_tx(
 }
 
 // ── Turn deadline queries ──
-
-pub async fn set_turn_deadline(
-    pool: &PgPool,
-    game_id: Uuid,
-    turn: i32,
-    deadline: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO turn_deadlines (game_id, turn, deadline)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (game_id, turn) DO UPDATE SET deadline = EXCLUDED.deadline
-        "#,
-    )
-    .bind(game_id)
-    .bind(turn)
-    .bind(deadline)
-    .execute(pool)
-    .await?;
-    Ok(())
-}
 
 pub async fn get_expired_deadlines(pool: &PgPool) -> Result<Vec<(Uuid, i32)>, sqlx::Error> {
     let rows: Vec<(Uuid, i32)> = sqlx::query_as(
