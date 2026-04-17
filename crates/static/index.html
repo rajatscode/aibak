@@ -521,13 +521,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #kb-help-overlay .kb-grid{grid-template-columns:80px 1fr;font-size:12px}
 }
 
-/* MINIMAP */
-#minimap{position:absolute;bottom:12px;left:12px;width:150px;height:100px;background:rgba(13,17,23,.88);border:1px solid var(--border);border-radius:8px;z-index:80;cursor:pointer;overflow:hidden;backdrop-filter:blur(4px)}
-#minimap svg{width:100%;height:100%;display:block}
-#minimap .mm-viewport{fill:none;stroke:var(--gold);stroke-width:1.5;opacity:.7;pointer-events:none}
-#minimap:hover{border-color:var(--text3)}
-@media (max-width:768px){#minimap{width:110px;height:72px;bottom:46px;left:8px}}
-@media (max-width:480px){#minimap{width:90px;height:60px;bottom:46px;left:6px}}
 
 /* TERRITORY OVERVIEW PANEL */
 #overview-panel{display:none;flex-direction:column;overflow:hidden;border-bottom:1px solid var(--border)}
@@ -609,14 +602,14 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     </div>
     <div class="controls">
       <button class="btn-quickplay" id="quickplay-btn" onclick="quickPlay()" title="Quick Play (instant new game)">Quick Play</button>
-      <select id="difficulty-select" onchange="setDifficulty(this.value)" title="AI Difficulty">
+      <select id="difficulty-select" onchange="setDifficulty(this.value)" title="AI Difficulty" style="display:none">
         <option value="easy">Easy</option>
         <option value="medium">Medium</option>
         <option value="hard" selected>Hard</option>
       </select>
       <button id="threat-toggle" onclick="toggleThreats()" title="Toggle Threat Heatmap">Threats</button>
-      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">&#9790;</button>
-      <button id="mute-toggle" onclick="toggleMute()" title="Toggle Sound">Sound</button>
+      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Theme">&#9790;</button>
+      <button id="mute-toggle" onclick="toggleMute()" title="Toggle Sound On/Off">Sound</button>
       <button onclick="newGame()" title="New Game (N)">New Game</button>
       <div class="auth-area" id="auth-area"></div>
     </div>
@@ -641,7 +634,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       </div>
       <div class="phase-flash" id="phase-flash"><span id="flash-text"></span></div>
       <div class="tooltip" id="tooltip"></div>
-      <div id="minimap"><svg id="minimap-svg"></svg></div>
       <div id="replay-stepper">
         <div class="stepper-row">
           <button id="rs-prev" onclick="replayStep(-1)" title="Previous turn (Left arrow)">&#9664;</button>
@@ -694,7 +686,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <button onclick="sendEmoji('\uD83C\uDFAF')" title="Bullseye">&#127919;</button>
           <button onclick="sendEmoji('\uD83D\uDE02')" title="Haha">&#128514;</button>
         </div>
-        <div id="chat-input-row">
+        <div id="chat-input-row" style="display:none">
           <input type="text" id="chat-input" placeholder="Say something..." maxlength="120" onkeydown="if(event.key==='Enter')sendChat()">
           <button id="chat-send-btn" onclick="sendChat()">Send</button>
         </div>
@@ -1950,8 +1942,6 @@ function updateMap() {
   drawHoverConnections();
   updateBonusBoundaryVisibility();
 
-  // Keep minimap in sync
-  updateMinimap();
 
   // Reapply light theme SVG adjustments if active
   if (isLightTheme()) applyThemeGradients();
@@ -2342,9 +2332,8 @@ function onStateUpdate() {
   updateWinProbBar();
 
   buildMap();
-  buildMinimap();
+
   updateMap();
-  updateMinimap();
   renderSidebar();
   renderHistory();
   if (overviewVisible) { renderOverview(); renderIncomeBreakdown(); }
@@ -4207,9 +4196,8 @@ function exitReplayMode() {
 
   // Restore the live game state map
   buildMap();
-  buildMinimap();
+
   updateMap();
-  updateMinimap();
   renderSidebar();
   renderHistory();
 
@@ -5129,136 +5117,6 @@ async function importGameData(data) {
   });
 })();
 
-// ========== MINIMAP ==========
-function buildMinimap() {
-  const mmSvg = document.getElementById('minimap-svg');
-  if (!mmSvg || !G || !G.territories) return;
-  mmSvg.innerHTML = '';
-  // Use same viewBox as main map
-  mmSvg.setAttribute('viewBox', '0 0 1000 680');
-  mmSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-  // Ocean background
-  mmSvg.appendChild(svgEl('rect', {x:'0',y:'0',width:'1000',height:'680',fill:'#060d15'}));
-
-  // Territory shapes (simplified — same paths, just tiny)
-  G.territories.forEach(function(t) {
-    let fill = '#1f2937'; // fog default
-    if (t.visible !== false) {
-      if (t.owner === 0) fill = '#2563eb';
-      else if (t.owner === 1) fill = '#dc2626';
-      else fill = '#4b5563';
-    }
-    if (t.path) {
-      mmSvg.appendChild(svgEl('path', {
-        d: t.path, fill: fill, stroke: '#080c12', 'stroke-width': '2',
-        'data-mmid': t.id
-      }));
-    } else {
-      const x = t.label_x || 0, y = t.label_y || 0;
-      mmSvg.appendChild(svgEl('circle', {
-        cx: x, cy: y, r: 12, fill: fill, stroke: '#080c12', 'stroke-width': '2',
-        'data-mmid': t.id
-      }));
-    }
-  });
-
-  // Viewport rectangle (shows visible area when zoomed)
-  mmSvg.appendChild(svgEl('rect', {
-    id: 'mm-viewport', class: 'mm-viewport',
-    x: '0', y: '0', width: '1000', height: '680',
-    rx: '4', ry: '4'
-  }));
-}
-
-function updateMinimap() {
-  const mmSvg = document.getElementById('minimap-svg');
-  if (!mmSvg || !G || !G.territories) return;
-
-  G.territories.forEach(function(t) {
-    let fill = '#1f2937';
-    if (t.visible !== false) {
-      if (t.owner === 0) fill = '#2563eb';
-      else if (t.owner === 1) fill = '#dc2626';
-      else fill = '#4b5563';
-    }
-    const el = mmSvg.querySelector('[data-mmid="' + t.id + '"]');
-    if (el) el.setAttribute('fill', fill);
-  });
-
-  updateMinimapViewport();
-}
-
-function updateMinimapViewport() {
-  const mainSvg = document.getElementById('map-svg');
-  const container = document.getElementById('map-container');
-  const vpRect = document.getElementById('mm-viewport');
-  if (!mainSvg || !container || !vpRect) return;
-
-  // Get the current visible area in SVG coordinates
-  const ctm = mainSvg.getScreenCTM();
-  if (!ctm) return;
-  const inv = ctm.inverse();
-  const cRect = container.getBoundingClientRect();
-
-  const topLeft = mainSvg.createSVGPoint();
-  topLeft.x = cRect.left; topLeft.y = cRect.top;
-  const tl = topLeft.matrixTransform(inv);
-
-  const botRight = mainSvg.createSVGPoint();
-  botRight.x = cRect.right; botRight.y = cRect.bottom;
-  const br = botRight.matrixTransform(inv);
-
-  // Clamp to viewBox
-  const vx = Math.max(0, tl.x);
-  const vy = Math.max(0, tl.y);
-  const vw = Math.min(1000, br.x) - vx;
-  const vh = Math.min(680, br.y) - vy;
-
-  // If viewport covers almost the whole map, hide the rect
-  if (vw >= 980 && vh >= 660) {
-    vpRect.setAttribute('opacity', '0');
-  } else {
-    vpRect.setAttribute('opacity', '1');
-    vpRect.setAttribute('x', vx);
-    vpRect.setAttribute('y', vy);
-    vpRect.setAttribute('width', Math.max(20, vw));
-    vpRect.setAttribute('height', Math.max(14, vh));
-  }
-}
-
-// Click on minimap to pan
-document.getElementById('minimap').addEventListener('click', function(e) {
-  const mmSvg = document.getElementById('minimap-svg');
-  const mainSvg = document.getElementById('map-svg');
-  if (!mmSvg || !mainSvg) return;
-
-  // Convert click position to SVG coordinates of the minimap
-  const mmRect = mmSvg.getBoundingClientRect();
-  const rx = (e.clientX - mmRect.left) / mmRect.width;
-  const ry = (e.clientY - mmRect.top) / mmRect.height;
-
-  // Target point in main SVG coords
-  const tx = rx * 1000;
-  const ty = ry * 680;
-
-  // Pan main SVG so this point is centered
-  const container = document.getElementById('map-container');
-  const cRect = container.getBoundingClientRect();
-  const ctm = mainSvg.getScreenCTM();
-  if (!ctm) return;
-
-  // Current scale
-  const scale = ctm.a;
-  const newVBx = tx - (cRect.width / 2) / scale;
-  const newVBy = ty - (cRect.height / 2) / scale;
-
-  // Get current viewBox
-  const vb = mainSvg.getAttribute('viewBox').split(' ').map(Number);
-  mainSvg.setAttribute('viewBox', newVBx + ' ' + newVBy + ' ' + vb[2] + ' ' + vb[3]);
-
-  updateMinimapViewport();
-});
 
 // ========== TERRITORY OVERVIEW ==========
 let overviewVisible = false;
@@ -5366,8 +5224,6 @@ function centerOnTerritory(tid) {
   var newX = pos[0] - vb[2] / 2;
   var newY = pos[1] - vb[3] / 2;
   mainSvg.setAttribute('viewBox', newX + ' ' + newY + ' ' + vb[2] + ' ' + vb[3]);
-
-  updateMinimapViewport();
 
   // Brief highlight
   var pathEl = document.getElementById('terr-' + tid);
