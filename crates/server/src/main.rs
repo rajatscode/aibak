@@ -784,7 +784,7 @@ async fn get_replay_turn(
     State(state): State<AppState>,
     session: SessionId,
     axum::extract::Path(turn): axum::extract::Path<u32>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Json<serde_json::Value> {
     let mut map = state.local.lock().unwrap();
     let app = map
         .entry(session.0)
@@ -792,14 +792,14 @@ async fn get_replay_turn(
 
     let idx = turn as usize;
     if idx >= app.state_history.len() {
-        return Err((
-            StatusCode::NOT_FOUND,
-            format!(
+        return Json(serde_json::json!({
+            "success": false,
+            "message": format!(
                 "Turn {} not found in replay history (available: 0..{})",
                 turn,
                 app.state_history.len().saturating_sub(1)
             ),
-        ));
+        }));
     }
 
     let historical_state = &app.state_history[idx];
@@ -833,7 +833,7 @@ async fn get_replay_turn(
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
+    Json(serde_json::json!({
         "turn": turn,
         "phase": match historical_state.phase {
             Phase::Picking => "picking",
@@ -843,7 +843,7 @@ async fn get_replay_turn(
         "territories": territories,
         "events": app.turn_history.get(idx).map(|tl| &tl.events),
         "win_probability": app.win_prob_history.get(idx),
-    })))
+    }))
 }
 
 async fn index() -> Html<&'static str> {
