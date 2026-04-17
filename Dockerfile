@@ -23,10 +23,11 @@ RUN cargo build --release --bin strat-server
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/strat-server /usr/local/bin/
-COPY --from=builder /app/maps /maps
+COPY --from=builder /app/maps /app/maps
+COPY --from=builder /app/boards /app/boards
 
-WORKDIR /
+WORKDIR /app
 ENV RUST_LOG=info
 EXPOSE 3000
 
-CMD ["strat-server", "--map-dir", "/maps"]
+CMD ["strat-server"]
