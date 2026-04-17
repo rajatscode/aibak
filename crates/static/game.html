@@ -1056,7 +1056,7 @@ function renderBonusInfo() {
     if (owned) cls += ' owned complete';
     else if (enemyOwned) cls += ' enemy-owned';
     if (nearly) cls += ' nearly';
-    html += '<div class="'+cls+'">' +
+    html += '<div class="'+cls+'" onclick="showBonusHighlight('+d.b.id+')" style="cursor:pointer">' +
       '<span class="bonus-dot" style="background:'+color+'"></span>' +
       '<span class="bonus-name">'+d.b.name+'</span>' +
       '<span class="bonus-prog">+'+d.b.value+'&ensp;'+d.myCount+'/'+d.total+'</span>' +
@@ -1226,6 +1226,36 @@ function popupConfirm() {
 
 function cancelPending() { hidePopup(); pendingTarget = null; updateMap(); renderSidebar(); }
 function hidePopup() { document.getElementById('map-army-popup').style.display = 'none'; }
+
+// ========== BONUS HIGHLIGHT ==========
+var bonusHighlightTimer = null;
+function showBonusHighlight(bonusId) {
+  clearBonusHighlight();
+  if (!MAP || !MAP.bonuses) return;
+  var b = MAP.bonuses.find(function(x) { return x.id === bonusId; });
+  if (!b) return;
+  var tids = b.territory_ids || [];
+  var color = BONUS_COLORS[b.id % BONUS_COLORS.length];
+  tids.forEach(function(tid) {
+    var el = document.getElementById('terr-' + tid);
+    if (el) {
+      el.setAttribute('data-orig-stroke', el.getAttribute('stroke') || '');
+      el.setAttribute('data-orig-sw', el.getAttribute('stroke-width') || '');
+      el.setAttribute('stroke', color);
+      el.setAttribute('stroke-width', '3');
+    }
+  });
+  bonusHighlightTimer = setTimeout(clearBonusHighlight, 2000);
+}
+function clearBonusHighlight() {
+  if (bonusHighlightTimer) { clearTimeout(bonusHighlightTimer); bonusHighlightTimer = null; }
+  document.querySelectorAll('[data-orig-stroke]').forEach(function(el) {
+    el.setAttribute('stroke', el.getAttribute('data-orig-stroke'));
+    el.setAttribute('stroke-width', el.getAttribute('data-orig-sw') || '1');
+    el.removeAttribute('data-orig-stroke');
+    el.removeAttribute('data-orig-sw');
+  });
+}
 
 // ========== END TURN ==========
 async function endTurn() {

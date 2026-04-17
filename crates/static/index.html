@@ -2087,7 +2087,8 @@ function clearAdjacencyHighlight() {
 var bonusHighlightTimer = null;
 function showBonusHighlight(bonusId) {
   clearBonusHighlight();
-  var b = bonus(bonusId);
+  if (!G || !G.bonuses) return;
+  var b = G.bonuses.find(function(x) { return x.id === bonusId; });
   if (!b) return;
   var tids = b.territory_ids || b.territories || [];
   var color = BONUS_COLORS[b.id % BONUS_COLORS.length];
