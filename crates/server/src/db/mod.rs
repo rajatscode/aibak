@@ -277,6 +277,28 @@ pub async fn finish_game_tx(
     Ok(())
 }
 
+/// Set a turn deadline (non-transactional).
+pub async fn set_turn_deadline(
+    pool: &PgPool,
+    game_id: Uuid,
+    turn: i32,
+    deadline: DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO turn_deadlines (game_id, turn, deadline)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (game_id, turn) DO UPDATE SET deadline = EXCLUDED.deadline
+        "#,
+    )
+    .bind(game_id)
+    .bind(turn)
+    .bind(deadline)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Set a turn deadline within an existing transaction.
 pub async fn set_turn_deadline_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
@@ -381,7 +403,7 @@ pub async fn get_expired_deadlines(pool: &PgPool) -> Result<Vec<(Uuid, i32)>, sq
         SELECT td.game_id, td.turn
         FROM turn_deadlines td
         JOIN games g ON g.id = td.game_id
-        WHERE td.deadline < now() AND g.status = 'active'
+        WHERE td.deadline < now() AND g.status IN ('active', 'picking')
         "#,
     )
     .fetch_all(pool)

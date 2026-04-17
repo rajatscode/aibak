@@ -92,12 +92,26 @@ fn default_defense_kill_rate() -> f64 {
 
 impl MapFile {
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json)
+        let map_file: Self = serde_json::from_str(json)?;
+        map_file.validate_adjacency();
+        Ok(map_file)
     }
 
     pub fn load(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&json)?)
+    }
+
+    fn validate_adjacency(&self) {
+        for t in &self.territories {
+            for &adj in &t.adjacent {
+                assert!(
+                    self.territories[adj].adjacent.contains(&t.id),
+                    "One-directional adjacency: {} (id {}) lists {} (id {}) as adjacent, but not vice versa",
+                    t.name, t.id, self.territories[adj].name, adj
+                );
+            }
+        }
     }
 }
 
