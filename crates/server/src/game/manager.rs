@@ -183,7 +183,7 @@ impl GameManager {
                 game_id,
                 status: "picking".to_string(),
             },
-        );
+        ).await;
 
         db::get_game(&self.pool, game_id)
             .await?
@@ -282,7 +282,7 @@ impl GameManager {
         if all_orders.len() < 2 {
             tx.commit().await?;
             self.hub
-                .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
+                .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat }).await;
             return Ok(());
         }
 
@@ -318,7 +318,7 @@ impl GameManager {
         tx.commit().await?;
 
         self.hub
-            .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
+            .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat }).await;
 
         self.hub.broadcast(
             game_id,
@@ -326,7 +326,7 @@ impl GameManager {
                 game_id,
                 status: "active".to_string(),
             },
-        );
+        ).await;
 
         Ok(())
     }
@@ -400,7 +400,7 @@ impl GameManager {
         if all_orders.len() < 2 {
             tx.commit().await?;
             self.hub
-                .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
+                .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat }).await;
             return Ok(());
         }
 
@@ -410,7 +410,7 @@ impl GameManager {
         tx.commit().await?;
 
         self.hub
-            .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
+            .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat }).await;
 
         Ok(())
     }
@@ -545,7 +545,7 @@ impl GameManager {
                 game_id,
                 status: "active".to_string(),
             },
-        );
+        ).await;
 
         Ok(())
     }
@@ -615,7 +615,7 @@ impl GameManager {
                 }
 
                 self.hub
-                    .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id });
+                    .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id }).await;
             }
         } else {
             let state_json = serde_json::to_value(&new_state)
@@ -628,12 +628,12 @@ impl GameManager {
             db::set_turn_deadline_tx(tx, game_id, new_turn, deadline).await?;
 
             self.hub.broadcast(
-                game_id,
-                ws::GameEvent::TurnResolved {
+            game_id,
+            ws::GameEvent::TurnResolved {
                     game_id,
                     turn: new_turn,
                 },
-            );
+            ).await;
         }
 
         Ok(())

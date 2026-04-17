@@ -61,8 +61,8 @@ impl Hub {
     }
 
     /// Broadcast an event to all subscribers of a game.
-    pub fn broadcast(&self, game_id: Uuid, event: GameEvent) {
-        let channels = self.channels.blocking_read();
+    pub async fn broadcast(&self, game_id: Uuid, event: GameEvent) {
+        let channels = self.channels.read().await;
         if let Some(sender) = channels.get(&game_id) {
             // Ignore send errors (no receivers).
             let _ = sender.send(event);

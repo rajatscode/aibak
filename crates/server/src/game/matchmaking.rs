@@ -263,14 +263,14 @@ pub async fn matchmaking_task(
                                 game_id,
                                 opponent_name: player_b.username.clone(),
                             },
-                        );
+                        ).await;
                         hub.broadcast(
                             player_b.user_id,
                             crate::ws::GameEvent::MatchFound {
                                 game_id,
                                 opponent_name: player_a.username.clone(),
                             },
-                        );
+                        ).await;
                     }
                     Err(e) => {
                         warn!(
@@ -313,14 +313,14 @@ pub async fn matchmaking_task(
                         game_id: Uuid::nil(),
                         opponent_name: player_b.username.clone(),
                     },
-                );
+                ).await;
                 hub.broadcast(
                     player_b.user_id,
                     crate::ws::GameEvent::MatchFound {
                         game_id: Uuid::nil(),
                         opponent_name: player_a.username.clone(),
                     },
-                );
+                ).await;
             }
         }
     }
