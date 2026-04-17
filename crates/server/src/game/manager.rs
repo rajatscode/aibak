@@ -666,12 +666,33 @@ impl GameManager {
     }
 
     /// Update ratings for winner and loser after a game.
+    /// Idempotent: checks if ratings were already updated for this game.
     async fn update_ratings(
         &self,
         game_id: Uuid,
         winner_id: Uuid,
         loser_id: Uuid,
     ) -> Result<(), GameError> {
+        // Idempotency check: skip if ratings already recorded for this game.
+        let already_done: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM rating_history WHERE game_id = $1)"
+        )
+        .bind(game_id)
+        .fetch_one(&self.pool)
+        .await
+        .unwrap_or(false);
+        if already_done {
+            tracing::info!("Skipping rating update for game {game_id}: already done");
+            return Ok(());
+        }
+
+        // Verify game is actually finished before updating.
+        let game = db::get_game(&self.pool, game_id).await?.ok_or(GameError::NotFound)?;
+        if game.status != "finished" {
+            tracing::warn!("Skipping rating update for game {game_id}: status={}", game.status);
+            return Ok(());
+        }
+
         let winner_user = db::get_user(&self.pool, winner_id)
             .await?
             .ok_or(GameError::NotFound)?;
