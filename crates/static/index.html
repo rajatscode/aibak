@@ -36,6 +36,11 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #topbar .session-info .game-counter{color:var(--text2);font-weight:600}
 #topbar .session-info .session-timer{color:var(--text3)}
 #topbar .controls{display:flex;align-items:center;gap:8px}
+#topbar .auth-area{display:flex;align-items:center;gap:8px;margin-left:4px}
+#topbar .auth-area a.discord-btn{background:#5865F2;color:#fff;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap}
+#topbar .auth-area a.discord-btn:hover{background:#4752c4}
+#topbar .auth-area .username{color:var(--text);font-size:12px;font-weight:600}
+#topbar .auth-area button.signout-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px}
 #topbar select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
 
 /* TURN TIMER */
@@ -618,6 +623,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">&#9790;</button>
       <button id="mute-toggle" onclick="toggleMute()" title="Toggle Sound">Sound</button>
       <button onclick="newGame()" title="New Game (N)">New Game</button>
+      <div class="auth-area" id="auth-area"></div>
     </div>
   </div>
   <div id="win-prob-bar">
@@ -903,6 +909,7 @@ let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
 let showTips = true; // strategic tips toggle
 let openingBook = []; // cached openings from server
+let currentUser = null; // authenticated user
 
 // ========== TURN TIMER STATE ==========
 let turnTimerDuration = 90; // seconds, 0 = off
@@ -5436,6 +5443,38 @@ function renderIncomeBreakdown() {
   panel.innerHTML = html;
 }
 
+// ========== AUTH ==========
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      currentUser = await res.json();
+    } else {
+      currentUser = null;
+    }
+  } catch(e) {
+    currentUser = null;
+  }
+  updateAuthUI();
+}
+
+function updateAuthUI() {
+  const area = document.getElementById('auth-area');
+  if (!area) return;
+  if (currentUser) {
+    area.innerHTML = '<span class="username">' + currentUser.username + '</span>' +
+      '<button class="signout-btn" onclick="signOut()">Sign Out</button>';
+  } else {
+    area.innerHTML = '<a href="/api/auth/discord" class="discord-btn">Sign in with Discord</a>';
+  }
+}
+
+async function signOut() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  currentUser = null;
+  updateAuthUI();
+}
+
 // ========== INIT ==========
 document.getElementById('set-fog').addEventListener('change', function() {
   document.getElementById('fog-label').textContent = this.checked ? 'On' : 'Off';
@@ -5443,6 +5482,7 @@ document.getElementById('set-fog').addEventListener('change', function() {
 startSessionTimer();
 buildMap();
 if (isLightTheme()) applyThemeGradients();
+checkAuth();
 fetchState();
 </script>
 <div id="session-stats-bar"></div>
