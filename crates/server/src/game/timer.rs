@@ -21,6 +21,12 @@ pub async fn boot_timer_task(pool: PgPool, manager: Arc<GameManager>) {
                     if let Err(e) = manager.check_boot_timer(game_id, turn).await {
                         error!(%game_id, turn, "boot timer error: {}", e);
                     }
+                    // Clean up the processed deadline so it doesn't fire again.
+                    let _ = sqlx::query("DELETE FROM turn_deadlines WHERE game_id = $1 AND turn = $2")
+                        .bind(game_id)
+                        .bind(turn)
+                        .execute(&pool)
+                        .await;
                 }
             }
             Err(e) => {
