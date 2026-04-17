@@ -493,8 +493,8 @@
     margin-top: 2px;
   }
 
-  /* Map Preferences pie */
-  .map-pref-container {
+  /* Board Preferences pie */
+  .board-pref-container {
     display: flex;
     align-items: center;
     gap: 24px;
@@ -502,19 +502,19 @@
     justify-content: center;
   }
 
-  .map-pref-legend {
+  .board-pref-legend {
     list-style: none;
     font-size: 13px;
   }
 
-  .map-pref-legend li {
+  .board-pref-legend li {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 3px 0;
   }
 
-  .map-pref-swatch {
+  .board-pref-swatch {
     width: 12px;
     height: 12px;
     border-radius: 3px;
@@ -522,7 +522,7 @@
     flex-shrink: 0;
   }
 
-  .map-pref-count {
+  .board-pref-count {
     color: #8b949e;
     margin-left: auto;
     padding-left: 12px;
@@ -531,6 +531,7 @@
 </style>
 </head>
 <body>
+<div style="position:fixed;top:0;left:0;z-index:9999;background:#d29922;color:#000;font-size:11px;font-weight:700;padding:2px 10px;border-bottom-right-radius:6px;opacity:0.9;">ALPHA — expect bugs</div>
 <nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
   <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
   <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
@@ -747,7 +748,7 @@
     }).join('');
 
     return '<table class="match-table">' +
-      '<thead><tr><th>Game</th><th>Result</th><th>Length</th><th>Map</th><th>Rating</th></tr></thead>' +
+      '<thead><tr><th>Game</th><th>Result</th><th>Length</th><th>Board</th><th>Rating</th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table>';
   }
 
@@ -802,7 +803,7 @@
             '<strong>Game #' + m.game_number + '</strong><br>' +
             'Result: ' + (isWin ? 'Victory' : 'Defeat') + '<br>' +
             'Turns: ' + m.turns + '<br>' +
-            'Map: ' + escHtml(m.map) + '<br>' +
+            'Board: ' + escHtml(m.map) + '<br>' +
             'Rating: ' + formatRating(m.rating_after) +
             (m.date ? '<br>Date: ' + m.date : '') +
           '</div>' +
@@ -865,8 +866,8 @@
     '</div>';
   }
 
-  /* Map Preferences Pie Chart */
-  function buildMapPieChart(matches) {
+  /* Board Preferences Pie Chart */
+  function buildBoardPieChart(matches) {
     if (!matches || matches.length < 1) return '<p style="color:#8b949e;font-size:14px;">No data yet.</p>';
 
     /* Count maps */
@@ -921,17 +922,17 @@
     var svg = '<svg viewBox="0 0 ' + svgSize + ' ' + svgSize + '" width="' + svgSize + '" height="' + svgSize + '" xmlns="http://www.w3.org/2000/svg">' + slices + '</svg>';
 
     /* Legend */
-    var legend = '<ul class="map-pref-legend">';
+    var legend = '<ul class="board-pref-legend">';
     for (var i = 0; i < entries.length; i++) {
       var color = PIE_COLORS[i % PIE_COLORS.length];
       var pct = ((entries[i].count / total) * 100).toFixed(0);
-      legend += '<li><span class="map-pref-swatch" style="background:' + color + '"></span>' +
+      legend += '<li><span class="board-pref-swatch" style="background:' + color + '"></span>' +
         '<span>' + escHtml(entries[i].name) + '</span>' +
-        '<span class="map-pref-count">' + entries[i].count + ' (' + pct + '%)</span></li>';
+        '<span class="board-pref-count">' + entries[i].count + ' (' + pct + '%)</span></li>';
     }
     legend += '</ul>';
 
-    return '<div class="map-pref-container">' + svg + legend + '</div>';
+    return '<div class="board-pref-container">' + svg + legend + '</div>';
   }
 
   async function loadProfile() {
@@ -989,11 +990,11 @@
         /* Win prob sparkline */
         '<div class="panel"><h2>Win Probability Over Games</h2><div class="chart-container" id="winprob-chart"></div></div>' +
 
-        /* Three column: Bonus, Picks, Map Preferences */
+        /* Three column: Bonus, Picks, Board Preferences */
         '<div class="three-col">' +
           '<div class="panel"><h2>Bonus Efficiency</h2><div id="bonus-list"></div></div>' +
           '<div class="panel"><h2>Favorite Starting Picks</h2><div id="picks-list"></div></div>' +
-          '<div class="panel"><h2>Map Preferences</h2><div id="map-pref"></div></div>' +
+          '<div class="panel"><h2>Board Preferences</h2><div id="board-pref"></div></div>' +
         '</div>' +
 
         /* Classic match table */
@@ -1006,7 +1007,7 @@
       document.getElementById('winprob-chart').innerHTML = buildWinProbSparkline(s.start_win_probs);
       document.getElementById('bonus-list').innerHTML = buildFreqList(s.bonus_captures);
       document.getElementById('picks-list').innerHTML = buildFreqList(s.pick_choices);
-      document.getElementById('map-pref').innerHTML = buildMapPieChart(s.match_history);
+      document.getElementById('board-pref').innerHTML = buildBoardPieChart(s.match_history);
       document.getElementById('match-history').innerHTML = buildMatchTable(s.match_history);
 
     } catch (e) {

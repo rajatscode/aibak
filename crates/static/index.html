@@ -575,6 +575,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 </style>
 </head>
 <body>
+<div style="position:fixed;top:0;left:0;z-index:9999;background:#d29922;color:#000;font-size:11px;font-weight:700;padding:2px 10px;border-bottom-right-radius:6px;opacity:0.9;">ALPHA — expect bugs</div>
 <nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
   <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
   <a href="/" style="color:#fff;text-decoration:none;">Play</a>
@@ -587,6 +588,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 <div id="app">
   <div id="topbar">
     <h1>strat.club</h1>
+    <span id="board-name-display" style="font-size:11px;color:var(--text3);margin-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px"></span>
     <div class="stats">
       <span>Turn <strong id="turn-num">1</strong></span>
       <span>Income <strong id="income-num">5</strong></span>
@@ -677,7 +679,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         </div>
         <div id="overview-list"></div>
       </div>
-      <div class="sb-section" id="control-panel" style="flex-shrink:0"></div>
+      <div class="sb-section" id="control-panel" style="flex:1;overflow-y:auto;min-height:0"></div>
       <div id="turn-log" style="flex:1;overflow-y:auto"></div>
       <div id="replay-sparkline"><h3>Win Probability</h3><div id="replay-sparkline-svg"></div></div>
       <div id="replay-log"></div>
@@ -709,7 +711,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <div id="go-analysis"></div>
     <div class="go-actions">
       <button class="btn-rematch" id="go-rematch-btn" onclick="rematch()">Rematch</button>
-      <button class="btn btn-gold" style="width:auto;padding:12px 32px" onclick="newGame()">New Map</button>
+      <button class="btn btn-gold" style="width:auto;padding:12px 32px" onclick="newGame()">New Board</button>
       <button class="btn btn-primary" style="width:auto;padding:12px 32px" id="go-review-btn" onclick="enterReplayMode()">Review Game</button>
     </div>
     <div class="go-social">
@@ -731,22 +733,24 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 </div>
 <div id="template-modal">
   <div class="modal-content">
-    <h2>Choose Your Battlefield</h2>
-    <p>Select a map template and customize settings</p>
+    <h2>Choose Your Board</h2>
+    <p>Select a board to play — each combines a map with gameplay settings</p>
     <div class="template-cards">
       <div class="template-card" id="tpl-small_earth" onclick="selectTemplate('small_earth')">
         <div class="template-icon">&#127758;</div>
         <h3>Small Earth</h3>
+        <div class="template-info" style="color:var(--text3);font-size:11px;margin-bottom:6px">on Small Earth map</div>
         <div class="template-info">42 territories<br>6 bonuses<br>Classic layout</div>
       </div>
       <div class="template-card" id="tpl-mme" onclick="selectTemplate('mme')">
         <div class="template-icon">&#127757;</div>
         <h3>Modified Medium Earth</h3>
+        <div class="template-info" style="color:var(--text3);font-size:11px;margin-bottom:6px">on Modified Medium Earth map</div>
         <div class="template-info">89 territories<br>22 bonuses<br>Extended map</div>
       </div>
     </div>
     <div id="game-settings">
-      <h3>Game Settings</h3>
+      <h3>Board Settings</h3>
       <div class="settings-grid">
         <div class="setting-row">
           <label>Fog of War</label>
@@ -892,6 +896,7 @@ let winProbHistory = []; // track win% over turns for sparkline
 let gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
 let annotations = {}; // territory_id -> {note, marker}
 let markerMode = null; // null or one of: 'attack','defend','danger','priority'
+let earnedAchievementIds = new Set(); // track achievements already toasted this game
 let selectedTemplate = null;
 let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
@@ -1332,7 +1337,7 @@ async function setDifficulty(level) {
   await api('POST', '/api/difficulty', {level: level});
 }
 
-// ========== TEMPLATE SELECTION ==========
+// ========== BOARD SELECTION ==========
 function showTemplateModal() {
   // Reset selection highlight
   document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
@@ -1365,7 +1370,7 @@ function selectTemplate(tmpl) {
 
 async function startGameWithSettings() {
   if (!selectedTemplate) {
-    toast('Select a map first', 'error');
+    toast('Select a board first', 'error');
     return;
   }
   const fog = document.getElementById('set-fog').checked;
@@ -1393,6 +1398,7 @@ async function startGameWithSettings() {
   if (res) {
     showTips = true;
     fetchOpeningBook(selectedTemplate);
+    updateBoardNameDisplay();
     await fetchState();
   }
 }
@@ -1726,6 +1732,8 @@ function buildMap() {
 
   // Draw bonus region boundaries now that POS is populated
   drawBonusBoundaries();
+  // Pre-build hover connection elements for instant show/hide
+  buildHoverConnections();
 
   // Bonus labels on map
   // For maps with 6 bonuses, use hardcoded positions; otherwise compute from territory centroids
@@ -2045,56 +2053,101 @@ function estimateCombat(attackers, defenders) {
 }
 
 // ========== HOVER CONNECTION LINES ==========
-function drawHoverConnections() {
-  const g = document.getElementById('hover-connections');
-  if (!g) return;
-  g.innerHTML = '';
+// Pre-built hover connection elements keyed by territory id
+let hoverConnGroups = {};
 
-  // Don't draw hover connections when a source is selected (attack routes take precedence)
+function buildHoverConnections() {
+  const container = document.getElementById('hover-connections');
+  if (!container) return;
+  container.innerHTML = '';
+  hoverConnGroups = {};
+  if (!G || !G.territories) return;
+
+  G.territories.forEach(t => {
+    if (!POS[t.id] || !t.adjacent) return;
+    const [hx, hy] = POS[t.id];
+    const g = svgEl('g', {'data-hover-terr': t.id, style: 'display:none'});
+
+    t.adjacent.forEach(adjId => {
+      if (!POS[adjId]) return;
+      const [ax, ay] = POS[adjId];
+
+      g.appendChild(svgEl('line', {
+        x1: ax, y1: ay, x2: hx, y2: hy,
+        class: 'hover-conn-line hover-conn-neutral hover-conn-anim',
+        'data-adj': adjId
+      }));
+
+      const bx = ax + (hx - ax) * 0.15;
+      const by = ay + (hy - ay) * 0.15;
+      g.appendChild(svgEl('circle', {
+        cx: bx, cy: by, r: 8,
+        fill: 'rgba(0,0,0,0.75)',
+        stroke: '#6b7280', 'stroke-width': 1.5,
+        'data-badge-adj': adjId, style: 'display:none'
+      }));
+      g.appendChild(svgEl('text', {
+        x: bx, y: by, class: 'hover-army-label',
+        'data-label-adj': adjId
+      }, ''));
+    });
+
+    container.appendChild(g);
+    hoverConnGroups[t.id] = g;
+  });
+}
+
+function drawHoverConnections() {
+  // Hide all pre-built groups
+  Object.values(hoverConnGroups).forEach(g => { g.style.display = 'none'; });
+
   if (selectedSource !== null) return;
   if (hoveredTerritory === null || !POS[hoveredTerritory]) return;
   if (!G) return;
 
+  const g = hoverConnGroups[hoveredTerritory];
+  if (!g) return;
+
   const ht = terr(hoveredTerritory);
   if (!ht || !ht.adjacent) return;
 
-  const [hx, hy] = POS[hoveredTerritory];
-
-  ht.adjacent.forEach(adjId => {
-    if (!POS[adjId]) return;
+  // Update colors and army badges based on current game state
+  g.querySelectorAll('line[data-adj]').forEach(line => {
+    const adjId = parseInt(line.getAttribute('data-adj'));
     const at = terr(adjId);
     if (!at) return;
-    const [ax, ay] = POS[adjId];
-
-    // Determine relationship color class
     let colorClass = 'hover-conn-neutral';
     if (at.owner === ht.owner && ht.owner === 0) colorClass = 'hover-conn-friendly';
     else if (at.owner === ht.owner && ht.owner === 1) colorClass = 'hover-conn-enemy';
     else if (at.owner === 0) colorClass = 'hover-conn-friendly';
     else if (at.owner === 1) colorClass = 'hover-conn-enemy';
+    line.setAttribute('class', 'hover-conn-line ' + colorClass + ' hover-conn-anim');
+  });
 
-    // Animated dashed connection line
-    g.appendChild(svgEl('line', {
-      x1: ax, y1: ay, x2: hx, y2: hy,
-      class: 'hover-conn-line ' + colorClass + ' hover-conn-anim'
-    }));
-
-    // Army count badge near the adjacent territory end
-    const bx = ax + (hx - ax) * 0.15;
-    const by = ay + (hy - ay) * 0.15;
+  g.querySelectorAll('circle[data-badge-adj]').forEach(circle => {
+    const adjId = parseInt(circle.getAttribute('data-badge-adj'));
+    const at = terr(adjId);
+    if (!at) { circle.style.display = 'none'; return; }
     const armyCount = at.armies || 0;
     if (armyCount > 0 && at.visible !== false) {
-      g.appendChild(svgEl('circle', {
-        cx: bx, cy: by, r: 8,
-        fill: 'rgba(0,0,0,0.75)',
-        stroke: colorClass === 'hover-conn-friendly' ? '#60a5fa' : colorClass === 'hover-conn-enemy' ? '#ef4444' : '#6b7280',
-        'stroke-width': 1.5
-      }));
-      g.appendChild(svgEl('text', {
-        x: bx, y: by, class: 'hover-army-label'
-      }, armyCount));
+      circle.style.display = '';
+      const colorClass = (at.owner === ht.owner && ht.owner === 0) || at.owner === 0 ? '#60a5fa' :
+                          (at.owner === 1 ? '#ef4444' : '#6b7280');
+      circle.setAttribute('stroke', colorClass);
+    } else {
+      circle.style.display = 'none';
     }
   });
+
+  g.querySelectorAll('text[data-label-adj]').forEach(txt => {
+    const adjId = parseInt(txt.getAttribute('data-label-adj'));
+    const at = terr(adjId);
+    if (!at) { txt.textContent = ''; return; }
+    const armyCount = at.armies || 0;
+    txt.textContent = (armyCount > 0 && at.visible !== false) ? armyCount : '';
+  });
+
+  g.style.display = '';
 }
 
 // ========== BONUS REGION BOUNDARIES ==========
@@ -3177,7 +3230,13 @@ async function endTurn() {
   if (res) {
     if (res.events) await showTurnEvents(res.events);
     if (res.new_achievements && res.new_achievements.length) {
-      res.new_achievements.forEach(function(ach, i) {
+      var unseen = res.new_achievements.filter(function(ach) {
+        var key = ach.id || ach.name;
+        if (earnedAchievementIds.has(key)) return false;
+        earnedAchievementIds.add(key);
+        return true;
+      });
+      unseen.forEach(function(ach, i) {
         setTimeout(function() { achievementToast(ach); }, i * 600);
       });
     }
@@ -3277,15 +3336,17 @@ function showGameOver(winner) {
   const msg = document.getElementById('go-msg');
   const statsDiv = document.getElementById('go-stats');
   const analysisDiv = document.getElementById('go-analysis');
+  var boardName = getBoardDisplayName();
+  var turns = gameStats.turnsPlayed || 0;
   if (winner === 0) {
     title.textContent = 'Victory!';
     title.style.color = 'var(--green)';
-    msg.textContent = 'You conquered the world!';
+    msg.textContent = 'You won on ' + boardName + ' in ' + turns + ' turns';
     playSound('win');
   } else {
     title.textContent = 'Defeat';
     title.style.color = 'var(--red)';
-    msg.textContent = 'The AI has conquered the world.';
+    msg.textContent = 'Defeated on ' + boardName + ' after ' + turns + ' turns';
     playSound('lose');
   }
 
@@ -3499,7 +3560,7 @@ async function newGame() {
   resolving = false;
   winProbHistory = [];
   annotations = {}; markerMode = null;
-  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
   clearUndoRedo();
   clearChat();
   showTemplateModal();
@@ -3539,14 +3600,17 @@ async function rematch() {
   resolving = false;
   winProbHistory = [];
   annotations = {}; markerMode = null;
-  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
   clearUndoRedo();
   clearChat();
   playSound('tick');
   sessionGames++;
   updateSessionDisplay();
   const res = await api('POST', '/api/new', lastGameSettings);
-  if (res) await fetchState();
+  if (res) {
+    updateBoardNameDisplay();
+    await fetchState();
+  }
 }
 
 async function quickPlay() {
@@ -3582,16 +3646,19 @@ async function quickPlay() {
     resolving = false;
     winProbHistory = [];
     annotations = {}; markerMode = null;
-    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
     clearUndoRedo();
     clearChat();
     playSound('tick');
     sessionGames++;
     updateSessionDisplay();
     const res = await api('POST', '/api/new', lastGameSettings);
-    if (res) await fetchState();
+    if (res) {
+      updateBoardNameDisplay();
+      await fetchState();
+    }
   } else {
-    // No previous game — show template picker
+    // No previous game — show board picker
     newGame();
   }
 }
@@ -4802,10 +4869,25 @@ function getMapDisplayName() {
   if (lastGameSettings && lastGameSettings.template) {
     var t = lastGameSettings.template;
     if (t === 'small_earth') return 'Small Earth';
-    if (t === 'mme') return 'Medium Earth';
+    if (t === 'mme') return 'Modified Medium Earth';
     return t.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
   }
   return 'Custom Map';
+}
+
+function getBoardDisplayName() {
+  var mapName = getMapDisplayName();
+  if (!lastGameSettings || !lastGameSettings.settings) return mapName;
+  var s = lastGameSettings.settings;
+  var parts = [mapName];
+  if (s.fog_of_war === false) parts.push('No Fog');
+  if (s.base_income && s.base_income !== 5) parts.push(s.base_income + ' income');
+  return parts.join(' \u2014 ');
+}
+
+function updateBoardNameDisplay() {
+  var el = document.getElementById('board-name-display');
+  if (el) el.textContent = getBoardDisplayName();
 }
 
 function getAiDifficultyName() {
@@ -4829,7 +4911,7 @@ function shareGameResult() {
   if (!G) { toast('No game to share', 'error'); return; }
   var won = G.winner === 0;
   var turns = gameStats.turnsPlayed || G.turn || 0;
-  var mapName = getMapDisplayName();
+  var boardName = getBoardDisplayName();
   var difficulty = getAiDifficultyName();
   var myTerr = G.my_territories || 0;
   var totalTerr = (G.my_territories || 0) + (G.enemy_territories || 0);
@@ -4841,7 +4923,7 @@ function shareGameResult() {
 
   var lines = [
     'strat.club ' + (won ? '\uD83C\uDFC6 Victory' : '\uD83D\uDCA5 Defeat') + ' in ' + turns + ' turns',
-    difficulty + ' ' + mapName + ' | Win Prob: ' + startProb + '% \u2192 ' + endProb + '%',
+    difficulty + ' ' + boardName + ' | Win Prob: ' + startProb + '% \u2192 ' + endProb + '%',
     bar + ' ' + myTerr + '/' + totalTerr + ' territories',
     'Play at strat.club'
   ];
@@ -4877,7 +4959,7 @@ function shareAsImage() {
 
   var won = G.winner === 0;
   var turns = gameStats.turnsPlayed || G.turn || 0;
-  var mapName = getMapDisplayName();
+  var boardName = getBoardDisplayName();
   var difficulty = getAiDifficultyName();
   var myTerr = G.my_territories || 0;
   var totalTerr = (G.my_territories || 0) + (G.enemy_territories || 0);
@@ -4907,7 +4989,7 @@ function shareAsImage() {
   // Sub-header
   ctx.fillStyle = '#8b949e';
   ctx.font = '18px -apple-system, BlinkMacSystemFont, sans-serif';
-  ctx.fillText(difficulty + ' ' + mapName + ' | ' + myTerr + '/' + totalTerr + ' territories | Start: ' + startProb + '%', cw / 2, 80);
+  ctx.fillText(difficulty + ' ' + boardName + ' | ' + myTerr + '/' + totalTerr + ' territories | Start: ' + startProb + '%', cw / 2, 80);
 
   // Branding
   ctx.fillStyle = '#e3b341';
@@ -5019,7 +5101,7 @@ async function importGameData(data) {
     resolving = false;
     winProbHistory = [];
     annotations = {}; markerMode = null;
-    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
+    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
     clearUndoRedo();
     document.getElementById('game-over').classList.remove('show');
     document.getElementById('turn-log').innerHTML = '';

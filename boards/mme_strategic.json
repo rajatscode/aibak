@@ -1,0 +1,20 @@
+{
+  "id": "mme_strategic",
+  "name": "Modified Medium Earth — Strategic",
+  "map_id": "mme",
+  "config": {
+    "picking": {
+      "num_picks": 4,
+      "method": "random_warlords"
+    },
+    "settings": {
+      "luck_pct": 0,
+      "base_income": 5,
+      "wasteland_armies": 10,
+      "unpicked_neutral_armies": 4,
+      "fog_of_war": true,
+      "offense_kill_rate": 0.6,
+      "defense_kill_rate": 0.7
+    }
+  }
+}

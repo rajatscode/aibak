@@ -1,8 +1,18 @@
 //! Board: a playable unit combining a Map with its configuration.
 
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 use crate::map::{Map, MapFile, MapSettings, PickingConfig};
+
+/// On-disk format for a board JSON file.
+#[derive(Debug, Clone, Deserialize)]
+struct BoardFile {
+    id: String,
+    name: String,
+    map_id: String,
+    config: BoardConfig,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoardConfig {
@@ -40,6 +50,27 @@ impl Board {
             map,
             config,
         }
+    }
+
+    /// Load a Board from a board JSON file + map directory.
+    ///
+    /// The board file contains the board id/name, a `map_id` referencing a map,
+    /// and a `config` with picking + settings. The map is loaded from
+    /// `maps_dir/<map_id>.json`.
+    pub fn load(board_path: &Path, maps_dir: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let board_json = std::fs::read_to_string(board_path)?;
+        let bf: BoardFile = serde_json::from_str(&board_json)?;
+
+        let map_path = maps_dir.join(format!("{}.json", bf.map_id));
+        let map_json = std::fs::read_to_string(&map_path)?;
+        let map: Map = serde_json::from_str(&map_json)?;
+
+        Ok(Board {
+            id: bf.id,
+            name: bf.name,
+            map,
+            config: bf.config,
+        })
     }
 
     pub fn settings(&self) -> &MapSettings {

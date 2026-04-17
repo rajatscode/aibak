@@ -1377,15 +1377,20 @@ async fn main() {
     let config = Config::from_env();
     info!("starting strat-club server");
 
-    // Load map for local play.
+    // Load board for local play.
+    // Try new split format (board JSON + maps dir) first, fall back to legacy MapFile.
     let map_path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| config.default_map_path.clone());
-    let map = MapFile::load(&PathBuf::from(&map_path)).unwrap_or_else(|e| {
-        eprintln!("Failed to load map '{}': {}", map_path, e);
-        std::process::exit(1);
-    });
-    let board = Board::from_map(map);
+    let board = if let Ok(b) = Board::load(&PathBuf::from(&map_path), &PathBuf::from("maps")) {
+        b
+    } else {
+        let map = MapFile::load(&PathBuf::from(&map_path)).unwrap_or_else(|e| {
+            eprintln!("Failed to load map '{}': {}", map_path, e);
+            std::process::exit(1);
+        });
+        Board::from_map(map)
+    };
 
     info!(
         map = %board.name,
