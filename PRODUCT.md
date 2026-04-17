@@ -13,7 +13,6 @@ That's it. Everything else is a distraction until this works perfectly.
 ## User Stories
 
 ### New Player
-- As a new player, I want a quick tutorial explaining the core turn structure (pick → deploy → attack → resolve) so I can understand the game flow in under 5 minutes.
 - As a new player, I want to play offline against AI on Easy before entering ranked so I can practice without risking my rating.
 - As a new player, I want tooltips on bonuses, card rewards, and fog of war so I don't need external wikis to understand the rules.
 
@@ -23,13 +22,12 @@ That's it. Everything else is a distraction until this works perfectly.
 - As a casual player, I want to replay completed games so I can learn from losses without needing a separate study mode.
 
 ### Competitive Player
-- As a competitive player, I want a public Glicko-2 rating and seasonal leaderboard so my skill is objectively measured and I know what I need to climb.
+- As a competitive player, I want a public Glicko-2 rating and seasonal leaderboard so my skill is objectively measured and I know what I need to climb. *(seasonal league upcoming)*
 - As a competitive player, I want frequent matchmaking against similarly skilled opponents so every game is a meaningful test of my ability, not a stomp.
 
 ### Returning Player
-- As a returning player, I want to see my rating history and previous season rank so I know where I left off and what to chase.
 - As a returning player, I want new maps or rule variants available so the meta feels fresh.
-- As a returning player, I want to jump straight into ranked matchmaking without mandatory tutorials so I can return frictionlessly.
+- As a returning player, I want to jump straight into ranked matchmaking so I can return frictionlessly.
 
 ### Feedback Loop
 - As a player, I want to submit feedback and bug reports directly in the app so the developers know what's broken without me leaving the game.
@@ -57,16 +55,13 @@ Everything else comes after these four things are done.
 - MCTS AI on Hard can block the server thread during computation
 
 ### Feature Bloat
-The overnight build session added many features that don't serve the core user story:
-- Daily puzzles — nice to have, not launch critical
+The following non-core features were stripped to focus on the critical path:
+- ~~Daily puzzles~~ — removed
+- ~~Tutorial page~~ — removed
+- ~~Profile/stats page~~ — removed
+- ~~Map editor~~ — removed
 - Arena tournaments — needs multiplayer first
 - Achievement system — fires incorrectly (client-side band-aid applied, server-side root cause unfixed)
-- Chat/emoji system — local AI chat is gimmicky
-- Territory annotations — niche power-user feature
-- Opening book/tips — premature before real meta develops
-- Game export/import — niche
-- Theme toggle — cosmetic
-- Session stats bar — cosmetic
 
 **None of these should get attention until the critical path is done.**
 
@@ -99,7 +94,6 @@ The overnight build session added many features that don't serve the core user s
 - Social features beyond basic chat
 - Custom game settings UI (use defaults)
 - AI improvements (local play is good enough)
-- Map editor polish
 - Landing page marketing
 
 ## Safety Principles

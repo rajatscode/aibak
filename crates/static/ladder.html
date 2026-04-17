@@ -8,9 +8,9 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --bg:#0d1117;--bg2:#0f1419;--bg3:#1a1f2e;--border:#21293a;
   --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
-  --blue:#2563eb;--red:#dc2626;--green:#3fb950;--gold:#e3b341;
+  --blue:#4a9eff;--red:#f87171;--green:#34d399;--gold:#fbbf24;
 }
 html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
 
@@ -26,6 +26,7 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 .ladder-table .rank-col{font-weight:700;color:var(--gold);width:50px}
 .ladder-table .rating-col{font-weight:600}
 .ladder-table .winrate-col{color:var(--text2)}
+.tier-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9999px;margin-left:6px;vertical-align:middle;letter-spacing:.3px}
 
 .rank-1{color:#ffd700}
 .rank-2{color:#c0c0c0}
@@ -46,8 +47,8 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 </head>
 <body>
 <div style="position:fixed;bottom:8px;right:8px;z-index:9999;background:#d29922;color:#000;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;opacity:0.75;">ALPHA — expect bugs</div>
-<nav style="background:#0d1117;border-bottom:1px solid #30363d;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
-  <a href="/" style="color:#e3b341;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
+<nav style="background:#0f1419;border-bottom:1px solid #21293a;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
+  <a href="/" style="color:#fbbf24;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
   <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
   <a href="/games" style="color:#8b949e;text-decoration:none;">Games</a>
   <a href="/ladder" style="color:#fff;text-decoration:none;">Ladder</a>
@@ -62,11 +63,21 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
   </div>
 </div>
 
-<footer style="width:100%;text-align:center;padding:24px 16px;font-size:12px;color:#8b949e;border-top:1px solid #30363d;margin-top:24px;">
+<footer style="width:100%;text-align:center;padding:24px 16px;font-size:12px;color:#8b949e;border-top:1px solid #21293a;margin-top:24px;">
   strat.club
 </footer>
 
 <script>
+function getTier(rating) {
+  if (rating >= 2200) return { name: 'Grandmaster', color: '#dc2626', bg: 'rgba(220,38,38,.15)' };
+  if (rating >= 2000) return { name: 'Master', color: '#a855f7', bg: 'rgba(168,85,247,.15)' };
+  if (rating >= 1800) return { name: 'Diamond', color: '#22d3ee', bg: 'rgba(34,211,238,.15)' };
+  if (rating >= 1600) return { name: 'Platinum', color: '#94a3b8', bg: 'rgba(148,163,184,.15)' };
+  if (rating >= 1400) return { name: 'Gold', color: '#e3b341', bg: 'rgba(227,179,65,.15)' };
+  if (rating >= 1200) return { name: 'Silver', color: '#c0c0c0', bg: 'rgba(192,192,192,.15)' };
+  return { name: 'Bronze', color: '#cd7f32', bg: 'rgba(205,127,50,.15)' };
+}
+
 var PAGE_SIZE = 20;
 var currentPage = 0;
 var allPlayers = [];
@@ -132,7 +143,8 @@ function renderPage() {
     html += '<tr' + (isCurrentUser ? ' class="current-user"' : '') + '>' +
       '<td class="rank-col' + rankClass + '">#' + rank + '</td>' +
       '<td>' + escHtml(p.username) + '</td>' +
-      '<td class="rating-col">' + Math.round(p.rating || 1500) + '</td>' +
+      '<td class="rating-col">' + Math.round(p.rating || 1500) +
+        '<span class="tier-badge" style="color:' + getTier(p.rating || 1500).color + ';background:' + getTier(p.rating || 1500).bg + '">' + getTier(p.rating || 1500).name + '</span></td>' +
       '<td>' + wins + ' / ' + losses + '</td>' +
       '<td class="winrate-col">' + winRate + '</td>' +
       '</tr>';
