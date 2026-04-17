@@ -128,7 +128,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* GAME OVER OVERLAY */
 #game-over{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:999}
 #game-over.show{display:flex}
-#game-over .card{background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:480px}
+#game-over .card{position:relative;background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:480px}
+#game-over .card .modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
+#game-over .card .modal-close:hover{color:var(--text)}
 #game-over .card h2{font-size:32px;margin-bottom:12px}
 #game-over .card p{color:var(--text2);margin-bottom:16px}
 #game-over .card button{padding:12px 32px;font-size:16px}
@@ -250,8 +252,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     </div>
   </div>
 </div>
-<div id="game-over">
+<div id="game-over" onclick="if(event.target===this)hideGameOver()">
   <div class="card">
+    <button class="modal-close" onclick="hideGameOver()">&times;</button>
     <h2 id="go-title"></h2>
     <p id="go-msg"></p>
     <div style="margin-top:16px">
@@ -919,6 +922,7 @@ function renderOrdersSidebar(pp, cp) {
 
   if (deployLeft > 0) html += '<div class="undeployed-warning">'+deployLeft+' armies undeployed</div>';
   html += '<button class="btn btn-green" style="margin-top:12px" onclick="endTurn()">End Turn</button>';
+  html += '<button style="background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px;margin-top:8px;width:100%;border-radius:6px;cursor:pointer" onclick="resignGame()">Resign</button>';
   html += renderBonusInfo();
   cp.innerHTML = html;
 }
@@ -1135,6 +1139,16 @@ function showGameOver() {
   el.classList.add('show');
 }
 
+function hideGameOver() {
+  document.getElementById('game-over').classList.remove('show');
+}
+
+async function resignGame() {
+  if (submitted || phase === 'finished') return;
+  if (!confirm('Resign this game? This counts as a loss.')) return;
+  await submitOrders([]);
+}
+
 // ========== UI HELPERS ==========
 function showSubmitted(msg) {
   document.getElementById('submitted-msg').textContent = msg;
@@ -1197,6 +1211,7 @@ function hideTooltip() { document.getElementById('tooltip').classList.remove('sh
 // ========== KEYBOARD SHORTCUTS ==========
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
+    if (document.getElementById('game-over').classList.contains('show')) { hideGameOver(); e.preventDefault(); return; }
     if (pendingTarget !== null) cancelPending();
     else if (selectedSource !== null) { selectedSource = null; updateMap(); renderSidebar(); }
   }
