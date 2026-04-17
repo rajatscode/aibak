@@ -741,6 +741,7 @@ function updateMap() {
     var fill, strokeColor, borderColor;
     if (isMe) { fill='#1e3a5f'; strokeColor='#1a2744'; borderColor='rgba(96,165,250,0.6)'; }
     else if (isThem) { fill='#5c1a1a'; strokeColor='#1a2744'; borderColor='rgba(239,68,68,0.6)'; }
+    else if (isFogged(t.id)) { fill='#0c1018'; strokeColor='#111827'; borderColor='rgba(255,255,255,0.05)'; }
     else if (t.is_wasteland && owner === 255 && phase === 'picking') { fill='url(#grad-wasteland)'; strokeColor='#3d2f00'; borderColor='rgba(251,191,36,0.4)'; }
     else { fill='#3d4451'; strokeColor='#1a2744'; borderColor='rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
@@ -774,14 +775,22 @@ function updateMap() {
     var displayArmies = armies[t.id] || 0;
     var dep = deploys[t.id] || 0;
     if (dep > 0) displayArmies += dep;
+    var fogged = isFogged(t.id);
 
-    if (displayArmies > 0) {
+    if (fogged) {
+      armyEl.textContent = '?';
+      armyEl.classList.remove('large-army');
+      armyEl.style.fill = 'rgba(255,255,255,0.2)';
+      if (armyBgEl) { armyBgEl.style.display = ''; armyBgEl.setAttribute('r','12'); armyBgEl.setAttribute('fill','rgba(0,0,0,0.5)'); }
+    } else if (displayArmies > 0) {
       armyEl.textContent = displayArmies;
+      armyEl.style.fill = '';
       if (displayArmies > 10) { armyEl.classList.add('large-army'); if (armyBgEl) armyBgEl.setAttribute('r','14'); }
       else { armyEl.classList.remove('large-army'); if (armyBgEl) armyBgEl.setAttribute('r','12'); }
-      if (armyBgEl) armyBgEl.style.display = '';
+      if (armyBgEl) { armyBgEl.style.display = ''; armyBgEl.setAttribute('fill','rgba(0,0,0,0.7)'); }
     } else {
       armyEl.textContent = '';
+      armyEl.style.fill = '';
       if (armyBgEl) armyBgEl.style.display = 'none';
     }
     if (badgeEl) badgeEl.textContent = dep > 0 ? '+'+dep : '';
@@ -908,6 +917,12 @@ function estimateCombat(attackers, defenders) {
 
 // ========== TERRITORY HELPERS ==========
 function isOwned(id) { return STATE && STATE.territory_owners[id] === mySeat; }
+function isFogged(tid) {
+  if (!STATE || mySeat === null) return false;
+  if (STATE.territory_owners[tid] !== 255) return false;
+  var adj = MAP && MAP.territories[tid] ? MAP.territories[tid].adjacent || [] : [];
+  return !adj.some(function(a) { return STATE.territory_owners[a] === mySeat; });
+}
 function availableArmies(id) {
   if (!STATE) return 0;
   var a = (STATE.territory_armies[id]||0) + (deploys[id]||0);
@@ -1309,8 +1324,12 @@ function showTooltip(id, e) {
   var ownerColor = isMe ? 'var(--blue)' : isThem ? 'var(--red)' : 'var(--neutral)';
 
   var html = '<div class="tip-name">'+t.name+(t.is_wasteland ? ' <span style="color:#d97706">\u2620 Wasteland</span>' : '')+'</div>';
-  html += '<div>Owner: <span style="color:'+ownerColor+'">'+ownerLabel+'</span></div>';
-  html += '<div>Armies: <strong>'+(STATE.territory_armies[id]||0)+'</strong></div>';
+  if (isFogged(id)) {
+    html += '<div style="color:var(--text3)">Fog of War — not visible</div>';
+  } else {
+    html += '<div>Owner: <span style="color:'+ownerColor+'">'+ownerLabel+'</span></div>';
+    html += '<div>Armies: <strong>'+(STATE.territory_armies[id]||0)+'</strong></div>';
+  }
   if (MAP.bonuses) {
     var tBonus = MAP.bonuses.find(function(b){return b.territory_ids.includes(id);});
     if (tBonus) {
