@@ -818,6 +818,27 @@ async fn new_local_game(
         .and_then(|s| s.starting_armies)
         .unwrap_or(picking::DEFAULT_STARTING_ARMIES);
 
+    // Validate that picks * players doesn't exceed available bonus territories.
+    let available_starts = app.board.map.bonuses.iter()
+        .filter(|b| b.value > 0 && b.territory_ids.iter().any(|&tid| !app.board.map.territories[tid].is_wasteland))
+        .count();
+    if app.board.config.picking.num_picks * 2 > available_starts {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ActionResult {
+                success: false,
+                message: format!(
+                    "Too many picks for this map ({} picks × 2 players = {}, but only {} starts available)",
+                    app.board.config.picking.num_picks,
+                    app.board.config.picking.num_picks * 2,
+                    available_starts
+                ),
+                events: Vec::new(),
+                new_achievements: Vec::new(),
+            }),
+        ));
+    }
+
     app.game = GameState::new(&app.board);
     app.rng = StdRng::from_entropy();
     let board_ref = app.board.clone();

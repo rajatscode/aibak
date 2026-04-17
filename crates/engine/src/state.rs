@@ -94,5 +94,9 @@ impl GameState {
                 }
             }
         }
+        // Handle simultaneous elimination: both players lost all territories.
+        if !self.alive[0] && !self.alive[1] && self.phase != Phase::Finished {
+            self.phase = Phase::Finished;
+        }
     }
 }

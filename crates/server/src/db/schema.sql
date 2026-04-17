@@ -149,5 +149,8 @@ CREATE TABLE IF NOT EXISTS feedback_votes (
     UNIQUE(user_id, feedback_id)
 );
 
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS resolved BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS idx_feedback_upvotes ON feedback(upvotes DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feedback_votes_feedback ON feedback_votes(feedback_id);

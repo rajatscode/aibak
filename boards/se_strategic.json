@@ -4,7 +4,7 @@
   "map_id": "small_earth",
   "config": {
     "picking": {
-      "num_picks": 4,
+      "num_picks": 2,
       "method": "random_warlords"
     },
     "settings": {

@@ -44,6 +44,8 @@ pub enum GameError {
     Serialization(String),
     #[error("turn deadline has passed")]
     DeadlinePassed,
+    #[error("validation error: {0}")]
+    Validation(String),
 }
 
 impl From<GameError> for (axum::http::StatusCode, String) {
@@ -54,7 +56,8 @@ impl From<GameError> for (axum::http::StatusCode, String) {
             GameError::WrongStatus { .. }
             | GameError::InvalidPicks(_)
             | GameError::InvalidOrders(_)
-            | GameError::DeadlinePassed => (StatusCode::BAD_REQUEST, err.to_string()),
+            | GameError::DeadlinePassed
+            | GameError::Validation(_) => (StatusCode::BAD_REQUEST, err.to_string()),
             GameError::NotParticipant | GameError::CannotJoinOwnGame => {
                 (StatusCode::FORBIDDEN, err.to_string())
             }
@@ -129,6 +132,19 @@ impl GameManager {
             .map_err(|e| GameError::Serialization(e.to_string()))?;
         let board = Board::from_map(map_file);
 
+        // Validate picks * players doesn't exceed available bonus territories.
+        let available_starts = board.map.bonuses.iter()
+            .filter(|b| b.value > 0 && b.territory_ids.iter().any(|&tid| !board.map.territories[tid].is_wasteland))
+            .count();
+        if board.config.picking.num_picks * 2 > available_starts {
+            return Err(GameError::Validation(format!(
+                "Too many picks for this map ({} picks × 2 players = {}, but only {} starts available)",
+                board.config.picking.num_picks,
+                board.config.picking.num_picks * 2,
+                available_starts
+            )));
+        }
+
         // Generate pick options.
         let pick_options = {
             let mut rng = self.rng.lock().await;
@@ -154,6 +170,10 @@ impl GameManager {
             Some(&pick_json),
         )
         .await?;
+
+        // Set picking phase deadline (same duration as turn deadlines).
+        let deadline = chrono::Utc::now() + chrono::Duration::seconds(300);
+        db::set_turn_deadline(&self.pool, game_id, 0, deadline).await?;
 
         self.hub.broadcast(
             game_id,
@@ -390,6 +410,11 @@ impl GameManager {
             .await?
             .ok_or(GameError::NotFound)?;
 
+        // Handle picking phase boot (turn 0).
+        if game.status == "picking" && turn == 0 {
+            return self.boot_picking_phase(tx, game_id, &game).await;
+        }
+
         if game.status != "active" || game.turn != turn {
             tx.rollback().await?;
             return Ok(()); // Already moved on.
@@ -421,6 +446,94 @@ impl GameManager {
         }
 
         tx.commit().await?;
+
+        Ok(())
+    }
+
+    /// Handle boot timer expiry during picking phase: auto-submit default picks for missing players,
+    /// then resolve picks and transition to active.
+    /// Handle boot timer expiry during picking phase: auto-submit default picks for missing players,
+    /// then resolve picks and transition to active.
+    async fn boot_picking_phase(
+        &self,
+        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        game_id: Uuid,
+        game: &db::GameRow,
+    ) -> Result<(), GameError> {
+        let existing = db::get_orders_for_turn_tx(&mut tx, game_id, 0).await?;
+        if existing.len() >= 2 {
+            tx.rollback().await?;
+            return Ok(());
+        }
+
+        let map_file: MapFile =
+            serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let board = Board::from_map(map_file);
+        let num_picks = board.picking().num_picks;
+
+        // Get pick options to build default picks.
+        let pick_options: Vec<usize> = game
+            .pick_options
+            .as_ref()
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
+        let default_picks: Vec<usize> = pick_options.iter().copied().take(num_picks).collect();
+
+        // Auto-submit default picks for missing players.
+        let players = [game.player_a, game.player_b];
+        let submitted_users: Vec<Uuid> = existing.iter().map(|o| o.user_id).collect();
+        for pid in players.iter().flatten() {
+            if !submitted_users.contains(pid) {
+                let picks_json = serde_json::to_value(&default_picks)
+                    .map_err(|e| GameError::Serialization(e.to_string()))?;
+                db::insert_orders_tx(&mut tx, game_id, *pid, 0, &picks_json).await?;
+            }
+        }
+
+        // Resolve picks.
+        let all_orders = db::get_orders_for_turn_tx(&mut tx, game_id, 0).await?;
+        if all_orders.len() < 2 {
+            tx.rollback().await?;
+            return Ok(());
+        }
+
+        let mut state: GameState =
+            serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
+
+        let mut player_picks: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
+        for order_row in &all_orders {
+            let s = self.player_seat_by_id(game, order_row.user_id)?;
+            let p: Vec<usize> = serde_json::from_value(order_row.orders_json.clone())
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
+            player_picks[s as usize] = p;
+        }
+
+        picking::resolve_picks(
+            &mut state,
+            [&player_picks[0], &player_picks[1]],
+            &board,
+            picking::DEFAULT_STARTING_ARMIES,
+        );
+
+        let state_json =
+            serde_json::to_value(&state).map_err(|e| GameError::Serialization(e.to_string()))?;
+
+        db::update_game_state_tx(&mut tx, game_id, "active", 1, &state_json, None).await?;
+
+        let deadline = chrono::Utc::now() + chrono::Duration::seconds(300);
+        db::set_turn_deadline_tx(&mut tx, game_id, 1, deadline).await?;
+
+        tx.commit().await?;
+
+        self.hub.broadcast(
+            game_id,
+            ws::GameEvent::GameStateUpdated {
+                game_id,
+                status: "active".to_string(),
+            },
+        );
 
         Ok(())
     }

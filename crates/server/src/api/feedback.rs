@@ -83,22 +83,6 @@ pub async fn submit_feedback(
 ) -> Result<Json<FeedbackResponse>, (StatusCode, String)> {
     let pool = state.require_db()?;
 
-    // Rate limit: max 5 feedback submissions per hour per user.
-    let recent_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM feedback WHERE user_id = $1 AND created_at > now() - interval '1 hour'",
-    )
-    .bind(auth.user_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    if recent_count >= 5 {
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            "Maximum 5 feedback submissions per hour".to_string(),
-        ));
-    }
-
     let content = body.content.trim();
     if content.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "content cannot be empty".to_string()));
@@ -156,22 +140,6 @@ pub async fn vote_feedback(
     Json(body): Json<VoteRequest>,
 ) -> Result<Json<VoteResponse>, (StatusCode, String)> {
     let pool = state.require_db()?;
-
-    // Rate limit: max 30 votes per hour per user.
-    let recent_votes: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM feedback_votes WHERE user_id = $1 AND created_at > now() - interval '1 hour'",
-    )
-    .bind(auth.user_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    if recent_votes >= 30 {
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            "Maximum 30 votes per hour".to_string(),
-        ));
-    }
 
     if body.direction != 1 && body.direction != -1 {
         return Err((

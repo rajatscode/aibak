@@ -229,13 +229,13 @@ fn test_picking_resolves_to_play_phase() {
     assert_eq!(state.turn, 1);
     assert_eq!(
         state.territory_count_for(0),
-        4,
-        "Player 0 should get 4 territories"
+        2,
+        "Player 0 should get 2 territories"
     );
     assert_eq!(
         state.territory_count_for(1),
-        4,
-        "Player 1 should get 4 territories"
+        2,
+        "Player 1 should get 2 territories"
     );
 }
 
@@ -859,8 +859,8 @@ fn test_picking_contested() {
         picking::DEFAULT_STARTING_ARMIES,
     );
 
-    assert_eq!(state.territory_count_for(0), 4);
-    assert_eq!(state.territory_count_for(1), 4);
+    assert_eq!(state.territory_count_for(0), 2);
+    assert_eq!(state.territory_count_for(1), 2);
     // No territory should be shared.
     for tid in 0..map.territories.len() {
         let o = state.territory_owners[tid];
@@ -1139,14 +1139,14 @@ fn test_mcts_time_budget() {
 
 #[test]
 fn test_win_prob_correlates_with_outcome() {
-    let map = load_small_earth();
+    let map = load_big_earth();
     let board = Board::from_map(map);
     let mut high_prob_wins = 0u32;
     let mut high_prob_total = 0u32;
     let mut low_prob_wins = 0u32;
     let mut low_prob_total = 0u32;
 
-    for seed in 0..20u64 {
+    for seed in 0..50u64 {
         let mut state = GameState::new(&board);
         let mut rng = StdRng::seed_from_u64(seed * 7919 + 101);
 
@@ -1436,8 +1436,8 @@ fn test_picks_with_more_options_than_bonuses() {
     );
 
     assert_eq!(state.phase, Phase::Play);
-    assert_eq!(state.territory_count_for(0), 4);
-    assert_eq!(state.territory_count_for(1), 4);
+    assert_eq!(state.territory_count_for(0), 2);
+    assert_eq!(state.territory_count_for(1), 2);
 
     // No territory should be owned by both players
     for tid in 0..map.territories.len() {
@@ -2252,8 +2252,8 @@ fn test_abba_draft_gives_balanced_picks() {
         picking::DEFAULT_STARTING_ARMIES,
     );
 
-    assert_eq!(state.territory_count_for(0), 4);
-    assert_eq!(state.territory_count_for(1), 4);
+    assert_eq!(state.territory_count_for(0), 2);
+    assert_eq!(state.territory_count_for(1), 2);
 
     // ABBA: P0 picks first (index 0), so P0 should get the first territory
     // they asked for (the top-priority pick).

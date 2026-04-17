@@ -305,6 +305,7 @@ let pendingMax = 0;
 let pendingType = '';
 let submitted = false;
 let ws = null;
+let wsReconnectDelay = 3000;
 let lastTurn = -1;        // track turn transitions
 let turnDeadline = null;  // ISO string from API
 let deadlineInterval = null;
@@ -429,14 +430,20 @@ function connectWebSocket() {
   ws = new WebSocket(proto + '//' + location.host + '/ws');
   ws.onopen = function() {
     updateWsStatus(true);
+    wsReconnectDelay = 3000;
     ws.send(JSON.stringify({type: 'subscribe', game_id: GAME_ID}));
   };
   ws.onmessage = function(evt) {
-    try { handleGameEvent(JSON.parse(evt.data)); } catch (e) {}
+    try { handleGameEvent(JSON.parse(evt.data)); } catch (e) {
+      console.error('WebSocket message error:', e);
+      toast('WebSocket error: ' + e.message, 'error');
+    }
   };
   ws.onclose = function() {
     updateWsStatus(false);
-    setTimeout(connectWebSocket, 3000);
+    toast('Connection lost, reconnecting...', 'error');
+    setTimeout(connectWebSocket, wsReconnectDelay);
+    wsReconnectDelay = Math.min(wsReconnectDelay * 2, 60000);
   };
   ws.onerror = function() { updateWsStatus(false); };
 }
@@ -490,9 +497,14 @@ function onStateUpdate() {
   if (status === 'finished' || statePhase === 'Finished') {
     phase = 'finished';
   } else if (status === 'picking' || statePhase === 'Picking') {
+    if (submitted && phase !== 'picking') { submitted = false; hideSubmitted(); }
     if (!submitted) { phase = 'picking'; picks = []; }
   } else if (status === 'active' || statePhase === 'Play') {
     var currentTurn = turn || 0;
+    if (submitted && lastTurn !== -1 && lastTurn !== currentTurn) {
+      submitted = false;
+      hideSubmitted();
+    }
     if (!submitted && (phase !== 'orders' || lastTurn !== currentTurn)) {
       phase = 'orders';
       lastTurn = currentTurn;
@@ -1034,7 +1046,15 @@ function unpick(id) {
 
 async function confirmPicks() {
   if (picks.length < pickOptions.length) { toast('Rank all territories first', 'error'); return; }
-  await submitPicks(picks);
+  if (submitted) return;
+  submitted = true;
+  var btn = document.querySelector('.btn-gold');
+  if (btn) btn.disabled = true;
+  var success = await submitPicks(picks);
+  if (!success) {
+    submitted = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 function onOrdersClick(id, e) {
@@ -1141,15 +1161,22 @@ function hidePopup() { document.getElementById('map-army-popup').style.display =
 // ========== END TURN ==========
 async function endTurn() {
   if (submitted) return;
+  submitted = true;
+  var btn = document.querySelector('.btn-green');
+  if (btn) btn.disabled = true;
   var apiOrders = [];
   Object.entries(deploys).forEach(function(kv) {
-    if (kv[1] > 0) apiOrders.push({Deploy: {territory: parseInt(kv[0]), armies: kv[1]}});
+    if (kv[1] > 0) apiOrders.push({Deploy: {territory: parseInt(kv[0], 10), armies: kv[1]}});
   });
   orders.forEach(function(o) {
     if (o.type === 'attack') apiOrders.push({Attack: {from:o.from, to:o.to, armies:o.armies}});
     else apiOrders.push({Transfer: {from:o.from, to:o.to, armies:o.armies}});
   });
-  await submitOrders(apiOrders);
+  var success = await submitOrders(apiOrders);
+  if (!success) {
+    submitted = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ========== GAME OVER ==========
