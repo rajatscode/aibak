@@ -42,6 +42,8 @@ pub enum GameError {
     MapNotFound(String),
     #[error("serialization error: {0}")]
     Serialization(String),
+    #[error("turn deadline has passed")]
+    DeadlinePassed,
 }
 
 impl From<GameError> for (axum::http::StatusCode, String) {
@@ -51,7 +53,8 @@ impl From<GameError> for (axum::http::StatusCode, String) {
             GameError::NotFound => (StatusCode::NOT_FOUND, err.to_string()),
             GameError::WrongStatus { .. }
             | GameError::InvalidPicks(_)
-            | GameError::InvalidOrders(_) => (StatusCode::BAD_REQUEST, err.to_string()),
+            | GameError::InvalidOrders(_)
+            | GameError::DeadlinePassed => (StatusCode::BAD_REQUEST, err.to_string()),
             GameError::NotParticipant | GameError::CannotJoinOwnGame => {
                 (StatusCode::FORBIDDEN, err.to_string())
             }
@@ -184,6 +187,13 @@ impl GameManager {
             });
         }
 
+        // Reject late submissions.
+        if let Some(deadline) = db::get_turn_deadline(&self.pool, game_id, 0).await? {
+            if chrono::Utc::now() > deadline {
+                return Err(GameError::DeadlinePassed);
+            }
+        }
+
         let seat = self.player_seat(&game, user_id)?;
 
         let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
@@ -198,17 +208,35 @@ impl GameManager {
             )));
         }
 
-        // Store picks as orders for turn 0.
         let picks_json =
             serde_json::to_value(&picks).map_err(|e| GameError::Serialization(e.to_string()))?;
-        db::insert_orders(&self.pool, game_id, user_id, 0, &picks_json).await?;
 
-        self.hub
-            .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
+        // Use a transaction with FOR UPDATE to prevent double resolution.
+        let mut tx = self.pool.begin().await?;
+
+        // Lock the game row to serialize concurrent pick submissions.
+        let game = db::get_game_for_update(&mut tx, game_id)
+            .await?
+            .ok_or(GameError::NotFound)?;
+
+        if game.status != "picking" {
+            // Another thread already resolved; our picks were late.
+            tx.rollback().await?;
+            return Err(GameError::WrongStatus {
+                expected: "picking".to_string(),
+                actual: game.status,
+            });
+        }
+
+        // Store picks as orders for turn 0.
+        db::insert_orders_tx(&mut tx, game_id, user_id, 0, &picks_json).await?;
 
         // Check if both players have submitted picks.
-        let all_orders = db::get_orders_for_turn(&self.pool, game_id, 0).await?;
+        let all_orders = db::get_orders_for_turn_tx(&mut tx, game_id, 0).await?;
         if all_orders.len() < 2 {
+            tx.commit().await?;
+            self.hub
+                .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
             return Ok(());
         }
 
@@ -235,11 +263,16 @@ impl GameManager {
         let state_json =
             serde_json::to_value(&state).map_err(|e| GameError::Serialization(e.to_string()))?;
 
-        db::update_game_state(&self.pool, game_id, "active", 1, &state_json, None).await?;
+        db::update_game_state_tx(&mut tx, game_id, "active", 1, &state_json, None).await?;
 
         // Set first turn deadline.
         let deadline = chrono::Utc::now() + chrono::Duration::seconds(300);
-        db::set_turn_deadline(&self.pool, game_id, 1, deadline).await?;
+        db::set_turn_deadline_tx(&mut tx, game_id, 1, deadline).await?;
+
+        tx.commit().await?;
+
+        self.hub
+            .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
 
         self.hub.broadcast(
             game_id,
@@ -271,38 +304,76 @@ impl GameManager {
             });
         }
 
+        // Reject late submissions.
+        if let Some(deadline) = db::get_turn_deadline(&self.pool, game_id, game.turn).await? {
+            if chrono::Utc::now() > deadline {
+                return Err(GameError::DeadlinePassed);
+            }
+        }
+
         let seat = self.player_seat(&game, user_id)?;
+
+        let orders_json =
+            serde_json::to_value(&orders).map_err(|e| GameError::Serialization(e.to_string()))?;
+
+        // Use a transaction with FOR UPDATE to prevent double resolution.
+        let mut tx = self.pool.begin().await?;
+
+        // Lock the game row to serialize concurrent order submissions.
+        let game = db::get_game_for_update(&mut tx, game_id)
+            .await?
+            .ok_or(GameError::NotFound)?;
+
+        if game.status != "active" {
+            tx.rollback().await?;
+            return Err(GameError::WrongStatus {
+                expected: "active".to_string(),
+                actual: game.status,
+            });
+        }
+
         let current_turn = game.turn;
 
         // Store orders.
-        let orders_json =
-            serde_json::to_value(&orders).map_err(|e| GameError::Serialization(e.to_string()))?;
-        db::insert_orders(&self.pool, game_id, user_id, current_turn, &orders_json).await?;
+        db::insert_orders_tx(&mut tx, game_id, user_id, current_turn, &orders_json).await?;
+
+        // Check if both players have submitted.
+        let all_orders = db::get_orders_for_turn_tx(&mut tx, game_id, current_turn).await?;
+        if all_orders.len() < 2 {
+            tx.commit().await?;
+            self.hub
+                .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
+            return Ok(());
+        }
+
+        self.resolve_turn_inner_tx(&mut tx, game_id, &game, &all_orders)
+            .await?;
+
+        tx.commit().await?;
 
         self.hub
             .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat });
 
-        // Check if both players have submitted.
-        let all_orders = db::get_orders_for_turn(&self.pool, game_id, current_turn).await?;
-        if all_orders.len() < 2 {
-            return Ok(());
-        }
-
-        self.resolve_turn_inner(game_id, &game, &all_orders).await
+        Ok(())
     }
 
     /// Check and enforce boot timer for a game.
     pub async fn check_boot_timer(&self, game_id: Uuid, turn: i32) -> Result<(), GameError> {
-        let game = db::get_game(&self.pool, game_id)
+        // Use a transaction with FOR UPDATE to prevent races with concurrent submissions.
+        let mut tx = self.pool.begin().await?;
+
+        let game = db::get_game_for_update(&mut tx, game_id)
             .await?
             .ok_or(GameError::NotFound)?;
 
         if game.status != "active" || game.turn != turn {
+            tx.rollback().await?;
             return Ok(()); // Already moved on.
         }
 
-        let existing = db::get_orders_for_turn(&self.pool, game_id, turn).await?;
+        let existing = db::get_orders_for_turn_tx(&mut tx, game_id, turn).await?;
         if existing.len() >= 2 {
+            tx.rollback().await?;
             return Ok(()); // Already resolved.
         }
 
@@ -314,25 +385,26 @@ impl GameManager {
                 let empty: Vec<Order> = Vec::new();
                 let empty_json = serde_json::to_value(&empty)
                     .map_err(|e| GameError::Serialization(e.to_string()))?;
-                db::insert_orders(&self.pool, game_id, *pid, turn, &empty_json).await?;
+                db::insert_orders_tx(&mut tx, game_id, *pid, turn, &empty_json).await?;
             }
         }
 
         // Re-fetch and resolve.
-        let all_orders = db::get_orders_for_turn(&self.pool, game_id, turn).await?;
+        let all_orders = db::get_orders_for_turn_tx(&mut tx, game_id, turn).await?;
         if all_orders.len() >= 2 {
-            let game = db::get_game(&self.pool, game_id)
-                .await?
-                .ok_or(GameError::NotFound)?;
-            self.resolve_turn_inner(game_id, &game, &all_orders).await?;
+            self.resolve_turn_inner_tx(&mut tx, game_id, &game, &all_orders)
+                .await?;
         }
+
+        tx.commit().await?;
 
         Ok(())
     }
 
-    /// Internal: resolve a turn once both players' orders are in.
-    async fn resolve_turn_inner(
+    /// Internal: resolve a turn once both players' orders are in (within a transaction).
+    async fn resolve_turn_inner_tx(
         &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         game_id: Uuid,
         game: &db::GameRow,
         all_orders: &[db::OrderRow],
@@ -377,9 +449,11 @@ impl GameManager {
 
                 let state_json = serde_json::to_value(&new_state)
                     .map_err(|e| GameError::Serialization(e.to_string()))?;
-                db::finish_game(&self.pool, game_id, winner_id, &state_json).await?;
+                db::finish_game_tx(tx, game_id, winner_id, &state_json).await?;
 
-                // Update ratings.
+                // Update ratings (uses pool directly, outside the row lock).
+                // Rating update is idempotent-safe since finish_game_tx already
+                // set the game to finished within this transaction.
                 self.update_ratings(game_id, winner_id, loser_id).await?;
 
                 self.hub
@@ -388,12 +462,12 @@ impl GameManager {
         } else {
             let state_json = serde_json::to_value(&new_state)
                 .map_err(|e| GameError::Serialization(e.to_string()))?;
-            db::update_game_state(&self.pool, game_id, "active", new_turn, &state_json, None)
+            db::update_game_state_tx(tx, game_id, "active", new_turn, &state_json, None)
                 .await?;
 
             // Set next turn deadline.
             let deadline = chrono::Utc::now() + chrono::Duration::seconds(300);
-            db::set_turn_deadline(&self.pool, game_id, new_turn, deadline).await?;
+            db::set_turn_deadline_tx(tx, game_id, new_turn, deadline).await?;
 
             self.hub.broadcast(
                 game_id,

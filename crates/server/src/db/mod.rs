@@ -1,7 +1,7 @@
 pub mod migrate;
 
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Row};
 use uuid::Uuid;
 
 /// A user row from the database.
@@ -168,6 +168,32 @@ pub async fn get_game(pool: &PgPool, game_id: Uuid) -> Result<Option<GameRow>, s
         .await
 }
 
+/// Fetch a game row with `FOR UPDATE` lock within an existing transaction.
+/// This serializes concurrent access to the same game row.
+pub async fn get_game_for_update(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    game_id: Uuid,
+) -> Result<Option<GameRow>, sqlx::Error> {
+    sqlx::query_as::<_, GameRow>("SELECT * FROM games WHERE id = $1 FOR UPDATE")
+        .bind(game_id)
+        .fetch_optional(&mut **tx)
+        .await
+}
+
+/// Fetch the deadline for a specific game turn.
+pub async fn get_turn_deadline(
+    pool: &PgPool,
+    game_id: Uuid,
+    turn: i32,
+) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
+    let row = sqlx::query("SELECT deadline FROM turn_deadlines WHERE game_id = $1 AND turn = $2")
+        .bind(game_id)
+        .bind(turn)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|r| r.get("deadline")))
+}
+
 pub async fn update_game_state(
     pool: &PgPool,
     game_id: Uuid,
@@ -188,6 +214,31 @@ pub async fn update_game_state(
     .bind(state_json)
     .bind(pick_options)
     .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Update game state within an existing transaction.
+pub async fn update_game_state_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    game_id: Uuid,
+    status: &str,
+    turn: i32,
+    state_json: &serde_json::Value,
+    pick_options: Option<&serde_json::Value>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE games SET status = $2, turn = $3, state_json = $4, pick_options = $5
+        WHERE id = $1
+        "#,
+    )
+    .bind(game_id)
+    .bind(status)
+    .bind(turn)
+    .bind(state_json)
+    .bind(pick_options)
+    .execute(&mut **tx)
     .await?;
     Ok(())
 }
@@ -221,6 +272,49 @@ pub async fn finish_game(
     .bind(winner_id)
     .bind(state_json)
     .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Finish a game within an existing transaction.
+pub async fn finish_game_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    game_id: Uuid,
+    winner_id: Uuid,
+    state_json: &serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE games SET status = 'finished', winner_id = $2, state_json = $3, finished_at = now()
+        WHERE id = $1
+        "#,
+    )
+    .bind(game_id)
+    .bind(winner_id)
+    .bind(state_json)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Set a turn deadline within an existing transaction.
+pub async fn set_turn_deadline_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    game_id: Uuid,
+    turn: i32,
+    deadline: DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO turn_deadlines (game_id, turn, deadline)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (game_id, turn) DO UPDATE SET deadline = EXCLUDED.deadline
+        "#,
+    )
+    .bind(game_id)
+    .bind(turn)
+    .bind(deadline)
+    .execute(&mut **tx)
     .await?;
     Ok(())
 }
@@ -294,6 +388,45 @@ pub async fn get_orders_for_turn(
         .bind(game_id)
         .bind(turn)
         .fetch_all(pool)
+        .await
+}
+
+/// Insert orders within an existing transaction.
+pub async fn insert_orders_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    game_id: Uuid,
+    user_id: Uuid,
+    turn: i32,
+    orders_json: &serde_json::Value,
+) -> Result<OrderRow, sqlx::Error> {
+    sqlx::query_as::<_, OrderRow>(
+        r#"
+        INSERT INTO orders (game_id, user_id, turn, orders_json)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (game_id, user_id, turn) DO UPDATE
+            SET orders_json = EXCLUDED.orders_json,
+                submitted_at = now()
+        RETURNING *
+        "#,
+    )
+    .bind(game_id)
+    .bind(user_id)
+    .bind(turn)
+    .bind(orders_json)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+/// Fetch orders for a turn within an existing transaction.
+pub async fn get_orders_for_turn_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    game_id: Uuid,
+    turn: i32,
+) -> Result<Vec<OrderRow>, sqlx::Error> {
+    sqlx::query_as::<_, OrderRow>("SELECT * FROM orders WHERE game_id = $1 AND turn = $2")
+        .bind(game_id)
+        .bind(turn)
+        .fetch_all(&mut **tx)
         .await
 }
 
