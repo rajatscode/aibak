@@ -352,7 +352,10 @@ async function fetchGameState() {
     pickOptions = data.pick_options || [];
     picksNeeded = data.picks_needed || pickOptions.length;
     turnDeadline = data.turn_deadline || null;
-    if (data.has_submitted) submitted = true;
+    if (data.has_submitted) {
+      submitted = true;
+      showSubmitted('Orders submitted - waiting for opponent...');
+    }
     startDeadlineTimer();
 
     if (data.player_a_info) {
@@ -1274,7 +1277,10 @@ async function endTurn() {
     else apiOrders.push({Transfer: {from:o.from, to:o.to, armies:o.armies}});
   });
   var success = await submitOrders(apiOrders);
-  if (!success) {
+  if (success) {
+    renderSidebar();
+    showSubmitted('Orders submitted - waiting for opponent...');
+  } else {
     submitted = false;
     if (btn) btn.disabled = false;
   }
