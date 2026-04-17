@@ -477,6 +477,10 @@ function handleGameEvent(event) {
   }
   if (event.type === 'turn_resolved' || event.type === 'game_state_updated' || event.type === 'game_finished') {
     submitted = false;
+    deploys = {};
+    orders = [];
+    selectedSource = null;
+    pendingTarget = null;
     hideSubmitted();
     fetchGameState();
   }
