@@ -15,6 +15,8 @@ use strat_engine::picking;
 use strat_engine::state::{GameState, Phase};
 use strat_engine::turn::resolve_turn;
 
+use tracing::error;
+
 use crate::db;
 use crate::game::rating::{self, Rating};
 use crate::ws;
@@ -378,6 +380,18 @@ impl GameManager {
 
         let current_turn = game.turn;
 
+        // Validate orders before inserting.
+        let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
+            .map_err(|e| GameError::Serialization(e.to_string()))?;
+        let board = Board::from_map(map_file);
+        let state: GameState =
+            serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
+                .map_err(|e| GameError::Serialization(e.to_string()))?;
+        if let Err(e) = validate_orders(&orders, seat, &state, &board) {
+            tx.rollback().await?;
+            return Err(GameError::InvalidOrders(e.to_string()));
+        }
+
         // Store orders.
         db::insert_orders_tx(&mut tx, game_id, user_id, current_turn, &orders_json).await?;
 
@@ -590,9 +604,15 @@ impl GameManager {
                 db::finish_game_tx(tx, game_id, winner_id, &state_json).await?;
 
                 // Update ratings (uses pool directly, outside the row lock).
-                // Rating update is idempotent-safe since finish_game_tx already
-                // set the game to finished within this transaction.
-                self.update_ratings(game_id, winner_id, loser_id).await?;
+                // Best-effort with retry — don't fail the game resolution
+                // if ratings can't be updated right now.
+                if let Err(e) = self.update_ratings(game_id, winner_id, loser_id).await {
+                    error!("Rating update failed for game {game_id}, retrying: {e}");
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    if let Err(e2) = self.update_ratings(game_id, winner_id, loser_id).await {
+                        error!("Rating update retry failed for game {game_id}: {e2}");
+                    }
+                }
 
                 self.hub
                     .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id });

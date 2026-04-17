@@ -330,6 +330,8 @@ function escHtml(s) {
   return d.innerHTML;
 }
 
+function escId(s) { return String(s).replace(/['"\\]/g, ''); }
+
 async function loadActiveGames() {
   try {
     var res = await fetch('/api/games/active');
@@ -380,9 +382,9 @@ function renderGameList(listId, emptyId, games, type) {
     var statusClass = 'status-' + g.status;
     var actionBtn = '';
     if (type === 'active') {
-      actionBtn = '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + g.id + '\')">Watch</button>';
+      actionBtn = '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Watch</button>';
     } else {
-      actionBtn = '<button class="btn btn-replay" onclick="spectateMultiplayer(\'' + g.id + '\')">Replay</button>';
+      actionBtn = '<button class="btn btn-replay" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Replay</button>';
     }
     var created = new Date(g.created_at);
     var timeStr = created.toLocaleDateString() + ' ' + created.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
@@ -822,7 +824,7 @@ function renderMyGameList(games) {
       '</div>' +
       '<div class="game-actions">' +
         '<a href="/game/' + g.id + '" class="btn btn-play">Play</a>' +
-        '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + g.id + '\')">Watch</button>' +
+        '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Watch</button>' +
       '</div>';
     list.appendChild(card);
   });

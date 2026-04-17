@@ -411,6 +411,16 @@ pub async fn get_expired_deadlines(pool: &PgPool) -> Result<Vec<(Uuid, i32)>, sq
     Ok(rows)
 }
 
+/// Delete games stuck in "waiting" status for more than 30 minutes.
+pub async fn cleanup_stale_waiting_games(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"DELETE FROM games WHERE status = 'waiting' AND created_at < now() - interval '30 minutes'"#,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 // ── Rating history queries ──
 
 // ── Season queries ──

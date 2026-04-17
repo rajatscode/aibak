@@ -197,9 +197,9 @@ async function loadFeedback() {
       const canManage = isOwner || isAdmin;
       return `<div class="feedback-item${item.resolved ? ' resolved' : ''}" data-id="${item.id}">
         <div class="vote-col">
-          <button class="vote-btn up" onclick="vote('${item.id}',1)" title="Upvote">&#9650;</button>
+          <button class="vote-btn up" onclick="vote('${escId(item.id)}',1)" title="Upvote">&#9650;</button>
           <span class="vote-score">${score}</span>
-          <button class="vote-btn down" onclick="vote('${item.id}',-1)" title="Downvote">&#9660;</button>
+          <button class="vote-btn down" onclick="vote('${escId(item.id)}',-1)" title="Downvote">&#9660;</button>
         </div>
         <div class="feedback-body">
           <div class="feedback-content">${escapeHtml(item.content)}</div>
@@ -207,8 +207,8 @@ async function loadFeedback() {
             <span class="author">${escapeHtml(item.username)}</span>
             <span>${timeAgo(item.created_at)}</span>
             ${item.resolved ? '<span class="resolved-badge">Resolved</span>' : ''}
-            ${canManage ? `<button class="resolve-btn" onclick="resolveFeedback('${item.id}')">${item.resolved ? 'unresolve' : 'resolve'}</button>` : ''}
-            ${canManage ? `<button class="delete-btn" onclick="deleteFeedback('${item.id}')">delete</button>` : ''}
+            ${canManage ? `<button class="resolve-btn" onclick="resolveFeedback('${escId(item.id)}')">${item.resolved ? 'unresolve' : 'resolve'}</button>` : ''}
+            ${canManage ? `<button class="delete-btn" onclick="deleteFeedback('${escId(item.id)}')">delete</button>` : ''}
           </div>
         </div>
       </div>`;
@@ -231,32 +231,37 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
+function escId(s) { return String(s).replace(/['"\\]/g, ''); }
+
 async function vote(id, direction) {
   if (!currentUser) { alert('Sign in to vote.'); return; }
   try {
-    await fetch(`/api/feedback/${id}/vote`, {
+    const res = await fetch(`/api/feedback/${id}/vote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ direction })
     });
+    if (!res.ok) throw new Error(await res.text());
     loadFeedback();
-  } catch {}
+  } catch (e) { alert('Vote failed: ' + e.message); }
 }
 
 async function resolveFeedback(id) {
   if (!currentUser) return;
   try {
-    await fetch(`/api/feedback/${id}/resolve`, { method: 'POST' });
+    const res = await fetch(`/api/feedback/${id}/resolve`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
     loadFeedback();
-  } catch {}
+  } catch (e) { alert('Action failed: ' + e.message); }
 }
 
 async function deleteFeedback(id) {
   if (!confirm('Delete this feedback?')) return;
   try {
-    await fetch(`/api/feedback/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/feedback/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
     loadFeedback();
-  } catch {}
+  } catch (e) { alert('Delete failed: ' + e.message); }
 }
 
 checkAuth();

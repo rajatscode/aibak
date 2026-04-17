@@ -27,5 +27,10 @@ pub async fn boot_timer_task(pool: PgPool, manager: Arc<GameManager>) {
                 error!("failed to check expired deadlines: {}", e);
             }
         }
+
+        // Clean up stale waiting games (created > 30 minutes ago, nobody joined).
+        if let Err(e) = crate::db::cleanup_stale_waiting_games(&pool).await {
+            error!("failed to clean up stale waiting games: {}", e);
+        }
     }
 }

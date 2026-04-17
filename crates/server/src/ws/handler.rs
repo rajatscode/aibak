@@ -34,7 +34,7 @@ async fn handle_socket(mut socket: WebSocket, auth: AuthUser, state: AppState) {
     let hub = &state.ws_hub;
 
     // Channel for forwarding game events to the WebSocket sender.
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(64);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(256);
     let mut subscriptions: Vec<(Uuid, tokio::task::JoinHandle<()>)> = Vec::new();
 
     // Main loop: read from WebSocket or forward events.
