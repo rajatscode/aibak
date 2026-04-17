@@ -367,60 +367,72 @@ async function fetchGameState() {
 }
 
 async function submitPicks(picksArr) {
-  try {
-    const r = await fetch('/api/games/' + GAME_ID + '/picks', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({picks: picksArr})
-    });
-    let data;
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      data = await r.json();
+      const r = await fetch('/api/games/' + GAME_ID + '/picks', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({picks: picksArr})
+      });
+      let data;
+      try {
+        data = await r.json();
+      } catch (e) {
+        data = { success: false, message: 'Server error: invalid response' };
+      }
+      if (!r.ok || data.success === false) {
+        toast(data.message || 'Failed to submit picks', 'error');
+        return false;
+      }
+      toast('Picks submitted!', 'success');
+      submitted = true;
+      showSubmitted('Picks submitted - waiting for opponent...');
+      renderSidebar();
+      return true;
     } catch (e) {
-      // Fallback if response is not JSON
-      data = { success: false, message: 'Server error: invalid response' };
+      if (attempt === 0) {
+        toast('Network error, retrying...', 'error');
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        toast('Network error: ' + e.message, 'error');
+        return false;
+      }
     }
-    if (!r.ok || data.success === false) {
-      toast(data.message || 'Failed to submit picks', 'error');
-      return false;
-    }
-    toast('Picks submitted!', 'success');
-    submitted = true;
-    showSubmitted('Picks submitted - waiting for opponent...');
-    renderSidebar();
-    return true;
-  } catch (e) {
-    toast('Network error: ' + e.message, 'error');
-    return false;
   }
 }
 
 async function submitOrders(apiOrders) {
-  try {
-    const r = await fetch('/api/games/' + GAME_ID + '/orders', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({orders: apiOrders})
-    });
-    let data;
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      data = await r.json();
+      const r = await fetch('/api/games/' + GAME_ID + '/orders', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({orders: apiOrders})
+      });
+      let data;
+      try {
+        data = await r.json();
+      } catch (e) {
+        data = { success: false, message: 'Server error: invalid response' };
+      }
+      if (!r.ok || data.success === false) {
+        toast(data.message || 'Failed to submit orders', 'error');
+        return false;
+      }
+      toast('Orders submitted!', 'success');
+      submitted = true;
+      showSubmitted('Orders submitted - waiting for opponent...');
+      renderSidebar();
+      return true;
     } catch (e) {
-      // Fallback if response is not JSON
-      data = { success: false, message: 'Server error: invalid response' };
+      if (attempt === 0) {
+        toast('Network error, retrying...', 'error');
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        toast('Network error: ' + e.message, 'error');
+        return false;
+      }
     }
-    if (!r.ok || data.success === false) {
-      toast(data.message || 'Failed to submit orders', 'error');
-      return false;
-    }
-    toast('Orders submitted!', 'success');
-    submitted = true;
-    showSubmitted('Orders submitted - waiting for opponent...');
-    renderSidebar();
-    return true;
-  } catch (e) {
-    toast('Network error: ' + e.message, 'error');
-    return false;
   }
 }
 
@@ -432,6 +444,8 @@ function connectWebSocket() {
     updateWsStatus(true);
     wsReconnectDelay = 3000;
     ws.send(JSON.stringify({type: 'subscribe', game_id: GAME_ID}));
+    // Refresh game state after reconnect to catch any missed updates
+    fetchGameState();
   };
   ws.onmessage = function(evt) {
     try { handleGameEvent(JSON.parse(evt.data)); } catch (e) {

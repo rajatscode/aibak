@@ -376,6 +376,11 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .adj-source-highlight{stroke:rgba(241,245,249,0.8) !important;stroke-width:2.5 !important;animation:adj-fade 1.2s ease-out forwards}
 @keyframes adj-fade{0%{stroke-opacity:1}70%{stroke-opacity:1}100%{stroke-opacity:0}}
 
+/* BONUS HIGHLIGHT */
+.bonus-highlight{stroke-width:2.5 !important;animation:bonus-fade 2s ease-out forwards}
+@keyframes bonus-fade{0%{stroke-opacity:1}80%{stroke-opacity:1}100%{stroke-opacity:0}}
+.bonus-row{cursor:pointer}
+
 /* KEYBOARD FOCUS RING */
 .territory-path.kb-focused{filter:brightness(1.12)}
 .kb-focus-ring{pointer-events:none;fill:none;stroke:var(--gold);stroke-width:3;animation:kb-pulse 1s ease-in-out infinite}
@@ -2065,6 +2070,31 @@ function clearAdjacencyHighlight() {
   });
 }
 
+// ========== BONUS HIGHLIGHT ==========
+var bonusHighlightTimer = null;
+function showBonusHighlight(bonusId) {
+  clearBonusHighlight();
+  var b = bonus(bonusId);
+  if (!b) return;
+  var tids = b.territory_ids || b.territories || [];
+  var color = BONUS_COLORS[b.id % BONUS_COLORS.length];
+  tids.forEach(function(tid) {
+    var hl = document.getElementById('highlight-' + tid);
+    if (hl) {
+      hl.style.stroke = color;
+      hl.classList.add('bonus-highlight');
+    }
+  });
+  bonusHighlightTimer = setTimeout(clearBonusHighlight, 2000);
+}
+function clearBonusHighlight() {
+  if (bonusHighlightTimer) { clearTimeout(bonusHighlightTimer); bonusHighlightTimer = null; }
+  document.querySelectorAll('.bonus-highlight').forEach(function(el) {
+    el.classList.remove('bonus-highlight');
+    el.style.stroke = '';
+  });
+}
+
 // ========== STATE UPDATE ==========
 function onStateUpdate() {
   if (!G) return;
@@ -2340,7 +2370,7 @@ function renderBonusInfo() {
     if (owned) cls += ' owned complete';
     else if (enemyOwned) cls += ' enemy-owned';
     if (nearly) cls += ' nearly';
-    html += '<div class="' + cls + '">' +
+    html += '<div class="' + cls + '" onclick="showBonusHighlight(' + b.id + ')">' +
       '<span class="bonus-dot" style="background:' + color + '"></span>' +
       '<span class="bonus-name">' + b.name + '</span>' +
       '<span class="bonus-prog">+' + b.value + '&ensp;' + b.player_count + '/' + b.total + '</span>' +
