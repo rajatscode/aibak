@@ -1690,8 +1690,8 @@ function buildMap() {
 
       g.addEventListener('click', e => onTerritoryClick(t.id, e));
       g.addEventListener('contextmenu', e => { e.preventDefault(); onTerritoryRightClick(t.id); });
-      g.addEventListener('mouseenter', e => { hoveredTerritory = t.id; showTooltip(t.id, e); drawHoverConnections(); });
-      g.addEventListener('mouseleave', () => { hoveredTerritory = null; hideTooltip(); drawHoverConnections(); });
+      g.addEventListener('mouseenter', e => { hoveredTerritory = t.id; showTooltip(t.id, e); });
+      g.addEventListener('mouseleave', () => { hoveredTerritory = null; hideTooltip(); });
       g.addEventListener('mousemove', e => moveTooltip(e));
 
       terrGroup.appendChild(g);
