@@ -541,7 +541,8 @@ function buildMap() {
   oceanGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#060d15'}));
   defs.appendChild(oceanGrad);
 
-  [['grad-me','#3b82f6','#1d4ed8'],['grad-them','#ef4444','#b91c1c'],['grad-neutral','#6b7280','#374151'],['grad-fog','#283040','#1a2030'],['grad-wasteland','#78350f','#451a03']].forEach(function(g) {
+  // Only wasteland gradient kept — other territories use flat fills
+  [['grad-wasteland','#78350f','#451a03']].forEach(function(g) {
     var gr = svgEl('linearGradient', {id:g[0], x1:'0', y1:'0', x2:'0', y2:'1'});
     gr.appendChild(svgEl('stop', {offset:'0%', 'stop-color':g[1]}));
     gr.appendChild(svgEl('stop', {offset:'100%', 'stop-color':g[2]}));
@@ -552,10 +553,7 @@ function buildMap() {
   wastelandPattern.appendChild(svgEl('line', {x1:'0', y1:'0', x2:'0', y2:'6', stroke:'rgba(0,0,0,0.3)', 'stroke-width':'1.5'}));
   defs.appendChild(wastelandPattern);
 
-  var armyBg = svgEl('radialGradient', {id:'army-bubble-grad', cx:'40%', cy:'35%', r:'65%'});
-  armyBg.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'rgba(40,40,50,0.85)'}));
-  armyBg.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'rgba(10,10,15,0.9)'}));
-  defs.appendChild(armyBg);
+  // Army bubble gradient removed — using flat fill
 
   var shadow = svgEl('filter', {id:'territory-shadow', x:'-10%', y:'-10%', width:'120%', height:'120%'});
   shadow.appendChild(svgEl('feDropShadow', {dx:'0', dy:'1', 'stdDeviation':'1.5', 'flood-color':'rgba(0,0,0,0.4)', 'flood-opacity':'0.4'}));
@@ -600,20 +598,20 @@ function buildMap() {
     }
 
     if (t.visual && t.visual.path) {
-      g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#1a2744', 'stroke-width':1, 'stroke-linejoin':'round', filter:'url(#territory-shadow)'}));
+      g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-path', id:'terr-'+t.id, fill:'#141c2e', stroke:'#1a2744', 'stroke-width':1, 'stroke-linejoin':'round', filter:'url(#territory-shadow)'}));
       if (t.is_wasteland) {
         g.appendChild(svgEl('path', {d:t.visual.path, id:'wasteland-hatch-'+t.id, fill:'url(#wasteland-hatch)', stroke:'none', 'pointer-events':'none', opacity:'0.5'}));
       }
       g.appendChild(svgEl('path', {d:t.visual.path, class:'territory-highlight', id:'highlight-'+t.id, fill:'none', stroke:'none', 'stroke-width':3, 'pointer-events':'none'}));
     } else {
-      g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#1a2744', 'stroke-width':1, filter:'url(#territory-shadow)'}));
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'#141c2e', stroke:'#1a2744', 'stroke-width':1, filter:'url(#territory-shadow)'}));
       if (t.is_wasteland) {
         g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, id:'wasteland-hatch-'+t.id, fill:'url(#wasteland-hatch)', stroke:'none', 'pointer-events':'none', opacity:'0.5'}));
       }
       g.appendChild(svgEl('circle', {cx:x, cy:y, r:20, class:'territory-highlight', id:'highlight-'+t.id, fill:'none', stroke:'none', 'stroke-width':3, 'pointer-events':'none'}));
     }
 
-    g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'url(#army-bubble-grad)', stroke:'rgba(255,255,255,0.15)', 'stroke-width':'1.5', style:'display:none', 'pointer-events':'none'}));
+    g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'rgba(0,0,0,0.7)', stroke:'rgba(255,255,255,0.15)', 'stroke-width':'1', style:'display:none', 'pointer-events':'none'}));
     g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
     g.appendChild(svgEl('text', {x:x+14, y:y-14, class:'deploy-badge', id:'deploy-badge-'+t.id}, ''));
 
@@ -648,17 +646,16 @@ function buildMap() {
   drawBonusBoundaries();
 
   // Bonus labels
-  var bonusGroup = svgEl('g', {id:'bonus-labels', opacity:'0.75'});
+  var bonusGroup = svgEl('g', {id:'bonus-labels', opacity:'0.5'});
   if (MAP.bonuses) {
     MAP.bonuses.forEach(function(b) {
       var minX = Infinity, minY = Infinity;
       b.territory_ids.forEach(function(tid) { var p = POS[tid]; if (p) { minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]); } });
       if (minX >= Infinity) return;
       var bx = minX - 10, by = minY - 18;
-      var color = BONUS_COLORS[b.id % BONUS_COLORS.length];
       var lg = svgEl('g', {'pointer-events':'none'});
-      lg.appendChild(svgEl('text', {x:bx, y:by, 'text-anchor':'start', 'font-size':'9px', 'font-weight':'700', fill:color}, b.name));
-      lg.appendChild(svgEl('text', {x:bx, y:by+11, 'text-anchor':'start', 'font-size':'8px', 'font-weight':'600', fill:'#aaa', id:'bonus-prog-'+b.id}, ''));
+      lg.appendChild(svgEl('text', {x:bx, y:by, 'text-anchor':'start', 'font-size':'10px', 'font-weight':'600', fill:'rgba(255,255,255,0.4)'}, b.name));
+      lg.appendChild(svgEl('text', {x:bx, y:by+12, 'text-anchor':'start', 'font-size':'8px', 'font-weight':'600', fill:'rgba(255,255,255,0.3)', id:'bonus-prog-'+b.id}, ''));
       bonusGroup.appendChild(lg);
     });
   }
@@ -684,10 +681,10 @@ function updateMap() {
     var isThem = owner !== mySeat && owner !== 255;
 
     var fill, strokeColor, borderColor;
-    if (isMe) { fill='url(#grad-me)'; strokeColor='#1a2744'; borderColor='rgba(96,165,250,0.6)'; }
-    else if (isThem) { fill='url(#grad-them)'; strokeColor='#1a2744'; borderColor='rgba(239,68,68,0.6)'; }
+    if (isMe) { fill='#1e3a5f'; strokeColor='#1a2744'; borderColor='rgba(96,165,250,0.6)'; }
+    else if (isThem) { fill='#5c1a1a'; strokeColor='#1a2744'; borderColor='rgba(239,68,68,0.6)'; }
     else if (t.is_wasteland && owner === 255 && phase === 'picking') { fill='url(#grad-wasteland)'; strokeColor='#3d2f00'; borderColor='rgba(251,191,36,0.4)'; }
-    else { fill='url(#grad-neutral)'; strokeColor='#1a2744'; borderColor='rgba(255,255,255,0.15)'; }
+    else { fill='#3d4451'; strokeColor='#1a2744'; borderColor='rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
     pathEl.setAttribute('stroke-width', '1');

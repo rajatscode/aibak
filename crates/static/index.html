@@ -1211,12 +1211,8 @@ function applyThemeGradients() {
   const light = isLightTheme();
   const setStops = (id, c1, c2) => { const g = document.getElementById(id); if (!g) return; const stops = g.querySelectorAll('stop'); if (stops.length >= 2) { stops[0].setAttribute('stop-color', c1); stops[1].setAttribute('stop-color', c2); } };
   if (light) {
-    setStops('grad-player', '#3b82f6', '#2563eb'); setStops('grad-enemy', '#ef4444', '#dc2626');
-    setStops('grad-neutral', '#9ca3af', '#6b7280'); setStops('grad-fog', '#d0d7de', '#bbc3cd');
     setStops('grad-wasteland', '#a16207', '#854d0e');
   } else {
-    setStops('grad-player', '#1e40af', '#0c2349'); setStops('grad-enemy', '#7f1d1d', '#4c0519');
-    setStops('grad-neutral', '#5a6672', '#3d4451'); setStops('grad-fog', '#1a2844', '#0f1929');
     setStops('grad-wasteland', '#78350f', '#451a03');
   }
   // Flat ocean background
@@ -1224,23 +1220,20 @@ function applyThemeGradients() {
   if (oceanRect) oceanRect.setAttribute('fill', light ? '#dfe6ed' : '#050e1f');
   // Flat army bubbles
   document.querySelectorAll('[id^="army-bg-"]').forEach(c => {
-    c.setAttribute('fill', light ? 'rgba(230,230,240,0.9)' : 'rgba(0,10,30,0.95)');
-    c.setAttribute('stroke', light ? 'rgba(0,0,0,0.15)' : 'rgba(100,160,255,0.15)');
+    c.setAttribute('fill', light ? 'rgba(230,230,240,0.9)' : 'rgba(0,0,0,0.7)');
+    c.setAttribute('stroke', light ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)');
     c.setAttribute('stroke-width', '1');
   });
   document.querySelectorAll('.territory-path').forEach(p => {
     const fill = p.getAttribute('fill');
     if (light) {
-      if (fill === 'url(#grad-player)') p.setAttribute('stroke', '#93b4e8');
-      else if (fill === 'url(#grad-enemy)') p.setAttribute('stroke', '#e8a0a0');
+      if (fill === '#1e3a5f') p.setAttribute('stroke', '#93b4e8');
+      else if (fill === '#5c1a1a') p.setAttribute('stroke', '#e8a0a0');
       else if (fill === 'url(#grad-wasteland)') p.setAttribute('stroke', '#d97706');
-      else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#b0b8c4');
+      else if (fill === '#3d4451') p.setAttribute('stroke', '#b0b8c4');
       else p.setAttribute('stroke', '#c0c8d0');
     } else {
-      if (fill === 'url(#grad-player)') p.setAttribute('stroke', '#1a2744');
-      else if (fill === 'url(#grad-enemy)') p.setAttribute('stroke', '#1a2744');
-      else if (fill === 'url(#grad-wasteland)') p.setAttribute('stroke', '#3d2f00');
-      else if (fill === 'url(#grad-neutral)') p.setAttribute('stroke', '#1a2744');
+      if (fill === 'url(#grad-wasteland)') p.setAttribute('stroke', '#3d2f00');
       else p.setAttribute('stroke', '#1a2744');
     }
     p.setAttribute('stroke-width', '1');
@@ -1447,23 +1440,7 @@ function buildMap() {
   markerBlue.appendChild(svgEl('polygon', {points:'0 0, 8 3, 0 6', fill:'#60a5fa'}));
   defs.appendChild(markerBlue);
 
-  // Territory fill gradients — player (blue)
-  const playerGrad = svgEl('linearGradient', {id:'grad-player', x1:'0', y1:'0', x2:'0', y2:'1'});
-  playerGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#3b82f6'}));
-  playerGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#1d4ed8'}));
-  defs.appendChild(playerGrad);
-
-  // Territory fill gradients — enemy (red)
-  const enemyGrad = svgEl('linearGradient', {id:'grad-enemy', x1:'0', y1:'0', x2:'0', y2:'1'});
-  enemyGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#ef4444'}));
-  enemyGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#b91c1c'}));
-  defs.appendChild(enemyGrad);
-
-  // Territory fill gradients — neutral (gray)
-  const neutralGrad = svgEl('linearGradient', {id:'grad-neutral', x1:'0', y1:'0', x2:'0', y2:'1'});
-  neutralGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#6b7280'}));
-  neutralGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#374151'}));
-  defs.appendChild(neutralGrad);
+  // Territory fill gradients removed — using flat fills now
 
   // Territory fill gradients — wasteland (dark brownish)
   const wastelandGrad = svgEl('linearGradient', {id:'grad-wasteland', x1:'0', y1:'0', x2:'0', y2:'1'});
@@ -1476,13 +1453,7 @@ function buildMap() {
   wastelandPattern.appendChild(svgEl('line', {x1:'0', y1:'0', x2:'0', y2:'6', stroke:'rgba(0,0,0,0.3)', 'stroke-width':'1.5'}));
   defs.appendChild(wastelandPattern);
 
-  // Territory fill gradients — fog
-  const fogGrad = svgEl('linearGradient', {id:'grad-fog', x1:'0', y1:'0', x2:'0', y2:'1'});
-  fogGrad.appendChild(svgEl('stop', {offset:'0%', 'stop-color':'#283040'}));
-  fogGrad.appendChild(svgEl('stop', {offset:'100%', 'stop-color':'#1a2030'}));
-  defs.appendChild(fogGrad);
-
-  // Army bubble — flat fill (no gradient)
+  // Fog gradient removed — using flat fill now
 
   // Drop shadow filter for territories
   const shadowFilter = svgEl('filter', {id:'territory-shadow', x:'-10%', y:'-10%', width:'120%', height:'120%'});
@@ -1541,7 +1512,7 @@ function buildMap() {
           d: t.path,
           class: 'territory-path',
           id: 'terr-' + t.id,
-          fill: 'url(#grad-fog)',
+          fill: '#141c2e',
           stroke: '#1a2744',
           'stroke-width': 1,
           'stroke-linejoin': 'round',
@@ -1549,7 +1520,7 @@ function buildMap() {
         }));
       } else {
         // Fallback circle if no path data
-        g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'url(#grad-fog)', stroke:'#1a2744','stroke-width':1, filter:'url(#territory-shadow)'}));
+        g.appendChild(svgEl('circle', {cx:x, cy:y, r:18, class:'territory-path', id:'terr-'+t.id, fill:'#141c2e', stroke:'#1a2744','stroke-width':1, filter:'url(#territory-shadow)'}));
       }
 
       // Wasteland crosshatch overlay
@@ -1600,7 +1571,7 @@ function buildMap() {
       }
 
       // Army count background circle with colored border
-      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'rgba(0,10,30,0.95)', stroke:'rgba(100,160,255,0.15)', 'stroke-width':'1', style:'display:none', 'pointer-events':'none'}));
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:12, id:'army-bg-'+t.id, fill:'rgba(0,0,0,0.7)', stroke:'rgba(255,255,255,0.15)', 'stroke-width':'1', style:'display:none', 'pointer-events':'none'}));
       // Army text
       g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
       // Deploy badge
@@ -1681,24 +1652,23 @@ function buildMap() {
       }
     });
   }
-  const bonusGroup = svgEl('g', {id:'bonus-labels', opacity:'0.75'});
+  const bonusGroup = svgEl('g', {id:'bonus-labels', opacity:'0.5'});
   if (G && G.bonuses) {
     G.bonuses.forEach(b => {
       const pos = bonusPositions[b.id];
       if (!pos) return;
       const g = svgEl('g', {id:'bonus-label-'+b.id, 'pointer-events':'none'});
-      const color = BONUS_COLORS[b.id % BONUS_COLORS.length];
 
-      // Compact single-line label
+      // Compact single-line label — muted to not compete with territories
       g.appendChild(svgEl('text', {
         x: pos[0], y: pos[1],
-        'text-anchor':'start', 'font-size':'9px', 'font-weight':'700',
-        fill: color, id: 'bonus-name-'+b.id
+        'text-anchor':'start', 'font-size':'10px', 'font-weight':'600',
+        fill: 'rgba(255,255,255,0.4)', id: 'bonus-name-'+b.id
       }, b.name));
       g.appendChild(svgEl('text', {
-        x: pos[0], y: pos[1]+11,
+        x: pos[0], y: pos[1]+12,
         'text-anchor':'start', 'font-size':'8px', 'font-weight':'600',
-        fill: '#aaa', id: 'bonus-prog-'+b.id
+        fill: 'rgba(255,255,255,0.3)', id: 'bonus-prog-'+b.id
       }, ''));
       bonusGroup.appendChild(g);
     });
@@ -1731,14 +1701,14 @@ function updateMap() {
     if (!pathEl) return;
 
     // Color
-    let fill = 'url(#grad-fog)';
+    let fill = '#141c2e';
     let strokeColor = '#1a2744';
     let ownerBorderColor = 'rgba(100,160,255,0.15)';
     if (t.visible !== false) {
-      if (t.owner === 0) { fill = 'url(#grad-player)'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
-      else if (t.owner === 1) { fill = 'url(#grad-enemy)'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
+      if (t.owner === 0) { fill = '#1e3a5f'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
+      else if (t.owner === 1) { fill = '#5c1a1a'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
       else if (t.is_wasteland && t.owner === 255 && phase === 'picking') { fill = 'url(#grad-wasteland)'; strokeColor = '#3d2f00'; ownerBorderColor = 'rgba(251,191,36,0.4)'; }
-      else { fill = 'url(#grad-neutral)'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
+      else { fill = '#3d4451'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
     }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
@@ -3842,11 +3812,11 @@ function applyReplayState(state) {
     if (!pathEl) return;
 
     // Color
-    let fill = 'url(#grad-fog)';
+    let fill = '#141c2e';
     if (t.visible !== false) {
-      if (t.owner === 0) fill = 'url(#grad-player)';
-      else if (t.owner === 1) fill = 'url(#grad-enemy)';
-      else fill = 'url(#grad-neutral)';
+      if (t.owner === 0) fill = '#1e3a5f';
+      else if (t.owner === 1) fill = '#5c1a1a';
+      else fill = '#3d4451';
     }
     pathEl.style.transition = 'fill 0.3s ease';
     pathEl.setAttribute('fill', fill);
