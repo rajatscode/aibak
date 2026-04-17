@@ -970,7 +970,7 @@ function renderSidebar() {
     }
     cp.innerHTML = ordersHtml;
     var sa = document.getElementById('sidebar-actions');
-    if (sa) sa.innerHTML = '';
+    if (sa) sa.innerHTML = '<button class="btn btn-primary" style="width:100%" onclick="editSubmittedOrders()">Edit Orders</button>';
     return;
   }
 
@@ -1285,6 +1285,14 @@ function clearBonusHighlight() {
     el.removeAttribute('data-orig-stroke');
     el.removeAttribute('data-orig-sw');
   });
+}
+
+function editSubmittedOrders() {
+  submitted = false;
+  window._mySubmittedOrders = null;
+  hideSubmitted();
+  renderSidebar();
+  updateMap();
 }
 
 // ========== END TURN ==========
