@@ -1735,15 +1735,13 @@ function updateMap() {
     if (!pathEl) return;
 
     // Color
-    let fill = '#151d30';
-    let strokeColor = '#1e2a42';
-    let ownerBorderColor = 'rgba(100,160,255,0.15)';
-    if (t.visible !== false) {
-      if (t.owner === 0) { fill = '#1a3f6e'; strokeColor = '#264d7a'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
-      else if (t.owner === 1) { fill = '#6b2020'; strokeColor = '#7a2c2c'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
-      else if (t.is_wasteland && t.owner === 255 && phase === 'picking') { fill = 'url(#grad-wasteland)'; strokeColor = '#3d2f00'; ownerBorderColor = 'rgba(251,191,36,0.4)'; }
-      else { fill = '#2a3244'; strokeColor = '#343e52'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
-    }
+    let fill, strokeColor, ownerBorderColor;
+    if (t.visible === false) {
+      fill = '#0c1018'; strokeColor = '#111827'; ownerBorderColor = 'rgba(255,255,255,0.05)';
+    } else if (t.owner === 0) { fill = '#1a3f6e'; strokeColor = '#264d7a'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
+    else if (t.owner === 1) { fill = '#6b2020'; strokeColor = '#7a2c2c'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
+    else if (t.is_wasteland && t.owner === 255 && phase === 'picking') { fill = 'url(#grad-wasteland)'; strokeColor = '#3d2f00'; ownerBorderColor = 'rgba(251,191,36,0.4)'; }
+    else { fill = '#2a3244'; strokeColor = '#343e52'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
     pathEl.setAttribute('stroke-width', '1');
@@ -1785,9 +1783,14 @@ function updateMap() {
     const dep = deploys[t.id] || 0;
     if (dep > 0) displayArmies += dep;
 
-    if (t.visible !== false && displayArmies > 0) {
+    if (t.visible === false) {
+      armyEl.textContent = '?';
+      armyEl.classList.remove('large-army');
+      armyEl.style.fill = 'rgba(255,255,255,0.15)';
+      if (armyBg) { armyBg.style.display = ''; armyBg.setAttribute('r', '12'); armyBg.setAttribute('fill', 'rgba(0,0,0,0.5)'); }
+    } else if (displayArmies > 0) {
       armyEl.textContent = displayArmies;
-      // Larger font and bigger bubble for armies > 10
+      armyEl.style.fill = '';
       if (displayArmies > 10) {
         armyEl.classList.add('large-army');
         if (armyBg) armyBg.setAttribute('r', '14');
@@ -1795,9 +1798,10 @@ function updateMap() {
         armyEl.classList.remove('large-army');
         if (armyBg) armyBg.setAttribute('r', '12');
       }
-      if (armyBg) armyBg.style.display = '';
+      if (armyBg) { armyBg.style.display = ''; armyBg.setAttribute('fill', 'rgba(0,0,0,0.7)'); }
     } else {
       armyEl.textContent = '';
+      armyEl.style.fill = '';
       armyEl.classList.remove('large-army');
       if (armyBg) armyBg.style.display = 'none';
     }
