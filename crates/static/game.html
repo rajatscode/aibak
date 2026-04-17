@@ -79,9 +79,17 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .btn-green:hover:not(:disabled){background:#4ade80}
 .btn-gold{background:var(--gold);color:#000}
 .btn-gold:hover:not(:disabled){background:#fbbf24}
-.bonus-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px}
+.bonus-row{display:flex;align-items:center;gap:6px;padding:3px 6px;font-size:11px;border-radius:4px;margin:1px 0}
 .bonus-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
-.bonus-row.complete{background:rgba(63,185,80,.1);border-radius:4px;padding:3px 4px}
+.bonus-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bonus-prog{color:var(--text3);font-size:10px;flex-shrink:0}
+.bonus-row.owned{background:rgba(74,158,255,.12);color:#4a9eff}
+.bonus-row.owned .bonus-prog{color:#4a9eff}
+.bonus-row.enemy-owned{background:rgba(248,113,113,.08);color:#f87171}
+.bonus-row.enemy-owned .bonus-prog{color:#f87171}
+.bonus-row.nearly{border-left:2px solid #e3b341}
+.bonus-row.complete{animation:glow-green .6s ease-out}
+@keyframes glow-green{0%{background:rgba(63,185,80,.2)}100%{background:transparent}}
 .undeployed-warning{color:#f59e0b;font-size:12px;font-weight:600;text-align:center;padding:4px 0}
 
 /* MAP ARMY POPUP */
@@ -912,12 +920,37 @@ function renderOrdersSidebar(pp, cp) {
 function renderBonusInfo() {
   if (!MAP || !MAP.bonuses || !STATE) return '';
   var owners = STATE.territory_owners || [];
-  var html = '<h3 style="margin-top:12px">Bonuses</h3>';
-  MAP.bonuses.forEach(function(b) {
-    var color = BONUS_COLORS[b.id%BONUS_COLORS.length];
+  var enemySeat = mySeat === 0 ? 1 : 0;
+  var bonusData = MAP.bonuses.map(function(b) {
     var myCount = b.territory_ids.filter(function(tid){return owners[tid]===mySeat;}).length;
-    var complete = myCount === b.territory_ids.length;
-    html += '<div class="bonus-row '+(complete?'complete':'')+'"><span class="bonus-dot" style="background:'+color+'"></span>'+b.name+' (+'+b.value+') '+myCount+'/'+b.territory_ids.length+'</div>';
+    var enemyCount = b.territory_ids.filter(function(tid){return owners[tid]===enemySeat;}).length;
+    return {b:b, myCount:myCount, enemyCount:enemyCount, total:b.territory_ids.length};
+  });
+  // Sort: owned first, then nearly complete, then rest; within groups by value desc
+  bonusData.sort(function(a, b) {
+    var aOwned = a.myCount === a.total ? 1 : 0;
+    var bOwned = b.myCount === b.total ? 1 : 0;
+    if (aOwned !== bOwned) return bOwned - aOwned;
+    var aNearly = (!aOwned && a.total - a.myCount === 1) ? 1 : 0;
+    var bNearly = (!bOwned && b.total - b.myCount === 1) ? 1 : 0;
+    if (aNearly !== bNearly) return bNearly - aNearly;
+    return b.b.value - a.b.value;
+  });
+  var html = '<h3 style="margin-top:12px">Bonuses</h3>';
+  bonusData.forEach(function(d) {
+    var color = BONUS_COLORS[d.b.id%BONUS_COLORS.length];
+    var owned = d.myCount === d.total;
+    var enemyOwned = d.enemyCount === d.total;
+    var nearly = !owned && d.total - d.myCount === 1;
+    var cls = 'bonus-row';
+    if (owned) cls += ' owned complete';
+    else if (enemyOwned) cls += ' enemy-owned';
+    if (nearly) cls += ' nearly';
+    html += '<div class="'+cls+'">' +
+      '<span class="bonus-dot" style="background:'+color+'"></span>' +
+      '<span class="bonus-name">'+d.b.name+'</span>' +
+      '<span class="bonus-prog">+'+d.b.value+'&ensp;'+d.myCount+'/'+d.total+'</span>' +
+      '</div>';
   });
   return html;
 }

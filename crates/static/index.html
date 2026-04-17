@@ -312,8 +312,15 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .phase-flash span{font-size:24px;font-weight:800;color:var(--gold);text-shadow:0 0 20px rgba(227,179,65,.5)}
 
 /* BONUS ROW */
-.bonus-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px}
+.bonus-row{display:flex;align-items:center;gap:6px;padding:3px 6px;font-size:11px;border-radius:4px;margin:1px 0}
 .bonus-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.bonus-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bonus-prog{color:var(--text3);font-size:10px;flex-shrink:0}
+.bonus-row.owned{background:rgba(74,158,255,.12);color:#4a9eff}
+.bonus-row.owned .bonus-prog{color:#4a9eff}
+.bonus-row.enemy-owned{background:rgba(248,113,113,.08);color:#f87171}
+.bonus-row.enemy-owned .bonus-prog{color:#f87171}
+.bonus-row.nearly{border-left:2px solid #e3b341}
 .bonus-row.complete{animation:glow-green .6s ease-out}
 @keyframes glow-green{0%{background:rgba(63,185,80,.2)}100%{background:transparent}}
 
@@ -1694,8 +1701,17 @@ function updateMap() {
       const progEl = document.getElementById('bonus-prog-' + b.id);
       if (progEl) {
         const complete = b.player_count === b.total;
+        const enemyComplete = (b.enemy_count || 0) === b.total;
         progEl.textContent = complete ? '\u2713 +' + b.value + '/turn' : b.player_count + '/' + b.total + ' (+' + b.value + ')';
-        progEl.setAttribute('fill', complete ? '#4ade80' : '#fff');
+        progEl.setAttribute('fill', complete ? '#4ade80' : enemyComplete ? '#f87171' : '#fff');
+      }
+      const nameEl = document.getElementById('bonus-name-' + b.id);
+      if (nameEl) {
+        const complete = b.player_count === b.total;
+        const enemyComplete = (b.enemy_count || 0) === b.total;
+        if (complete) nameEl.setAttribute('fill', '#4a9eff');
+        else if (enemyComplete) nameEl.setAttribute('fill', '#f87171');
+        else nameEl.setAttribute('fill', BONUS_COLORS[b.id % BONUS_COLORS.length]);
       }
     });
   }
@@ -2126,11 +2142,31 @@ function renderOrdersPanel(pp, cp) {
 
 function renderBonusInfo() {
   if (!G || !G.bonuses) return '';
+  // Sort: owned first, then nearly complete (1 away), then rest; within groups sort by value desc
+  var sorted = G.bonuses.slice().sort(function(a, b) {
+    var aOwned = a.player_count === a.total ? 1 : 0;
+    var bOwned = b.player_count === b.total ? 1 : 0;
+    if (aOwned !== bOwned) return bOwned - aOwned;
+    var aNearly = (!aOwned && a.total - a.player_count === 1) ? 1 : 0;
+    var bNearly = (!bOwned && b.total - b.player_count === 1) ? 1 : 0;
+    if (aNearly !== bNearly) return bNearly - aNearly;
+    return b.value - a.value;
+  });
   let html = '<h3 style="margin-top:12px">Bonuses</h3>';
-  G.bonuses.forEach(b => {
-    const color = BONUS_COLORS[b.id % BONUS_COLORS.length];
-    const complete = b.player_count === b.total;
-    html += '<div class="bonus-row ' + (complete?'complete':'') + '"><span class="bonus-dot" style="background:' + color + '"></span>' + b.name + ' (+' + b.value + ') ' + b.player_count + '/' + b.total + '</div>';
+  sorted.forEach(function(b) {
+    var color = BONUS_COLORS[b.id % BONUS_COLORS.length];
+    var owned = b.player_count === b.total;
+    var enemyOwned = (b.enemy_count || 0) === b.total;
+    var nearly = !owned && b.total - b.player_count === 1;
+    var cls = 'bonus-row';
+    if (owned) cls += ' owned complete';
+    else if (enemyOwned) cls += ' enemy-owned';
+    if (nearly) cls += ' nearly';
+    html += '<div class="' + cls + '">' +
+      '<span class="bonus-dot" style="background:' + color + '"></span>' +
+      '<span class="bonus-name">' + b.name + '</span>' +
+      '<span class="bonus-prog">+' + b.value + '&ensp;' + b.player_count + '/' + b.total + '</span>' +
+      '</div>';
   });
   return html;
 }

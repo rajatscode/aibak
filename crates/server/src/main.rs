@@ -183,6 +183,7 @@ struct BonusView {
     value: u32,
     territory_ids: Vec<usize>,
     player_count: usize,
+    enemy_count: usize,
     total: usize,
 }
 
@@ -256,12 +257,21 @@ fn build_game_view(app: &LocalState) -> GameView {
                 .iter()
                 .filter(|&&tid| app.game.territory_owners[tid] == PLAYER)
                 .count();
+            let enemy_count = b
+                .territory_ids
+                .iter()
+                .filter(|&&tid| {
+                    let owner = app.game.territory_owners[tid];
+                    owner != PLAYER && owner != NEUTRAL
+                })
+                .count();
             BonusView {
                 id: b.id,
                 name: b.name.clone(),
                 value: b.value,
                 territory_ids: b.territory_ids.clone(),
                 player_count,
+                enemy_count,
                 total: b.territory_ids.len(),
             }
         })
