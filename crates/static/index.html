@@ -1737,7 +1737,7 @@ function updateMap() {
     if (t.visible !== false) {
       if (t.owner === 0) { fill = 'url(#grad-player)'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
       else if (t.owner === 1) { fill = 'url(#grad-enemy)'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
-      else if (t.is_wasteland) { fill = 'url(#grad-wasteland)'; strokeColor = '#3d2f00'; ownerBorderColor = 'rgba(251,191,36,0.4)'; }
+      else if (t.is_wasteland && t.owner === 255 && phase === 'picking') { fill = 'url(#grad-wasteland)'; strokeColor = '#3d2f00'; ownerBorderColor = 'rgba(251,191,36,0.4)'; }
       else { fill = 'url(#grad-neutral)'; strokeColor = '#1a2744'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
     }
     pathEl.setAttribute('fill', fill);
@@ -1747,7 +1747,7 @@ function updateMap() {
     // Wasteland crosshatch overlay
     const hatchEl = document.getElementById('wasteland-hatch-' + t.id);
     if (hatchEl) {
-      hatchEl.style.display = (t.is_wasteland && t.owner === 255 && t.visible !== false) ? '' : 'none';
+      hatchEl.style.display = (t.is_wasteland && t.owner === 255 && phase === 'picking' && t.visible !== false) ? '' : 'none';
     }
 
     // Update army bubble border color to match owner
@@ -3846,7 +3846,6 @@ function applyReplayState(state) {
     if (t.visible !== false) {
       if (t.owner === 0) fill = 'url(#grad-player)';
       else if (t.owner === 1) fill = 'url(#grad-enemy)';
-      else if (t.is_wasteland) fill = 'url(#grad-wasteland)';
       else fill = 'url(#grad-neutral)';
     }
     pathEl.style.transition = 'fill 0.3s ease';
@@ -3854,7 +3853,7 @@ function applyReplayState(state) {
     // Wasteland hatch visibility
     const hatchEl = document.getElementById('wasteland-hatch-' + t.id);
     if (hatchEl) {
-      hatchEl.style.display = (t.is_wasteland && t.owner === 255 && t.visible !== false) ? '' : 'none';
+      hatchEl.style.display = 'none';
     }
 
     // Armies

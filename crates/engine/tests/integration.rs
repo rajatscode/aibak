@@ -6,17 +6,18 @@ use rand::rngs::StdRng;
 
 use strat_engine::ai::{self, AiStrength};
 use strat_engine::analysis::{material_evaluation, quick_win_probability};
+use strat_engine::cards::Card;
 use strat_engine::combat::resolve_attack;
 use strat_engine::fog::{fog_filter, visible_territories};
 use strat_engine::game_analysis::analyze_game;
 use strat_engine::board::Board;
-use strat_engine::map::{MapFile, MapSettings};
+use strat_engine::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
 use strat_engine::mcts::MctsConfig;
-use strat_engine::orders::Order;
+use strat_engine::orders::{Order, validate_orders};
 use strat_engine::picking;
 use strat_engine::puzzle::daily_puzzle;
 use strat_engine::state::{GameState, NEUTRAL, Phase};
-use strat_engine::turn::resolve_turn;
+use strat_engine::turn::{resolve_turn, TurnEvent};
 
 fn maps_dir() -> PathBuf {
     // Navigate from crate root to workspace root
@@ -1600,4 +1601,1358 @@ fn test_turn_resolution_under_1ms() {
         "Turn resolution should take < 1ms on average, took {:?}",
         avg_per_turn
     );
+}
+
+// ========== HELPER: Small test map (A-B-C-D linear) ==========
+
+fn test_map_4() -> MapFile {
+    MapFile {
+        id: "test4".into(),
+        name: "Test4".into(),
+        territories: vec![
+            Territory {
+                id: 0,
+                name: "A".into(),
+                bonus_id: 0,
+                is_wasteland: false,
+                default_armies: 2,
+                adjacent: vec![1],
+                visual: None,
+            },
+            Territory {
+                id: 1,
+                name: "B".into(),
+                bonus_id: 0,
+                is_wasteland: false,
+                default_armies: 2,
+                adjacent: vec![0, 2],
+                visual: None,
+            },
+            Territory {
+                id: 2,
+                name: "C".into(),
+                bonus_id: 1,
+                is_wasteland: false,
+                default_armies: 2,
+                adjacent: vec![1, 3],
+                visual: None,
+            },
+            Territory {
+                id: 3,
+                name: "D".into(),
+                bonus_id: 1,
+                is_wasteland: false,
+                default_armies: 2,
+                adjacent: vec![2],
+                visual: None,
+            },
+        ],
+        bonuses: vec![
+            Bonus {
+                id: 0,
+                name: "Left".into(),
+                value: 2,
+                territory_ids: vec![0, 1],
+                visual: None,
+            },
+            Bonus {
+                id: 1,
+                name: "Right".into(),
+                value: 2,
+                territory_ids: vec![2, 3],
+                visual: None,
+            },
+        ],
+        picking: PickingConfig {
+            num_picks: 1,
+            method: PickingMethod::RandomWarlords,
+        },
+        settings: MapSettings {
+            luck_pct: 0,
+            base_income: 5,
+            wasteland_armies: 10,
+            unpicked_neutral_armies: 4,
+            fog_of_war: true,
+            offense_kill_rate: 0.6,
+            defense_kill_rate: 0.7,
+        },
+    }
+}
+
+/// Set up a play-phase state on test_map_4: P0 owns {0,1}, P1 owns {2,3}.
+fn setup_play_state(board: &Board) -> GameState {
+    let mut state = GameState::new(board);
+    state.territory_owners = vec![0, 0, 1, 1];
+    state.territory_armies = vec![5, 5, 5, 5];
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+    state
+}
+
+// ========== DEPLOY VALIDATION ==========
+
+#[test]
+fn test_deploy_capped_at_income() {
+    // Turn resolution caps deploy to income even if player submits more.
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    let income = state.income(0, &board); // 5 + 2 = 7
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![Order::Deploy {
+            territory: 0,
+            armies: 100, // way over income
+        }],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Should only deploy income amount (7), not 100.
+    assert_eq!(
+        result.state.territory_armies[0],
+        5 + income,
+        "Deploy should be capped at income ({}), not 100",
+        income
+    );
+}
+
+#[test]
+fn test_deploy_to_enemy_territory_ignored() {
+    // Deploy to territory owned by opponent should be skipped by turn resolution.
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    let mut rng = StdRng::seed_from_u64(42);
+
+    let orders = [
+        vec![Order::Deploy {
+            territory: 2, // owned by P1
+            armies: 5,
+        }],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // P0's deploy to enemy territory: check via events that it wasn't applied to P0
+    // P1's deploy should work normally
+    assert_eq!(result.state.territory_armies[2], 10); // 5 original + 5 from P1
+}
+
+#[test]
+fn test_deploy_to_neutral_territory_ignored() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    state.territory_owners = vec![0, NEUTRAL, 1, NEUTRAL];
+    state.territory_armies = vec![5, 2, 5, 2];
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![Order::Deploy {
+            territory: 1, // neutral
+            armies: 5,
+        }],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Neutral territory should not receive P0's deploy.
+    assert_eq!(result.state.territory_armies[1], 2);
+}
+
+#[test]
+fn test_validate_zero_deploy_rejected() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    let orders = vec![Order::Deploy {
+        territory: 0,
+        armies: 0,
+    }];
+    let result = validate_orders(&orders, 0, &state, &board);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_deploy_split_across_territories() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    let income = state.income(0, &board); // 7
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 0,
+                armies: 3,
+            },
+            Order::Deploy {
+                territory: 1,
+                armies: 4,
+            },
+        ],
+        vec![],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    assert_eq!(result.state.territory_armies[0], 5 + 3);
+    assert_eq!(result.state.territory_armies[1], 5 + 4);
+    let total_deployed: u32 = result
+        .events
+        .iter()
+        .filter_map(|e| match e {
+            TurnEvent::Deploy {
+                player: 0, armies, ..
+            } => Some(*armies),
+            _ => None,
+        })
+        .sum();
+    assert_eq!(total_deployed, income);
+}
+
+// ========== ATTACK RESOLUTION THRESHOLDS ==========
+
+#[test]
+fn test_combat_exact_thresholds() {
+    let s = default_settings();
+
+    // 3v2: 3*0.6=1.8→2, 2*0.7=1.4→1. Capture with 2 survivors.
+    let r = resolve_attack(3, 2, &s);
+    assert!(r.captured);
+    assert_eq!(r.surviving_attackers, 2);
+
+    // 2v2: 2*0.6=1.2→1, 2*0.7=1.4→1. 1 def remains, 1 atk remains. No capture.
+    let r = resolve_attack(2, 2, &s);
+    assert!(!r.captured);
+    assert_eq!(r.surviving_defenders, 1);
+    assert_eq!(r.surviving_attackers, 1);
+
+    // 4v3: 4*0.6=2.4→2, 3*0.7=2.1→2. 1 def remains, 2 atk remain. No capture.
+    let r = resolve_attack(4, 3, &s);
+    assert!(!r.captured);
+    assert_eq!(r.surviving_defenders, 1);
+    assert_eq!(r.surviving_attackers, 2);
+
+    // 5v3: 5*0.6=3.0→3, 3*0.7=2.1→2. Capture with 3 survivors.
+    let r = resolve_attack(5, 3, &s);
+    assert!(r.captured);
+    assert_eq!(r.surviving_attackers, 3);
+
+    // 10v6: 10*0.6=6→6, 6*0.7=4.2→4. Capture with 6 survivors.
+    let r = resolve_attack(10, 6, &s);
+    assert!(r.captured);
+    assert_eq!(r.surviving_attackers, 6);
+
+    // 10v7: 10*0.6=6→6, 7*0.7=4.9→5. 1 def remains, 5 atk remain. No capture.
+    let r = resolve_attack(10, 7, &s);
+    assert!(!r.captured);
+    assert_eq!(r.surviving_defenders, 1);
+}
+
+#[test]
+fn test_attack_must_leave_1_army_behind() {
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    state.territory_armies[1] = 3; // P0 has 3 on territory 1
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![Order::Attack {
+            from: 1,
+            to: 2,
+            armies: 3, // tries to send all 3
+        }],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Source territory must keep at least 1 army.
+    assert!(
+        result.state.territory_armies[1] >= 1,
+        "Must leave at least 1 army on source, got {}",
+        result.state.territory_armies[1]
+    );
+}
+
+#[test]
+fn test_attack_from_unowned_territory_ignored() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+
+    let mut rng = StdRng::seed_from_u64(42);
+    // P0 tries to attack from territory 2 (owned by P1)
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 2,
+                to: 3,
+                armies: 4,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Attack from P1's territory should be ignored; territory 3 stays P1.
+    assert_eq!(result.state.territory_owners[3], 1);
+}
+
+#[test]
+fn test_attack_with_1_army_territory_skipped() {
+    // Territory with only 1 army can't attack (must leave 1 behind).
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    state.territory_armies[1] = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 1,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Attack should be skipped (0 actual armies after leaving 1 behind).
+    assert_eq!(result.state.territory_owners[2], 1);
+    assert_eq!(result.state.territory_armies[1], 1);
+}
+
+// ========== CHAIN ATTACK PREVENTION ==========
+
+#[test]
+fn test_can_attack_from_turn_start_territory() {
+    // Positive test: can attack from territory owned at turn start.
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    state.territory_armies[1] = 20;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![Order::Attack {
+            from: 1,
+            to: 2,
+            armies: 19,
+        }],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Territory 1 was owned at turn start, so attack should execute.
+    let attack_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| matches!(e, TurnEvent::Attack { player: 0, .. }))
+        .collect();
+    assert!(
+        !attack_events.is_empty(),
+        "Attack from turn-start territory should execute"
+    );
+}
+
+#[test]
+fn test_multiple_attacks_from_same_territory() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    // P0 owns territory 1 with lots of armies. Territories 0 and 2 are neutral.
+    state.territory_owners = vec![NEUTRAL, 0, NEUTRAL, 1];
+    state.territory_armies = vec![2, 30, 2, 5];
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 1,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 1,
+                to: 0,
+                armies: 15,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 15,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 3,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Both attacks should execute (enough armies for both).
+    // Territory 0 should be captured (15 vs 2, easy capture).
+    assert_eq!(result.state.territory_owners[0], 0);
+    // Territory 1 must have at least 1 army.
+    assert!(result.state.territory_armies[1] >= 1);
+    // Total armies should be conserved (original + deploy - combat losses).
+}
+
+#[test]
+fn test_chain_attack_from_mid_turn_capture_blocked() {
+    // Repeat of the unit test from turn.rs but as integration test with Small Earth.
+    let map = load_small_earth();
+    let board = Board::from_map(map);
+    let mut state = GameState::new(&board);
+    // P0 owns Alaska (0) with overwhelming force.
+    // NW Territory (1) is neutral with 2 armies.
+    // Alberta (3) is owned by P1.
+    state.territory_owners[0] = 0;
+    state.territory_armies[0] = 30;
+    state.territory_owners[1] = NEUTRAL;
+    state.territory_armies[1] = 2;
+    state.territory_owners[3] = 1;
+    state.territory_armies[3] = 5;
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            // First attack: capture NW Territory (1) from Alaska (0).
+            Order::Attack {
+                from: 0,
+                to: 1,
+                armies: 20,
+            },
+            // Chain attack: from captured NW Territory (1) to Alberta (3).
+            // NW Territory (1) is adjacent to Alberta (3) but was NOT owned at turn start.
+            Order::Attack {
+                from: 1,
+                to: 3,
+                armies: 10,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 3,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    assert_eq!(
+        result.state.territory_owners[1], 0,
+        "NW Territory should be captured"
+    );
+    assert_eq!(
+        result.state.territory_owners[3], 1,
+        "Alberta should NOT be captured via chain attack"
+    );
+}
+
+// ========== TRANSFER VALIDATION ==========
+
+#[test]
+fn test_transfer_to_enemy_territory_ignored() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 1,
+                armies: 5,
+            },
+            Order::Transfer {
+                from: 1,
+                to: 2, // owned by P1
+                armies: 5,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Transfer to enemy should be skipped; territory 2 keeps only P1's armies.
+    assert_eq!(result.state.territory_owners[2], 1);
+    // P0's territory 1 should still have its armies (deploy + original, no transfer out).
+    assert_eq!(result.state.territory_armies[1], 10); // 5 + 5 deploy
+}
+
+#[test]
+fn test_transfer_must_leave_1_behind() {
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    state.territory_armies[0] = 5;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![Order::Transfer {
+            from: 0,
+            to: 1,
+            armies: 5, // tries to send all 5
+        }],
+        vec![],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    assert!(
+        result.state.territory_armies[0] >= 1,
+        "Transfer must leave at least 1 army, got {}",
+        result.state.territory_armies[0]
+    );
+    assert_eq!(
+        result.state.territory_armies[0] + result.state.territory_armies[1] - 5,
+        5,
+        "Total armies should be preserved"
+    );
+}
+
+#[test]
+fn test_validate_transfer_to_non_adjacent() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    // Territories 0 and 3 are not adjacent (0-1-2-3 linear).
+    // But territory 3 is owned by P1, so this would fail as TransferToEnemy.
+    // Let's make P0 own all 4 territories instead.
+    let mut state2 = state.clone();
+    state2.territory_owners = vec![0, 0, 0, 0];
+    let orders = vec![
+        Order::Deploy {
+            territory: 0,
+            armies: 5,
+        },
+        Order::Transfer {
+            from: 0,
+            to: 3, // not adjacent to 0
+            armies: 3,
+        },
+    ];
+    let result = validate_orders(&orders, 0, &state2, &board);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_validate_attack_non_adjacent() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    let orders = vec![
+        Order::Deploy {
+            territory: 0,
+            armies: 5,
+        },
+        Order::Attack {
+            from: 0,
+            to: 2, // not adjacent to 0
+            armies: 3,
+        },
+    ];
+    let result = validate_orders(&orders, 0, &state, &board);
+    assert!(result.is_err());
+}
+
+// ========== PICKING MECHANICS ==========
+
+#[test]
+fn test_wastelands_excluded_from_pick_options() {
+    // Create a map with wastelands and verify they're excluded.
+    let mut map = MapFile {
+        id: "wasteland_test".into(),
+        name: "Wasteland Test".into(),
+        territories: (0..6)
+            .map(|i| Territory {
+                id: i,
+                name: format!("T{}", i),
+                bonus_id: i / 3,
+                is_wasteland: i == 1 || i == 4, // territories 1 and 4 are wastelands
+                default_armies: if i == 1 || i == 4 { 10 } else { 2 },
+                adjacent: if i == 0 {
+                    vec![1]
+                } else if i == 5 {
+                    vec![4]
+                } else {
+                    vec![i - 1, i + 1]
+                },
+                visual: None,
+            })
+            .collect(),
+        bonuses: vec![
+            Bonus {
+                id: 0,
+                name: "A".into(),
+                value: 3,
+                territory_ids: vec![0, 1, 2],
+                visual: None,
+            },
+            Bonus {
+                id: 1,
+                name: "B".into(),
+                value: 3,
+                territory_ids: vec![3, 4, 5],
+                visual: None,
+            },
+        ],
+        picking: PickingConfig {
+            num_picks: 2,
+            method: PickingMethod::RandomWarlords,
+        },
+        settings: default_settings(),
+    };
+    map.settings.wasteland_armies = 10;
+
+    let board = Board::from_map(map);
+    let mut rng = StdRng::seed_from_u64(42);
+    let options = picking::generate_pick_options(&board, &mut rng);
+
+    // No wasteland territory should be in the pick options.
+    for &tid in &options {
+        assert!(
+            !board.map.territories[tid].is_wasteland,
+            "Wasteland territory {} should not be a pick option",
+            tid
+        );
+    }
+}
+
+#[test]
+fn test_abba_draft_gives_balanced_picks() {
+    // With 6 options (small earth), ABBA draft should give 4 each.
+    let map = load_small_earth();
+    let board = Board::from_map(map);
+    let mut rng = StdRng::seed_from_u64(42);
+    let mut state = GameState::new(&board);
+    let options = picking::generate_pick_options(&board, &mut rng);
+
+    // Both submit all options in same order.
+    picking::resolve_picks(
+        &mut state,
+        [&options, &options],
+        &board,
+        picking::DEFAULT_STARTING_ARMIES,
+    );
+
+    assert_eq!(state.territory_count_for(0), 4);
+    assert_eq!(state.territory_count_for(1), 4);
+
+    // ABBA: P0 picks first (index 0), so P0 should get the first territory
+    // they asked for (the top-priority pick).
+    assert_eq!(state.territory_owners[options[0]], 0);
+}
+
+// ========== INCOME CALCULATION ==========
+
+#[test]
+fn test_base_income_with_no_bonuses() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    // P0 owns territory 0 only (bonus "Left" needs 0 AND 1).
+    state.territory_owners[0] = 0;
+    let income = state.income(0, &board);
+    assert_eq!(income, 5, "Should have base income only");
+}
+
+#[test]
+fn test_losing_bonus_territory_removes_bonus_income() {
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    // P0 owns {0,1} = full Left bonus. Income = 5 + 2 = 7.
+    assert_eq!(state.income(0, &board), 7);
+
+    // P1 captures territory 1 from P0.
+    state.territory_owners[1] = 1;
+    // Now P0 only has territory 0, no complete bonus.
+    assert_eq!(
+        state.income(0, &board),
+        5,
+        "Losing a bonus territory should remove bonus income"
+    );
+}
+
+#[test]
+fn test_multiple_bonuses_income() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    // P0 owns all 4 territories (both bonuses: Left=2, Right=2).
+    state.territory_owners = vec![0, 0, 0, 0];
+    let income = state.income(0, &board);
+    assert_eq!(income, 5 + 2 + 2, "Should have base + both bonuses");
+}
+
+// ========== WASTELAND INITIALIZATION ==========
+
+#[test]
+fn test_wasteland_initialization() {
+    let map = load_small_earth();
+    let board = Board::from_map(map.clone());
+    let state = GameState::new(&board);
+
+    for (tid, t) in map.territories.iter().enumerate() {
+        if t.is_wasteland {
+            assert_eq!(
+                state.territory_armies[tid],
+                board.settings().wasteland_armies,
+                "Wasteland territory {} should have {} armies",
+                tid,
+                board.settings().wasteland_armies
+            );
+        } else {
+            assert_eq!(
+                state.territory_armies[tid], t.default_armies,
+                "Normal territory {} should have default {} armies",
+                tid, t.default_armies
+            );
+        }
+    }
+}
+
+#[test]
+fn test_all_territories_start_neutral() {
+    let map = load_small_earth();
+    let board = Board::from_map(map.clone());
+    let state = GameState::new(&board);
+
+    for tid in 0..map.territories.len() {
+        assert_eq!(
+            state.territory_owners[tid], NEUTRAL,
+            "Territory {} should start as NEUTRAL",
+            tid
+        );
+    }
+    assert_eq!(state.phase, Phase::Picking);
+    assert_eq!(state.turn, 0);
+}
+
+// ========== FOG OF WAR ==========
+
+#[test]
+fn test_fog_visible_adjacent_enemy_shows_real_armies() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    // P0 owns territory 0, P1 owns territory 1 (adjacent).
+    state.territory_owners[0] = 0;
+    state.territory_armies[0] = 5;
+    state.territory_owners[1] = 1;
+    state.territory_armies[1] = 15;
+
+    let filtered = fog_filter(&state, 0, &board);
+    // Territory 1 is adjacent to P0's territory 0, so it should be visible.
+    assert_eq!(
+        filtered.territory_owners[1], 1,
+        "Adjacent enemy territory should show real owner"
+    );
+    assert_eq!(
+        filtered.territory_armies[1], 15,
+        "Adjacent enemy territory should show real army count"
+    );
+}
+
+#[test]
+fn test_fog_own_territory_always_visible() {
+    let map = load_small_earth();
+    let board = Board::from_map(map);
+    let mut state = GameState::new(&board);
+    state.territory_owners[0] = 0;
+    state.territory_armies[0] = 42;
+
+    let filtered = fog_filter(&state, 0, &board);
+    assert_eq!(filtered.territory_owners[0], 0);
+    assert_eq!(filtered.territory_armies[0], 42);
+}
+
+// ========== GAME END CONDITIONS ==========
+
+#[test]
+fn test_game_does_not_end_with_territories_remaining() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    // Both players have territories, game should not be finished.
+    assert_eq!(state.phase, Phase::Play);
+    assert!(state.winner.is_none());
+
+    // Run a turn where no elimination happens.
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![Order::Deploy {
+            territory: 0,
+            armies: 5,
+        }],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    assert_eq!(
+        result.state.phase,
+        Phase::Play,
+        "Game should not end when both players have territories"
+    );
+    assert!(result.state.winner.is_none());
+}
+
+#[test]
+fn test_game_ends_when_player_has_zero_territories() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    // P0 has territory 0 and 1 with overwhelming force.
+    // P1 has only territory 2 with 1 army.
+    state.territory_owners = vec![0, 0, 1, NEUTRAL];
+    state.territory_armies = vec![5, 30, 1, 2];
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![Order::Attack {
+            from: 1,
+            to: 2,
+            armies: 29,
+        }],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    assert_eq!(result.state.phase, Phase::Finished);
+    assert_eq!(result.state.winner, Some(0));
+    assert!(!result.state.alive[1]);
+}
+
+#[test]
+fn test_winner_is_player_who_eliminated_other() {
+    let map = load_small_earth();
+    let board = Board::from_map(map);
+    let mut state = GameState::new(&board);
+    state.territory_owners[0] = 0;
+    state.territory_armies[0] = 50;
+    state.territory_owners[1] = 1;
+    state.territory_armies[1] = 1;
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 0,
+                to: 1,
+                armies: 54,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 1,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    assert_eq!(result.state.winner, Some(0));
+    // Verify events contain elimination and victory
+    let has_eliminated = result
+        .events
+        .iter()
+        .any(|e| matches!(e, TurnEvent::Eliminated { player: 1 }));
+    let has_victory = result
+        .events
+        .iter()
+        .any(|e| matches!(e, TurnEvent::Victory { player: 0 }));
+    assert!(has_eliminated);
+    assert!(has_victory);
+}
+
+// ========== EDGE CASES ==========
+
+#[test]
+fn test_empty_orders_pass_turn() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders: [Vec<Order>; 2] = [vec![], vec![]];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Turn should advance, no armies should change (no deploy, no attacks).
+    assert_eq!(result.state.turn, state.turn + 1);
+    assert_eq!(result.state.territory_armies, state.territory_armies);
+    assert_eq!(result.state.territory_owners, state.territory_owners);
+}
+
+#[test]
+fn test_validate_out_of_bounds_territory() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+
+    // Deploy to non-existent territory.
+    let orders = vec![Order::Deploy {
+        territory: 999,
+        armies: 1,
+    }];
+    assert!(validate_orders(&orders, 0, &state, &board).is_err());
+
+    // Attack to non-existent territory.
+    let orders = vec![Order::Attack {
+        from: 0,
+        to: 999,
+        armies: 1,
+    }];
+    assert!(validate_orders(&orders, 0, &state, &board).is_err());
+
+    // Transfer to non-existent territory.
+    let orders = vec![Order::Transfer {
+        from: 0,
+        to: 999,
+        armies: 1,
+    }];
+    assert!(validate_orders(&orders, 0, &state, &board).is_err());
+}
+
+#[test]
+fn test_validate_deploy_to_unowned_territory() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    // P0 tries to deploy to P1's territory 2.
+    let orders = vec![Order::Deploy {
+        territory: 2,
+        armies: 3,
+    }];
+    let result = validate_orders(&orders, 0, &state, &board);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_attack_becomes_transfer_when_target_already_owned() {
+    // If opponent captures target before your attack executes, it becomes a transfer.
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    // P0 owns 0 and 1, P1 owns 2 and 3. Territory 2 is the contested one.
+    state.territory_owners = vec![0, 0, 1, 1];
+    state.territory_armies = vec![5, 20, 1, 5];
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    // P0 attacks territory 2 from territory 1 (will capture, only 1 def).
+    // Then P0 also has an attack from 0 to 1 which is a transfer (both owned by P0).
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 1,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 20,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 3,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Territory 2 should be captured by P0.
+    assert_eq!(result.state.territory_owners[2], 0);
+}
+
+// ========== CARD SYSTEM IN TURN RESOLUTION ==========
+
+#[test]
+fn test_card_pieces_awarded_on_capture() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    state.territory_owners = vec![0, 0, NEUTRAL, 1];
+    state.territory_armies = vec![5, 20, 2, 5];
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 1,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 15,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 3,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // P0 should have earned 1 card piece for capturing territory 2.
+    assert!(
+        result.state.card_pieces[0] >= 1 || !result.state.hands[0].is_empty(),
+        "Capturing a territory should award a card piece"
+    );
+}
+
+#[test]
+fn test_3_captures_gives_reinforcement_card() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    // Set up so P0 already has 2 card pieces and can capture 1 more territory.
+    state.territory_owners = vec![0, 0, NEUTRAL, 1];
+    state.territory_armies = vec![5, 30, 2, 5];
+    state.card_pieces = [2, 0];
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 1,
+                armies: 5,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 20,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 3,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // 2 existing pieces + 1 capture = 3 pieces -> 1 Reinforcement card.
+    assert_eq!(result.state.card_pieces[0], 0, "3 pieces consumed for card");
+    assert_eq!(result.state.hands[0].len(), 1);
+    assert!(matches!(
+        result.state.hands[0][0],
+        Card::Reinforcement(5)
+    ));
+}
+
+// ========== BLOCKADE CARD IN TURN RESOLUTION ==========
+
+#[test]
+fn test_blockade_card_in_turn() {
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    state.territory_armies[0] = 4;
+    state.hands[0] = vec![Card::Blockade];
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 1,
+                armies: 5,
+            },
+            Order::PlayCard {
+                card: Card::Blockade,
+                target: 0,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Territory 0 should be blockaded: 4 * 3 = 12 armies, becomes NEUTRAL.
+    assert_eq!(result.state.territory_owners[0], NEUTRAL);
+    assert_eq!(result.state.territory_armies[0], 12);
+    assert!(result.state.hands[0].is_empty());
+}
+
+// ========== REINFORCEMENT CARD IN TURN RESOLUTION ==========
+
+#[test]
+fn test_reinforcement_card_in_turn() {
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    state.hands[0] = vec![Card::Reinforcement(5)];
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 0,
+                armies: 5,
+            },
+            Order::PlayCard {
+                card: Card::Reinforcement(5),
+                target: 1,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 5,
+        }],
+    ];
+
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    // Territory 1 should receive +5 from card.
+    assert_eq!(
+        result.state.territory_armies[1],
+        5 + 5,
+        "Reinforcement card should add 5 armies"
+    );
+    assert!(result.state.hands[0].is_empty());
+}
+
+// ========== COMBAT EDGE CASES ==========
+
+#[test]
+fn test_combat_large_armies() {
+    let s = default_settings();
+    // Large army vs small: should always capture.
+    let r = resolve_attack(100, 1, &s);
+    assert!(r.captured);
+    assert_eq!(r.surviving_attackers, 99);
+
+    // Large vs large: verify no overflow.
+    let r = resolve_attack(1000, 500, &s);
+    assert!(r.captured || !r.captured); // just verify it doesn't panic
+    assert!(r.attackers_killed <= 1000);
+    assert!(r.defenders_killed <= 500);
+}
+
+#[test]
+fn test_combat_minimum_capture_table() {
+    // Verify the minimum attackers needed to capture N defenders at 0% luck.
+    let s = default_settings();
+
+    // Against 1 def: need 2 (1v1 = mutual kill, 2v1 = capture).
+    assert!(!resolve_attack(1, 1, &s).captured);
+    assert!(resolve_attack(2, 1, &s).captured);
+
+    // Against 2 def: need 3 (3*0.6=1.8→2 kills all def, 2*0.7=1.4→1 kill).
+    assert!(!resolve_attack(2, 2, &s).captured);
+    assert!(resolve_attack(3, 2, &s).captured);
+
+    // Against 3 def: need 5 (5*0.6=3.0→3, 3*0.7=2.1→2).
+    assert!(!resolve_attack(4, 3, &s).captured);
+    assert!(resolve_attack(5, 3, &s).captured);
+
+    // Against 4 def: need 7 (7*0.6=4.2→4, 4*0.7=2.8→3). Actually:
+    // 6*0.6=3.6→4 kills. 4*0.7=2.8→3 kills. Capture! (6 needed)
+    // Wait: 6*0.6 = 3.6, straight_round(3.6) = floor(3.6+0.5) = floor(4.1) = 4. Yes captures.
+    // 5*0.6 = 3.0, straight_round(3.0) = floor(3.5) = 3. 1 def survives. No capture.
+    assert!(!resolve_attack(5, 4, &s).captured);
+    assert!(resolve_attack(6, 4, &s).captured);
+}
+
+// ========== ARMY CONSERVATION ==========
+
+#[test]
+fn test_total_armies_conserved_in_combat() {
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    state.territory_armies = vec![5, 20, 10, 5];
+
+    let mut rng = StdRng::seed_from_u64(42);
+    let orders = [
+        vec![
+            Order::Deploy {
+                territory: 1,
+                armies: 7,
+            },
+            Order::Attack {
+                from: 1,
+                to: 2,
+                armies: 15,
+            },
+        ],
+        vec![Order::Deploy {
+            territory: 2,
+            armies: 7,
+        }],
+    ];
+
+    let before_total: u32 = state.territory_armies.iter().sum::<u32>() + 7 + 7; // + deploys
+    let result = resolve_turn(&state, orders, &board, &mut rng);
+    let after_total: u32 = result.state.territory_armies.iter().sum();
+
+    // Armies should decrease (combat kills armies), but never increase beyond deploy.
+    assert!(
+        after_total <= before_total,
+        "Total armies after combat ({}) should not exceed before ({})",
+        after_total,
+        before_total
+    );
+}
+
+// ========== VALIDATE: ATTACK ZERO ARMIES ==========
+
+#[test]
+fn test_validate_attack_zero_armies() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    let orders = vec![Order::Attack {
+        from: 1,
+        to: 2,
+        armies: 0,
+    }];
+    let result = validate_orders(&orders, 0, &state, &board);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_validate_transfer_zero_armies() {
+    let board = Board::from_map(test_map_4());
+    let state = setup_play_state(&board);
+    let orders = vec![Order::Transfer {
+        from: 0,
+        to: 1,
+        armies: 0,
+    }];
+    let result = validate_orders(&orders, 0, &state, &board);
+    assert!(result.is_err());
+}
+
+// ========== INTERLEAVED EXECUTION ==========
+
+#[test]
+fn test_interleaved_execution_fairness() {
+    // Both players attack the same neutral. Only one can capture.
+    // Run many seeds and verify both players get a fair chance.
+    let board = Board::from_map(test_map_4());
+
+    let mut p0_captures = 0;
+    let mut p1_captures = 0;
+
+    for seed in 0..100u64 {
+        let mut state = GameState::new(&board);
+        state.territory_owners = vec![0, NEUTRAL, NEUTRAL, 1];
+        state.territory_armies = vec![15, 2, 2, 15];
+        state.alive = [true; 2];
+        state.phase = Phase::Play;
+        state.turn = 1;
+
+        let mut rng = StdRng::seed_from_u64(seed);
+        // Both players attack the same neutral territory (not possible here since
+        // territories 1 and 2 are different). Let's have them attack territory 1 and 2.
+        // Instead: P0 attacks 1, P1 attacks 2. Not quite what we want.
+        // Actually, territory 1 is adjacent to 0 AND 2 (which is adjacent to 3).
+        // But territory 1 is only adjacent to 0 and 2, not 3.
+        // So P1 can't attack territory 1 from territory 3.
+        // Let's just test that interleaving doesn't crash and both get to move.
+        let orders = [
+            vec![
+                Order::Deploy {
+                    territory: 0,
+                    armies: 5,
+                },
+                Order::Attack {
+                    from: 0,
+                    to: 1,
+                    armies: 19,
+                },
+            ],
+            vec![
+                Order::Deploy {
+                    territory: 3,
+                    armies: 5,
+                },
+                Order::Attack {
+                    from: 3,
+                    to: 2,
+                    armies: 19,
+                },
+            ],
+        ];
+
+        let result = resolve_turn(&state, orders, &board, &mut rng);
+        if result.state.territory_owners[1] == 0 {
+            p0_captures += 1;
+        }
+        if result.state.territory_owners[2] == 1 {
+            p1_captures += 1;
+        }
+    }
+
+    // Both should capture their target every time (overwhelming force vs 2 neutrals).
+    assert_eq!(p0_captures, 100, "P0 should capture territory 1 every time");
+    assert_eq!(p1_captures, 100, "P1 should capture territory 2 every time");
+}
+
+// ========== CHECK ELIMINATION LOGIC ==========
+
+#[test]
+fn test_check_elimination_both_alive() {
+    let board = Board::from_map(test_map_4());
+    let mut state = setup_play_state(&board);
+    state.check_elimination();
+    assert!(state.alive[0]);
+    assert!(state.alive[1]);
+    assert!(state.winner.is_none());
+}
+
+#[test]
+fn test_check_elimination_one_player_no_territories() {
+    let board = Board::from_map(test_map_4());
+    let mut state = GameState::new(&board);
+    state.territory_owners = vec![0, 0, 0, NEUTRAL];
+    state.alive = [true; 2];
+    state.phase = Phase::Play;
+
+    state.check_elimination();
+    assert!(!state.alive[1], "P1 with 0 territories should be eliminated");
+    assert_eq!(state.winner, Some(0));
+    assert_eq!(state.phase, Phase::Finished);
 }

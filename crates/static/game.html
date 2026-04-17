@@ -686,7 +686,7 @@ function updateMap() {
     var fill, strokeColor, borderColor;
     if (isMe) { fill='url(#grad-me)'; strokeColor='#1a2744'; borderColor='rgba(96,165,250,0.6)'; }
     else if (isThem) { fill='url(#grad-them)'; strokeColor='#1a2744'; borderColor='rgba(239,68,68,0.6)'; }
-    else if (t.is_wasteland) { fill='url(#grad-wasteland)'; strokeColor='#3d2f00'; borderColor='rgba(251,191,36,0.4)'; }
+    else if (t.is_wasteland && owner === 255 && phase === 'picking') { fill='url(#grad-wasteland)'; strokeColor='#3d2f00'; borderColor='rgba(251,191,36,0.4)'; }
     else { fill='url(#grad-neutral)'; strokeColor='#1a2744'; borderColor='rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
@@ -694,7 +694,7 @@ function updateMap() {
     if (armyBgEl) armyBgEl.setAttribute('stroke', borderColor);
     // Wasteland hatch visibility
     var hatchEl = document.getElementById('wasteland-hatch-'+t.id);
-    if (hatchEl) { hatchEl.style.display = (t.is_wasteland && owner === 255) ? '' : 'none'; }
+    if (hatchEl) { hatchEl.style.display = (t.is_wasteland && owner === 255 && phase === 'picking') ? '' : 'none'; }
 
     if (highlightEl) {
       highlightEl.classList.remove('selected-highlight');
