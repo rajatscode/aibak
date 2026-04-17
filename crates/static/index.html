@@ -782,13 +782,10 @@ let resolving = false;
 let muted = false;
 let winProbHistory = []; // track win% over turns for sparkline
 let gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
-let annotations = {}; // territory_id -> {note, marker}
-let markerMode = null; // null or one of: 'attack','defend','danger','priority'
 let earnedAchievementIds = new Set(); // track achievements already toasted this game
 let selectedTemplate = null;
 let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
-let showTips = true; // strategic tips toggle
 let openingBook = []; // cached openings from server
 let currentUser = null; // authenticated user
 
@@ -1233,7 +1230,6 @@ async function startGameWithSettings() {
   updateSessionDisplay();
   const res = await api('POST', '/api/new', lastGameSettings);
   if (res) {
-    showTips = true;
     fetchOpeningBook(selectedTemplate);
     updateBoardNameDisplay();
     await fetchState();
@@ -1680,15 +1676,6 @@ function updateMap() {
     }
   });
 
-  // Update annotation overlays
-  G.territories.forEach(t => {
-    const noteEl = document.getElementById('annot-note-' + t.id);
-    const markerEl = document.getElementById('annot-marker-' + t.id);
-    const ann = annotations[t.id];
-    if (noteEl) noteEl.textContent = (ann && ann.note) ? ann.note : '';
-    if (markerEl) markerEl.textContent = (ann && ann.marker) ? annotationMarkerEmoji(ann.marker) : '';
-  });
-
   // Update bonus labels
   if (G.bonuses) {
     G.bonuses.forEach(b => {
@@ -1986,59 +1973,6 @@ function renderSidebar() {
     tab.innerHTML = label + ' <span class="tab-arrow">' + (isOpen ? '&#9660;' : '&#9650;') + '</span>';
   }
 
-  renderStratTips();
-}
-
-function renderStratTips() {
-  const el = document.getElementById('strat-tips');
-  if (!el) return;
-  if (!showTips || !G) { el.className = 'hidden'; el.innerHTML = ''; return; }
-  el.className = '';
-
-  let tipText = '';
-
-  if (phase === 'picking') {
-    // Show bonus info for the focused pick option
-    if (typeof focusedId === 'number' && G.bonuses) {
-      const b = G.bonuses.find(function(b) {
-        return (b.territory_ids || b.territories || []).includes(focusedId);
-      });
-      if (b) tipText = 'This territory belongs to ' + b.name + ' (+' + b.value + ' income, ' + (b.territory_ids || b.territories || []).length + ' territories).';
-    }
-    if (!tipText) {
-      tipText = 'South America is the easiest bonus to complete (4 territories, +2 income).';
-    }
-  } else if (phase === 'orders') {
-    const hasAttack = orders.some(function(o) { return o.type === 'attack'; });
-    const hasTransfer = orders.some(function(o) { return o.type === 'transfer'; });
-
-    if (deployLeft > 0 && orders.length === 0) {
-      tipText = 'Concentrate armies for one strong attack rather than spreading thin.';
-    } else if (!hasAttack && deployLeft === 0) {
-      tipText = 'Attack neutrals to expand and earn card pieces.';
-    } else if (!hasTransfer && orders.length > 0) {
-      tipText = 'Move interior armies to the border after attacking.';
-    } else {
-      tipText = 'Completing a bonus gives income every turn. Check the Bonuses list below your orders.';
-    }
-  }
-
-  if (!tipText) { el.className = 'hidden'; el.innerHTML = ''; return; }
-
-  el.innerHTML = '<span class="tip-label">Tip:</span>' + tipText +
-    '<button class="tip-dismiss" onclick="dismissTips()" title="Hide tips">&times;</button>' +
-    '<br><span class="tip-toggle" onclick="dismissTips()">hide tips</span>';
-}
-
-function dismissTips() {
-  showTips = false;
-  var el = document.getElementById('strat-tips');
-  if (el) { el.className = 'hidden'; el.innerHTML = ''; }
-}
-
-function enableTips() {
-  showTips = true;
-  renderStratTips();
 }
 
 function fetchOpeningBook(mapId) {
@@ -2899,7 +2833,6 @@ async function showTurnEvents(events) {
 
     await sleep(300);
   }
-  postTurnAnnouncement(events);
 }
 
 // ========== GAME OVER ==========
@@ -3132,10 +3065,10 @@ async function newGame() {
   editingOrderIdx = null;
   resolving = false;
   winProbHistory = [];
-  annotations = {}; markerMode = null;
+
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
   clearUndoRedo();
-  clearChat();
+
   showTemplateModal();
 }
 
@@ -3172,10 +3105,10 @@ async function rematch() {
   editingOrderIdx = null;
   resolving = false;
   winProbHistory = [];
-  annotations = {}; markerMode = null;
+
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
   clearUndoRedo();
-  clearChat();
+
   playSound('tick');
   sessionGames++;
   updateSessionDisplay();
@@ -3261,18 +3194,6 @@ if (sessionStats.games > 0) {
 function onTerritoryClick(id, e) {
   if (replayMode) return;
   if (resolving) return;
-  // Handle marker mode — toggle marker on territory
-  if (markerMode) {
-    const ann = annotations[id] || {};
-    if (ann.marker === markerMode) {
-      if (annotations[id]) { delete annotations[id].marker; if (!annotations[id].note) delete annotations[id]; }
-    } else {
-      if (!annotations[id]) annotations[id] = {};
-      annotations[id].marker = markerMode;
-    }
-    updateMap();
-    return;
-  }
   if (phase === 'picking') {
     onPickClick(id);
   } else if (phase === 'orders') {
@@ -3286,194 +3207,6 @@ function onTerritoryRightClick(id) {
   if (phase === 'orders') {
     onDeployRightClick(id);
   }
-  showAnnotationContextMenu(id);
-}
-
-// ========== ANNOTATIONS ==========
-const MARKER_TYPES = {
-  attack: '\u2694\uFE0F',
-  defend: '\uD83D\uDEE1',
-  danger: '\u26A0\uFE0F',
-  priority: '\u2B50'
-};
-
-function annotationMarkerEmoji(type) {
-  return MARKER_TYPES[type] || '';
-}
-
-function showAnnotationContextMenu(id) {
-  hideAnnotationContextMenu();
-  hideAnnotationNoteInput();
-  const menu = document.getElementById('annotation-ctx-menu');
-  if (!menu) return;
-  const ann = annotations[id] || {};
-  const hasNote = !!ann.note;
-  const hasMarker = !!ann.marker;
-  menu.innerHTML = '';
-
-  // Add/Edit Note
-  const noteItem = document.createElement('div');
-  noteItem.className = 'ctx-item';
-  noteItem.innerHTML = '<span class="ctx-icon">\uD83D\uDCDD</span>' + (hasNote ? 'Edit Note' : 'Add Note');
-  noteItem.addEventListener('click', function() { hideAnnotationContextMenu(); showAnnotationNoteInput(id); });
-  menu.appendChild(noteItem);
-
-  // Remove Note (if exists)
-  if (hasNote) {
-    const rmNote = document.createElement('div');
-    rmNote.className = 'ctx-item';
-    rmNote.innerHTML = '<span class="ctx-icon">\u2715</span>Remove Note';
-    rmNote.addEventListener('click', function() {
-      hideAnnotationContextMenu();
-      if (annotations[id]) { delete annotations[id].note; if (!annotations[id].marker) delete annotations[id]; }
-      updateMap();
-    });
-    menu.appendChild(rmNote);
-  }
-
-  // Separator
-  const sep = document.createElement('div');
-  sep.className = 'ctx-sep';
-  menu.appendChild(sep);
-
-  // Marker options
-  Object.keys(MARKER_TYPES).forEach(function(type) {
-    const item = document.createElement('div');
-    item.className = 'ctx-item';
-    const isActive = ann.marker === type;
-    item.innerHTML = '<span class="ctx-icon">' + MARKER_TYPES[type] + '</span>' +
-      (isActive ? 'Remove marker' : 'Mark: ' + type.charAt(0).toUpperCase() + type.slice(1));
-    item.addEventListener('click', function() {
-      hideAnnotationContextMenu();
-      if (isActive) {
-        if (annotations[id]) { delete annotations[id].marker; if (!annotations[id].note) delete annotations[id]; }
-      } else {
-        if (!annotations[id]) annotations[id] = {};
-        annotations[id].marker = type;
-      }
-      updateMap();
-    });
-    menu.appendChild(item);
-  });
-
-  // Clear all on this territory
-  if (hasNote || hasMarker) {
-    const sep2 = document.createElement('div');
-    sep2.className = 'ctx-sep';
-    menu.appendChild(sep2);
-    const clearItem = document.createElement('div');
-    clearItem.className = 'ctx-item';
-    clearItem.innerHTML = '<span class="ctx-icon">\uD83D\uDDD1</span>Clear Annotations';
-    clearItem.addEventListener('click', function() {
-      hideAnnotationContextMenu();
-      delete annotations[id];
-      updateMap();
-    });
-    menu.appendChild(clearItem);
-  }
-
-  // Position the menu near the territory
-  const pos = POS[id];
-  const svgEl2 = document.getElementById('map-svg');
-  if (pos && svgEl2) {
-    const pt = svgEl2.createSVGPoint();
-    pt.x = pos[0]; pt.y = pos[1];
-    const ctm = svgEl2.getScreenCTM();
-    if (ctm) {
-      const screenPt = pt.matrixTransform(ctm);
-      menu.style.left = screenPt.x + 'px';
-      menu.style.top = screenPt.y + 'px';
-    }
-  }
-  menu.style.display = 'block';
-
-  // Close on outside click (delayed to avoid instant close)
-  setTimeout(function() {
-    document.addEventListener('click', closeAnnotationCtxOnClick);
-    document.addEventListener('contextmenu', closeAnnotationCtxOnContext);
-  }, 0);
-}
-
-function closeAnnotationCtxOnClick() { hideAnnotationContextMenu(); }
-function closeAnnotationCtxOnContext() { hideAnnotationContextMenu(); }
-
-function hideAnnotationContextMenu() {
-  const menu = document.getElementById('annotation-ctx-menu');
-  if (menu) menu.style.display = 'none';
-  document.removeEventListener('click', closeAnnotationCtxOnClick);
-  document.removeEventListener('contextmenu', closeAnnotationCtxOnContext);
-}
-
-function showAnnotationNoteInput(id) {
-  const box = document.getElementById('annotation-note-input');
-  if (!box) return;
-  const existing = (annotations[id] && annotations[id].note) || '';
-  box.innerHTML = '<input type="text" maxlength="20" placeholder="e.g. attack next turn" value="' +
-    existing.replace(/"/g, '&quot;') + '"><div class="note-hint">Max 20 chars \u2022 Enter to save \u2022 Esc to cancel</div>';
-  const inp = box.querySelector('input');
-
-  // Position near territory
-  const pos = POS[id];
-  const svgEl2 = document.getElementById('map-svg');
-  if (pos && svgEl2) {
-    const pt = svgEl2.createSVGPoint();
-    pt.x = pos[0]; pt.y = pos[1];
-    const ctm = svgEl2.getScreenCTM();
-    if (ctm) {
-      const screenPt = pt.matrixTransform(ctm);
-      box.style.left = screenPt.x + 'px';
-      box.style.top = (screenPt.y + 20) + 'px';
-    }
-  }
-  box.style.display = 'block';
-  inp.focus();
-  inp.select();
-
-  inp.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const val = inp.value.trim().slice(0, 20);
-      if (val) {
-        if (!annotations[id]) annotations[id] = {};
-        annotations[id].note = val;
-      } else {
-        if (annotations[id]) { delete annotations[id].note; if (!annotations[id].marker) delete annotations[id]; }
-      }
-      hideAnnotationNoteInput();
-      updateMap();
-    } else if (e.key === 'Escape') {
-      hideAnnotationNoteInput();
-    }
-    e.stopPropagation();
-  });
-  inp.addEventListener('click', function(e) { e.stopPropagation(); });
-}
-
-function hideAnnotationNoteInput() {
-  const box = document.getElementById('annotation-note-input');
-  if (box) box.style.display = 'none';
-}
-
-function toggleMarkerMode(type) {
-  if (markerMode === type) {
-    markerMode = null;
-  } else {
-    markerMode = type;
-  }
-  updateMarkerToolbar();
-}
-
-function clearAllAnnotations() {
-  annotations = {};
-  markerMode = null;
-  updateMarkerToolbar();
-  updateMap();
-}
-
-function updateMarkerToolbar() {
-  document.querySelectorAll('#marker-toolbar .marker-btn[data-marker]').forEach(function(btn) {
-    btn.classList.toggle('active', markerMode === btn.getAttribute('data-marker'));
-  });
 }
 
 // ========== KEYBOARD ==========
@@ -3507,17 +3240,6 @@ document.addEventListener('keydown', e => {
   if (resolving) return;
   const key = e.key;
   const keyLower = key.toLowerCase();
-
-  // Escape exits marker mode and hides annotation UI
-  if (key === 'Escape' && markerMode) {
-    markerMode = null;
-    updateMarkerToolbar();
-    return;
-  }
-  if (key === 'Escape') {
-    hideAnnotationContextMenu();
-    hideAnnotationNoteInput();
-  }
 
   // --- Undo/Redo shortcuts ---
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && keyLower === 'z') {
@@ -3993,172 +3715,6 @@ function renderReplayLog(state) {
   logEl.innerHTML = '<h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:0 0 6px">Turn ' + (state.turn + 1) + ' Events</h3>' + formatEvents(state.events);
 }
 
-// ========== CHAT SYSTEM ==========
-const chatMessages = [];
-
-const AI_CHAT = {
-  winning: [
-    "Your position is crumbling.",
-    "Resistance is futile at this point.",
-    "I can see the end from here.",
-    "Your armies scatter like leaves.",
-    "The map tells the story. My story.",
-    "Perhaps try a different strategy next time.",
-    "Every turn you delay only deepens my advantage.",
-  ],
-  losing: [
-    "Impressive, but I am not done yet.",
-    "A temporary setback. Nothing more.",
-    "You fight well. It will not save you.",
-    "Enjoy the lead while it lasts.",
-    "I have come back from worse.",
-    "Do not mistake patience for weakness.",
-    "The tide will turn. It always does.",
-  ],
-  early: [
-    "Interesting choice of territory...",
-    "Let us see how this unfolds.",
-    "The board is young. So many possibilities.",
-    "Bold opening. We shall see.",
-    "I am studying your patterns.",
-    "An intriguing start.",
-    "The real battle has not begun yet.",
-  ],
-  playerCaptured: [
-    "Well played.",
-    "A fine capture. I will remember it.",
-    "You have earned that one.",
-    "Noted. I will adapt.",
-    "That will cost you elsewhere.",
-  ],
-  aiCaptured: [
-    "Another territory falls.",
-    "Mine now.",
-    "Your borders shrink.",
-    "One step closer to victory.",
-    "The map grows redder.",
-  ],
-  emojiReply: [
-    "Words fail you? Understandable.",
-    "How expressive.",
-    "I do not deal in emojis. Only armies.",
-    "Amusing.",
-    "Save the theatrics for the battlefield.",
-    "Is that all you have to say?",
-  ],
-};
-
-function getGameContext() {
-  if (!G) return 'early';
-  const turn = G.turn || 1;
-  const my = G.my_territories || 0;
-  const enemy = G.enemy_territories || 0;
-  if (turn <= 3) return 'early';
-  if (my > enemy * 1.3) return 'losing'; // AI is losing
-  if (enemy > my * 1.3) return 'winning'; // AI is winning
-  return 'early';
-}
-
-function pickRandom(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function addChatMessage(sender, text, type) {
-  chatMessages.push({ sender, text, type, time: Date.now() });
-  if (chatMessages.length > 50) chatMessages.shift();
-  renderChatMessages();
-}
-
-function renderChatMessages() {
-  const el = document.getElementById('chat-messages');
-  if (!el) return;
-  el.innerHTML = chatMessages.map(function(m) {
-    var cls = m.type === 'player' ? 'player-msg' : m.type === 'ai' ? 'ai-msg' : 'system-msg';
-    if (m.type === 'system') {
-      return '<div class="chat-msg ' + cls + '">' + m.text + '</div>';
-    }
-    return '<div class="chat-msg ' + cls + '"><span class="chat-sender">' + m.sender + ':</span>' + m.text + '</div>';
-  }).join('');
-  el.scrollTop = el.scrollHeight;
-}
-
-function sendChat() {
-  var input = document.getElementById('chat-input');
-  var text = (input.value || '').trim();
-  if (!text) return;
-  input.value = '';
-  addChatMessage('You', text, 'player');
-  scheduleAiReply(false);
-}
-
-function sendEmoji(emoji) {
-  addChatMessage('You', emoji, 'player');
-  scheduleAiReply(true);
-}
-
-function scheduleAiReply(isEmoji) {
-  var delay = 600 + Math.random() * 1200;
-  setTimeout(function() {
-    var reply;
-    if (isEmoji) {
-      reply = pickRandom(AI_CHAT.emojiReply);
-    } else {
-      // Check recent events for context
-      if (window._lastChatContext === 'playerCaptured') {
-        reply = pickRandom(AI_CHAT.playerCaptured);
-      } else if (window._lastChatContext === 'aiCaptured') {
-        reply = pickRandom(AI_CHAT.aiCaptured);
-      } else {
-        reply = pickRandom(AI_CHAT[getGameContext()]);
-      }
-    }
-    addChatMessage('AI', reply, 'ai');
-  }, delay);
-}
-
-function postTurnAnnouncement(events) {
-  if (!events || events.length === 0) return;
-  var turnNum = G ? (G.turn || 1) : '?';
-  var playerCaptures = [];
-  var aiCaptures = [];
-
-  events.forEach(function(e) {
-    if (e.Attack && e.Attack.captured) {
-      var t = terr(e.Attack.to);
-      var name = t ? t.name : ('territory ' + e.Attack.to);
-      if (e.Attack.player === 0) playerCaptures.push(name);
-      else aiCaptures.push(name);
-    }
-    if (e.Capture) {
-      // Capture events are territory-level, already covered by Attack.captured
-    }
-  });
-
-  var parts = [];
-  if (playerCaptures.length > 0) parts.push('You captured ' + playerCaptures.join(', '));
-  if (aiCaptures.length > 0) parts.push('AI captured ' + aiCaptures.join(', '));
-
-  if (parts.length > 0) {
-    addChatMessage('', 'Turn ' + turnNum + ': ' + parts.join('. ') + '.', 'system');
-  }
-
-  // Set context for next player chat
-  if (playerCaptures.length > 0) window._lastChatContext = 'playerCaptured';
-  else if (aiCaptures.length > 0) window._lastChatContext = 'aiCaptured';
-  else window._lastChatContext = null;
-}
-
-function toggleChat() {
-  var panel = document.getElementById('chat-panel');
-  panel.classList.toggle('collapsed');
-}
-
-function clearChat() {
-  chatMessages.length = 0;
-  renderChatMessages();
-  window._lastChatContext = null;
-}
-
 // ========== SIDEBAR TOGGLE ==========
 function toggleSidebar() {
   const main = document.getElementById('main');
@@ -4618,7 +4174,7 @@ async function importGameData(data) {
     editingOrderIdx = null;
     resolving = false;
     winProbHistory = [];
-    annotations = {}; markerMode = null;
+  
     gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
     clearUndoRedo();
     document.getElementById('game-over').classList.remove('show');
