@@ -133,7 +133,11 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 
       <!-- Multiplayer actions (logged-in only) -->
       <div id="mp-actions" style="display:none">
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+          <select id="map-select" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:14px;cursor:pointer">
+            <option value="small_earth">Small Earth</option>
+            <option value="big_earth">Big Earth</option>
+          </select>
           <button id="btn-find-game" class="btn btn-play" style="font-size:14px;padding:10px 28px" onclick="findGame()">Find Game</button>
           <button id="btn-create-game" class="btn btn-watch" style="font-size:14px;padding:10px 28px" onclick="createGame()">Create Game</button>
         </div>
@@ -803,7 +807,8 @@ async function findGame() {
   btn.disabled = true;
   btn.textContent = 'Joining queue...';
   try {
-    var res = await fetch('/api/queue/join', { method: 'POST' });
+    var template = document.getElementById('map-select').value;
+    var res = await fetch('/api/queue/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template: template }) });
     if (!res.ok) {
       var err = await res.text();
       btn.disabled = false;
@@ -862,7 +867,8 @@ async function createGame() {
   btn.disabled = true;
   btn.textContent = 'Creating...';
   try {
-    var res = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    var template = document.getElementById('map-select').value;
+    var res = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template: template }) });
     if (!res.ok) {
       var err = await res.text();
       btn.disabled = false;
