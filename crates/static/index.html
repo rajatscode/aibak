@@ -152,9 +152,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .route-combat-bg{fill:rgba(0,0,0,0.8);rx:4;ry:4}
 .route-combat-text{pointer-events:none;font-size:9px;font-weight:600;fill:#fff;text-anchor:middle;dominant-baseline:central}
 
-/* BONUS REGION BOUNDARIES */
-.bonus-boundary{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;opacity:0.25;pointer-events:none;stroke-dasharray:6,4}
-
 /* SIDEBAR SECTIONS */
 .sb-section{padding:12px;border-bottom:1px solid var(--border)}
 .sb-section h3{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
@@ -354,7 +351,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 [data-theme="light"] #game-over{background:rgba(255,255,255,.75)}
 [data-theme="light"] #replay-stepper{background:#f6f8fa}
 [data-theme="light"] .army-text{fill:#1f2328}
-[data-theme="light"] .bonus-boundary{opacity:0.35}
 [data-theme="light"] #sidebar{background:var(--bg2)}
 [data-theme="light"] .phase-flash{background:rgba(255,255,255,.6)}
 [data-theme="light"] #kb-help-overlay{background:rgba(255,255,255,.8)}
@@ -1408,9 +1404,6 @@ function buildMap() {
   });
   svg.appendChild(waveGroup);
 
-  // Bonus region boundaries layer (below territories)
-  svg.appendChild(svgEl('g', {id:'bonus-boundaries'}));
-
   // Territory groups
   const terrGroup = svgEl('g', {id:'territories'});
   if (G && G.territories) {
@@ -1527,9 +1520,6 @@ function buildMap() {
       }
     });
   }
-
-  // Draw bonus region boundaries now that POS is populated
-  drawBonusBoundaries();
 
   // Bonus labels on map
   // For maps with 6 bonuses, use hardcoded positions; otherwise compute from territory centroids
@@ -1739,7 +1729,6 @@ function updateMap() {
   updateKbFocusRing();
 
   drawOrderLines();
-  updateBonusBoundaryVisibility();
 
 
   // Reapply light theme SVG adjustments if active
@@ -1841,91 +1830,6 @@ function estimateCombat(attackers, defenders) {
   if (def <= 0 && atk > 0) return 'Capture (' + atk + ' survive)';
   if (atk <= 0) return 'Fail';
   return 'Stalemate';
-}
-
-// ========== BONUS REGION BOUNDARIES ==========
-function drawBonusBoundaries() {
-  const g = document.getElementById('bonus-boundaries');
-  if (!g) return;
-  g.innerHTML = '';
-
-  if (!G || !G.bonuses || !G.territories) return;
-
-  G.bonuses.forEach(b => {
-    const tids = b.territory_ids || b.territories || [];
-    if (tids.length < 2) return;
-
-    // Collect territory positions
-    const points = [];
-    tids.forEach(tid => {
-      const pos = POS[tid];
-      if (pos) points.push(pos);
-    });
-    if (points.length < 2) return;
-
-    // Compute convex hull
-    const hull = convexHull(points);
-    if (hull.length < 3) return;
-
-    // Expand hull outward slightly for visual padding
-    const cx = hull.reduce((s, p) => s + p[0], 0) / hull.length;
-    const cy = hull.reduce((s, p) => s + p[1], 0) / hull.length;
-    const expanded = hull.map(p => {
-      const dx = p[0] - cx, dy = p[1] - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const pad = 20;
-      return [p[0] + (dx / (dist || 1)) * pad, p[1] + (dy / (dist || 1)) * pad];
-    });
-
-    // Build smooth polygon path
-    const d = 'M' + expanded.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L') + ' Z';
-    const color = BONUS_COLORS[b.id % BONUS_COLORS.length];
-
-    g.appendChild(svgEl('path', {
-      d: d,
-      class: 'bonus-boundary',
-      stroke: color,
-      'data-bonus-id': b.id
-    }));
-  });
-}
-
-// Convex hull (Andrew's monotone chain algorithm)
-function convexHull(points) {
-  const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  if (pts.length <= 2) return pts;
-
-  function cross(O, A, B) {
-    return (A[0] - O[0]) * (B[1] - O[1]) - (A[1] - O[1]) * (B[0] - O[0]);
-  }
-
-  const lower = [];
-  for (let i = 0; i < pts.length; i++) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pts[i]) <= 0) lower.pop();
-    lower.push(pts[i]);
-  }
-  const upper = [];
-  for (let i = pts.length - 1; i >= 0; i--) {
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pts[i]) <= 0) upper.pop();
-    upper.push(pts[i]);
-  }
-  lower.pop();
-  upper.pop();
-  return lower.concat(upper);
-}
-
-// Show bonus boundaries only when zoomed out (scale <= 1.3)
-function updateBonusBoundaryVisibility() {
-  const g = document.getElementById('bonus-boundaries');
-  if (!g) return;
-  // Check the current CSS transform scale on the SVG
-  const mapSvg = document.getElementById('map-svg');
-  if (!mapSvg) return;
-  const style = mapSvg.style.transform || '';
-  const scaleMatch = style.match(/scale\(([\d.]+)\)/);
-  const scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
-  g.style.opacity = scale <= 1.3 ? '1' : '0';
-  g.style.transition = 'opacity 0.3s ease';
 }
 
 function floatText(territoryId, text, color) {
@@ -4422,7 +4326,6 @@ function toggleMobileSidebar() {
         currentTranslateY = initialTranslateY + (mid.y - initialPanY);
       }
       applyTransform();
-      updateBonusBoundaryVisibility();
     }
   }, { passive: false });
 
@@ -4451,8 +4354,7 @@ function toggleMobileSidebar() {
         currentTranslateY = 0;
         mapSvg.style.transition = 'transform 0.3s ease';
         applyTransform();
-        updateBonusBoundaryVisibility();
-        setTimeout(function() { mapSvg.style.transition = ''; }, 300);
+          setTimeout(function() { mapSvg.style.transition = ''; }, 300);
       }
     }
   });
@@ -4463,7 +4365,6 @@ function toggleMobileSidebar() {
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     currentScale = Math.max(0.5, Math.min(4, currentScale * delta));
     applyTransform();
-    updateBonusBoundaryVisibility();
   }, { passive: false });
 })();
 
