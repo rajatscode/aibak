@@ -263,6 +263,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #game-over .go-links{display:flex;gap:12px;justify-content:center;margin-top:8px}
 #game-over .go-links a{color:var(--text2);font-size:13px;text-decoration:none;padding:6px 16px;border:1px solid var(--border);border-radius:6px;transition:color .15s,border-color .15s}
 #game-over .go-links a:hover{color:var(--text);border-color:var(--text3)}
+#game-over .go-achievements{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+#game-over .go-ach-badge{background:rgba(227,179,65,0.15);border:1px solid var(--gold);color:var(--gold);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600}
+#game-over .btn-mp{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:12px 32px;font-size:15px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s;text-decoration:none;display:inline-block}
+#game-over .btn-mp:hover{background:#3b82f6;transform:translateY(-2px)}
 #import-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1001}
 #import-overlay.show{display:flex}
 #import-overlay .import-box{background:var(--bg2);border:2px dashed var(--border);border-radius:16px;padding:40px 60px;text-align:center;max-width:480px;cursor:pointer;transition:border-color .2s}
@@ -640,16 +644,16 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <button class="modal-close" onclick="hideGameOver()">&times;</button>
     <h2 id="go-title"></h2>
     <p id="go-msg"></p>
+    <div id="go-achievements"></div>
     <div id="go-stats"></div>
     <div id="go-analysis"></div>
     <div class="go-actions">
       <button class="btn-rematch" id="go-rematch-btn" onclick="rematch()">Play Again</button>
-      <button class="btn btn-gold" style="width:auto;padding:12px 32px" onclick="newGame()">New Board</button>
+      <a class="btn-mp" href="/games">Try Multiplayer</a>
       <button class="btn btn-primary" style="width:auto;padding:12px 32px" id="go-review-btn" onclick="enterReplayMode()">Review Game</button>
     </div>
     <div class="go-links">
       <a href="/ladder">View Ladder</a>
-      <a href="/games">View Games</a>
     </div>
     <div class="go-social">
       <button class="btn-share" onclick="shareGameResult()">&#128203; Share Result</button>
@@ -850,6 +854,7 @@ let muted = false;
 let winProbHistory = []; // track win% over turns for sparkline
 let gameStats = { turnsPlayed: 0, captured: 0, lost: 0 };
 let earnedAchievementIds = new Set(); // track achievements already toasted this game
+let earnedAchievements = []; // achievements earned this game for game-over display
 let selectedTemplate = null;
 let kbFocusIndex = -1; // index into owned territories list for Tab cycling
 let kbHelpVisible = false;
@@ -2417,6 +2422,13 @@ async function confirmPicks() {
     // Reset turn tracking so applyState properly initializes deploy phase
     window._lastTurn = null;
     await fetchState();
+    // Flash player territories to signal game start
+    if (G && G.territories) {
+      G.territories.forEach(function(t) {
+        if (t.owner === 0) flashTerritory(t.id, 'flash-deploy');
+      });
+    }
+    toast('Game Started! Deploy your armies.');
   }
 }
 
@@ -2963,11 +2975,13 @@ async function endTurn() {
         return true;
       });
       unseen.forEach(function(ach, i) {
+        earnedAchievements.push(ach);
         setTimeout(function() { achievementToast(ach); }, i * 600);
       });
     }
   }
 
+  var completedTurn = G ? (G.turn || 1) : 1;
   deploys = {};
   orders = [];
   selectedSource = null;
@@ -2977,6 +2991,12 @@ async function endTurn() {
   window._lastTurn = null; // Force orders re-init on next fetchState
 
   await fetchState();
+
+  // Show turn completion feedback (unless game just ended)
+  if (phase !== 'finished') {
+    toast('Turn ' + completedTurn + ' complete');
+  }
+
   resolving = false;
 }
 
@@ -3065,6 +3085,17 @@ function showGameOver(winner) {
   }
 
   statsDiv.innerHTML = statsHtml;
+
+  // Show achievements earned this game (on victory)
+  var achDiv = document.getElementById('go-achievements');
+  if (winner === 0 && earnedAchievements.length > 0) {
+    achDiv.innerHTML = '<div class="go-achievements">' +
+      earnedAchievements.map(function(a) { return '<span class="go-ach-badge">\uD83C\uDFC6 ' + escapeHtml(a.name) + '</span>'; }).join('') +
+      '</div>';
+  } else {
+    achDiv.innerHTML = '';
+  }
+
   analysisDiv.innerHTML = '<p style="color:var(--text3);font-size:12px">Loading analysis...</p>';
   el.classList.add('show');
 
@@ -3265,7 +3296,7 @@ async function newGame() {
   resolving = false;
   winProbHistory = [];
 
-  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
+  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear(); earnedAchievements = [];
   clearUndoRedo();
 
   showTemplateModal();
@@ -3305,7 +3336,7 @@ async function rematch() {
   resolving = false;
   winProbHistory = [];
 
-  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
+  gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear(); earnedAchievements = [];
   clearUndoRedo();
 
   playSound('tick');
@@ -4388,7 +4419,7 @@ async function importGameData(data) {
     resolving = false;
     winProbHistory = [];
   
-    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear();
+    gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear(); earnedAchievements = [];
     clearUndoRedo();
     document.getElementById('game-over').classList.remove('show');
   
