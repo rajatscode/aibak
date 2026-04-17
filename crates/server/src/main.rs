@@ -553,8 +553,7 @@ async fn submit_local_orders(
         format!("Turn {} complete", app.game.turn - 1)
     };
 
-    // Build achievement views for newly earned ones.
-    let achievement_views = achievements::build_achievement_views(&newly_earned_achievements);
+    let achievement_views = achievements::build_newly_earned_views(&newly_earned_achievements);
 
     Ok(Json(ActionResult {
         success: true,

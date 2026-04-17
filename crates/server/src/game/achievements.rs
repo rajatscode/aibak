@@ -322,6 +322,25 @@ pub fn build_achievement_views(earned: &[EarnedAchievement]) -> Vec<AchievementV
         .collect()
 }
 
+/// Build achievement views for only the newly earned achievements (used for turn-end toasts).
+pub fn build_newly_earned_views(earned: &[EarnedAchievement]) -> Vec<AchievementView> {
+    earned
+        .iter()
+        .map(|e| {
+            let def = ACHIEVEMENTS.iter().find(|a| a.id == e.id).expect("Invalid achievement ID");
+            AchievementView {
+                id: def.id,
+                name: def.name,
+                description: def.description,
+                icon: def.icon,
+                category: def.category,
+                earned: true,
+                earned_at: Some(e.game_number),
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,5 +410,31 @@ mod tests {
         ctx.total_maps_available = 2;
         let earned = check_achievements(&[], &ctx, 1);
         assert!(earned.iter().any(|e| e.id == AchievementId::Explorer));
+    }
+
+    #[test]
+    fn test_build_newly_earned_views_empty() {
+        let views = build_newly_earned_views(&[]);
+        assert!(views.is_empty());
+    }
+
+    #[test]
+    fn test_build_newly_earned_views_single() {
+        let earned = vec![EarnedAchievement { id: AchievementId::FirstBlood, game_number: 1 }];
+        let views = build_newly_earned_views(&earned);
+        assert_eq!(views.len(), 1);
+        assert!(views[0].earned);
+        assert_eq!(views[0].earned_at, Some(1));
+    }
+
+    #[test]
+    fn test_build_newly_earned_views_no_unearned_leak() {
+        let earned = vec![
+            EarnedAchievement { id: AchievementId::FirstBlood, game_number: 1 },
+            EarnedAchievement { id: AchievementId::Speedrun, game_number: 1 },
+        ];
+        let views = build_newly_earned_views(&earned);
+        assert_eq!(views.len(), 2);
+        assert!(views.iter().all(|v| v.earned));
     }
 }
