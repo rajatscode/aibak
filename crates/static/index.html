@@ -2959,10 +2959,11 @@ function updateCombatPreview() {
   const tgt = terr(pendingTarget);
   const def = tgt ? tgt.armies : 0;
   const att = pendingArmies;
-  const attLost = Math.ceil(def * 0.7);
-  const defLost = Math.ceil(att * 0.6);
+  const attLost = Math.min(Math.floor(def * 0.7 + 0.5), att);
+  const defLost = Math.min(Math.floor(att * 0.6 + 0.5), def);
   const survive = Math.max(0, att - attLost);
-  preview.textContent = att + ' vs ' + def + ' \u2192 ~' + survive + ' survive';
+  const defRemain = Math.max(0, def - defLost);
+  preview.textContent = att + ' vs ' + def + ' \u2192 ' + (defRemain <= 0 && survive > 0 ? 'Capture (' + survive + ')' : survive + 'v' + defRemain);
 }
 
 function popupConfirm() {
