@@ -20,6 +20,7 @@ use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tracing::info;
+use uuid::Uuid;
 
 use strat_engine::ai::{self, AiStrength};
 use strat_engine::analysis;
@@ -432,28 +433,41 @@ fn build_game_view(app: &LocalState) -> GameView {
 
 fn fog_filter_events(
     events: &[TurnEvent],
-    visible_before: &std::collections::HashSet<usize>,
-    visible_after: &std::collections::HashSet<usize>,
+    player: PlayerId,
+    territory_owners: &[PlayerId],
+    board: &Board,
 ) -> Vec<TurnEvent> {
-    events
-        .iter()
-        .filter(|e| match e {
-            TurnEvent::Deploy { territory, .. } => visible_after.contains(territory),
+    let mut owners = territory_owners.to_vec();
+    let mut visible = fog::visible_territories_from_owners(&owners, player, &board.map);
+    let mut result = Vec::new();
+
+    for event in events {
+        let dominated = match event {
+            TurnEvent::Deploy { territory, .. } => visible.contains(territory),
             TurnEvent::Attack { from, to, .. } => {
-                visible_before.contains(from)
-                    || visible_before.contains(to)
-                    || visible_after.contains(from)
-                    || visible_after.contains(to)
+                visible.contains(from) || visible.contains(to)
             }
             TurnEvent::Transfer { from, to, .. } => {
-                visible_after.contains(from) || visible_after.contains(to)
+                visible.contains(from) || visible.contains(to)
             }
-            TurnEvent::Capture { territory, .. } => visible_after.contains(territory),
-            TurnEvent::Blockade { territory, .. } => visible_after.contains(territory),
+            TurnEvent::Capture { territory, .. } => visible.contains(territory),
+            TurnEvent::Blockade { territory, .. } => visible.contains(territory),
             TurnEvent::Eliminated { .. } | TurnEvent::Victory { .. } => true,
-        })
-        .cloned()
-        .collect()
+        };
+
+        if dominated {
+            result.push(event.clone());
+        }
+
+        // After processing visibility, update ownership for Capture events
+        // so subsequent events use the new visibility.
+        if let TurnEvent::Capture { player: cap_player, territory } = event {
+            owners[*territory] = *cap_player;
+            visible = fog::visible_territories_from_owners(&owners, player, &board.map);
+        }
+    }
+
+    result
 }
 
 // ── Local play route handlers ──
@@ -573,8 +587,6 @@ async fn submit_local_orders(
         return Err((StatusCode::BAD_REQUEST, format!("Invalid orders: {e}")));
     }
 
-    let visible_before = fog::visible_territories(&app.game, PLAYER, &app.board);
-
     // Snapshot the current state before resolving orders (for replay).
     let state_snapshot = app.game.clone();
     app.state_history.push(state_snapshot);
@@ -586,8 +598,7 @@ async fn submit_local_orders(
     let board = app.board.clone();
     let result = resolve_turn(&game_clone, [body.orders, ai_orders], &board, &mut app.rng);
 
-    let visible_after = fog::visible_territories(&result.state, PLAYER, &app.board);
-    let filtered_events = fog_filter_events(&result.events, &visible_before, &visible_after);
+    let filtered_events = fog_filter_events(&result.events, PLAYER, &game_clone.territory_owners, &board);
 
     let turn_num = app.game.turn;
     app.turn_history.push(TurnLog {
@@ -979,6 +990,8 @@ async fn auth_discord_redirect(
 #[derive(Deserialize)]
 struct CallbackQuery {
     code: String,
+    /// OAuth state parameter — contains the anonymous user ID when linking accounts.
+    state: Option<String>,
 }
 
 async fn auth_discord_callback(
@@ -1027,15 +1040,44 @@ async fn auth_discord_callback(
         )
     })?;
 
-    // Upsert user in database.
-    let user = db::upsert_user(
-        pool,
-        discord_id,
-        &discord_user.username,
-        discord_user.avatar_url().as_deref(),
-    )
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // If state param contains "link:<user_id>", try linking to existing anonymous account.
+    let user = if let Some(ref st) = query.state
+        && let Some(uid_str) = st.strip_prefix("link:")
+        && let Ok(anon_user_id) = Uuid::parse_str(uid_str)
+    {
+        // Try linking Discord to the anonymous account.
+        match db::link_discord(
+            pool,
+            anon_user_id,
+            discord_id,
+            &discord_user.username,
+            discord_user.avatar_url().as_deref(),
+        )
+        .await
+        {
+            Ok(user) => user,
+            Err(_) => {
+                // Link failed (already linked or discord_id conflict) — fall back to upsert.
+                db::upsert_user(
+                    pool,
+                    discord_id,
+                    &discord_user.username,
+                    discord_user.avatar_url().as_deref(),
+                )
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            }
+        }
+    } else {
+        db::upsert_user(
+            pool,
+            discord_id,
+            &discord_user.username,
+            discord_user.avatar_url().as_deref(),
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    };
 
     // Create JWT.
     let token = auth::session::create_token(user.id, &user.username, &state.config.jwt_secret)
@@ -1054,6 +1096,70 @@ async fn auth_discord_callback(
     Ok((
         [(axum::http::header::SET_COOKIE, cookie)],
         Redirect::temporary("/"),
+    ))
+}
+
+// ── Anonymous auth ──
+
+#[derive(Deserialize)]
+struct RegisterRequest {
+    username: String,
+}
+
+/// Validates a username: 3-16 chars, alphanumeric + underscore only.
+fn validate_username(username: &str) -> Result<(), &'static str> {
+    if username.len() < 3 || username.len() > 16 {
+        return Err("Username must be 3-16 characters");
+    }
+    if !username
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err("Username must be alphanumeric or underscore only");
+    }
+    Ok(())
+}
+
+async fn auth_register(
+    State(state): State<AppState>,
+    SanitizedJson(body): SanitizedJson<RegisterRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let pool = state.require_db()?;
+    let username = body.username.trim().to_string();
+
+    validate_username(&username)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let user = db::create_anonymous_user(pool, &username)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("idx_users_username_lower")
+                || e.to_string().contains("duplicate key")
+            {
+                (StatusCode::CONFLICT, "Username already taken".to_string())
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            }
+        })?;
+
+    let token = auth::session::create_token(user.id, &user.username, &state.config.jwt_secret)
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("JWT creation failed: {}", e),
+            )
+        })?;
+
+    let cookie = format!(
+        "token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800",
+        token
+    );
+    Ok((
+        [(axum::http::header::SET_COOKIE, cookie)],
+        Json(serde_json::json!({
+            "id": user.id,
+            "username": user.username,
+        })),
     ))
 }
 
@@ -1081,12 +1187,31 @@ async fn auth_me(
             "rating": user.rating,
             "games_played": user.games_played,
             "games_won": user.games_won,
+            "has_discord": user.discord_id.is_some(),
         })));
     }
     Ok(Json(serde_json::json!({
         "id": auth.user_id,
         "username": auth.username,
+        "has_discord": false,
     })))
+}
+
+async fn auth_link_discord(
+    auth: auth::AuthUser,
+    State(state): State<AppState>,
+) -> Result<Redirect, (StatusCode, String)> {
+    let client_id = state.config.discord_client_id.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Discord OAuth not configured".to_string(),
+    ))?;
+    let redirect_uri = state.config.discord_redirect_uri.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Discord OAuth not configured".to_string(),
+    ))?;
+    let link_state = format!("link:{}", auth.user_id);
+    let url = auth::discord::build_auth_url_with_state(client_id, redirect_uri, &link_state);
+    Ok(Redirect::temporary(&url))
 }
 
 // ── Analysis & difficulty endpoints ──
@@ -1703,6 +1828,8 @@ async fn main() {
         // Auth routes.
         .route("/api/auth/discord", get(auth_discord_redirect))
         .route("/api/auth/discord/callback", get(auth_discord_callback))
+        .route("/api/auth/register", post(auth_register))
+        .route("/api/auth/link-discord", get(auth_link_discord))
         .route("/api/auth/logout", post(auth_logout))
         .route("/api/auth/me", get(auth_me))
         // Game API routes.

@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use crate::board::Board;
+use crate::map::Map;
 use crate::state::{GameState, NEUTRAL, PlayerId};
 
 /// Compute the set of territory IDs visible to a player.
@@ -14,6 +15,23 @@ pub fn visible_territories(state: &GameState, player: PlayerId, board: &Board) -
     let mut visible = HashSet::new();
 
     for (tid, &owner) in state.territory_owners.iter().enumerate() {
+        if owner == player {
+            visible.insert(tid);
+            for &adj in &map.territories[tid].adjacent {
+                visible.insert(adj);
+            }
+        }
+    }
+
+    visible
+}
+
+/// Compute visibility from a raw ownership array (no GameState needed).
+/// Used for incremental visibility tracking during event filtering.
+pub fn visible_territories_from_owners(owners: &[PlayerId], player: PlayerId, map: &Map) -> HashSet<usize> {
+    let mut visible = HashSet::new();
+
+    for (tid, &owner) in owners.iter().enumerate() {
         if owner == player {
             visible.insert(tid);
             for &adj in &map.territories[tid].adjacent {
