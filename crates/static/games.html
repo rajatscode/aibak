@@ -179,6 +179,8 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
           </select>
           <button id="btn-find-game" class="btn btn-play" style="font-size:14px;padding:10px 28px" onclick="findGame()">Find Game</button>
           <button id="btn-create-game" class="btn btn-watch" style="font-size:14px;padding:10px 28px" onclick="createGame()">Create Game</button>
+          <div id="queue-error" style="color:#f87171;font-size:13px;margin-top:6px"></div>
+          <div id="create-error" style="color:#f87171;font-size:13px;margin-top:6px"></div>
         </div>
 
         <!-- Queue status (hidden by default) -->
@@ -859,7 +861,7 @@ async function findGame() {
       var err = await res.text();
       btn.disabled = false;
       btn.textContent = 'Find Game';
-      alert('Could not join queue: ' + err);
+      document.getElementById('queue-error').textContent = 'Could not join queue: ' + err;
       return;
     }
     document.getElementById('queue-status').style.display = '';
@@ -919,7 +921,7 @@ async function createGame() {
       var err = await res.text();
       btn.disabled = false;
       btn.textContent = 'Create Game';
-      alert('Could not create game: ' + err);
+      document.getElementById('create-error').textContent = 'Could not create game: ' + err;
       return;
     }
     var data = await res.json();

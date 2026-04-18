@@ -231,6 +231,14 @@ impl GameManager {
             )));
         }
 
+        // Check for duplicate picks.
+        {
+            let unique: std::collections::HashSet<usize> = picks.iter().copied().collect();
+            if unique.len() != picks.len() {
+                return Err(GameError::InvalidPicks("duplicate territory in picks".into()));
+            }
+        }
+
         // Validate all pick IDs are in bounds.
         for &tid in &picks {
             if tid >= board.map.territory_count() {

@@ -491,6 +491,14 @@ async fn submit_local_picks(
         ));
     }
 
+    // Check for duplicate picks.
+    {
+        let unique: std::collections::HashSet<usize> = body.picks.iter().copied().collect();
+        if unique.len() != body.picks.len() {
+            return Err((StatusCode::BAD_REQUEST, "Duplicate territory in picks".into()));
+        }
+    }
+
     // Validate all pick IDs are in bounds.
     for &tid in &body.picks {
         if tid >= app.board.map.territory_count() {

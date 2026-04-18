@@ -935,6 +935,7 @@ let pendingMax = 0;
 let pendingType = ''; // 'attack' or 'transfer'
 let editingOrderIdx = null; // index of order being edited in sidebar
 let resolving = false;
+let gameOverShown = false;
 
 let muted = false;
 let winProbHistory = []; // track win% over turns for sparkline
@@ -1788,6 +1789,9 @@ function updateMap() {
     } else if (t.owner === 0) { fill = '#1a3f6e'; strokeColor = '#264d7a'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
     else if (t.owner === 1) { fill = '#6b2020'; strokeColor = '#7a2c2c'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
     else if (t.is_wasteland && t.owner === 255 && phase === 'picking') { fill = 'url(#grad-wasteland)'; strokeColor = '#3d2f00'; ownerBorderColor = 'rgba(251,191,36,0.4)'; }
+    else if (phase === 'picking' && G.pick_options && G.pick_options.includes(t.id) && !picks.includes(t.id)) {
+      fill = '#333d2a'; strokeColor = '#4a5a38'; ownerBorderColor = 'rgba(245,158,11,0.5)';
+    }
     else { fill = '#2a3244'; strokeColor = '#343e52'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
@@ -1815,8 +1819,8 @@ function updateMap() {
         highlightEl.setAttribute('stroke', 'var(--green)');
         highlightEl.setAttribute('stroke-width', '3');
       } else if (phase === 'picking' && G.pick_options && G.pick_options.includes(t.id)) {
-        highlightEl.setAttribute('stroke', 'rgba(245,158,11,0.5)');
-        highlightEl.setAttribute('stroke-width', '2');
+        highlightEl.setAttribute('stroke', '#f59e0b');
+        highlightEl.setAttribute('stroke-width', '2.5');
         highlightEl.setAttribute('stroke-dasharray', 'none');
         highlightEl.classList.add('pick-option-pulse');
       } else {
@@ -2225,7 +2229,7 @@ function onStateUpdate() {
   if (overviewVisible) { renderOverview(); renderIncomeBreakdown(); }
 
   // Game over
-  if (G.phase === 'finished' && G.winner !== null && G.winner !== undefined) {
+  if (G.phase === 'finished' && G.winner !== null && G.winner !== undefined && !gameOverShown) {
     showGameOver(G.winner);
   }
 }
@@ -3262,9 +3266,17 @@ async function showTurnEvents(events) {
   }
 }
 
+var resignConfirming = false;
 function resignGame() {
   if (resolving) return;
-  if (!confirm('Resign this game? This counts as a loss.')) return;
+  if (!resignConfirming) {
+    resignConfirming = true;
+    var btn = document.querySelector('#sidebar-actions .btn-resign, #sidebar-actions button[onclick="resignGame()"]');
+    if (btn) { btn.textContent = 'Click to confirm resign'; btn.style.background = '#ef4444'; btn.style.color = '#fff'; }
+    setTimeout(function() { resignConfirming = false; if (btn) { btn.textContent = 'Resign'; btn.style.background = ''; btn.style.color = ''; } }, 3000);
+    return;
+  }
+  resignConfirming = false;
   phase = 'finished';
   if (G) {
     G.phase = 'finished';
@@ -3276,6 +3288,7 @@ function resignGame() {
 
 // ========== GAME OVER ==========
 function showGameOver(winner) {
+  gameOverShown = true;
   const el = document.getElementById('game-over');
   const title = document.getElementById('go-title');
   const msg = document.getElementById('go-msg');
@@ -3517,6 +3530,7 @@ async function newGame() {
   pendingTarget = null;
   editingOrderIdx = null;
   resolving = false;
+  gameOverShown = false;
   winProbHistory = [];
 
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear(); earnedAchievements = [];
@@ -3557,6 +3571,7 @@ async function rematch() {
   pendingTarget = null;
   editingOrderIdx = null;
   resolving = false;
+  gameOverShown = false;
   winProbHistory = [];
 
   gameStats = { turnsPlayed: 0, captured: 0, lost: 0 }; earnedAchievementIds.clear(); earnedAchievements = [];
