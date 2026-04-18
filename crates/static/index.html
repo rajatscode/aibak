@@ -29,8 +29,8 @@
   --blue:#0969da;--red:#cf222e;--green:#1a7f37;--gold:#9a6700;
   --neutral:#8c959f;--fog:#eaeef2;
 }
-html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
-#app{display:flex;flex-direction:column;height:100vh}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
 
 /* TOP BAR */
 #topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;background:var(--bg2);border-bottom:1px solid var(--border);min-height:48px;flex-shrink:0;gap:16px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
@@ -84,6 +84,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #sidebar{width:340px;min-width:340px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;box-shadow:-2px 0 12px rgba(0,0,0,.3)}
 #sidebar-content{flex:1;overflow-y:auto;min-height:0}
 #sidebar-actions{padding:14px;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0}
+.btn-resign{background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px;margin-top:8px;width:100%;border-radius:6px;cursor:pointer}
+.btn-resign:hover{background:var(--red);color:#fff}
 
 /* SVG MAP */
 #map-svg{width:100%;height:100%}
@@ -518,7 +520,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #sidebar-actions{position:fixed;bottom:44px;left:0;right:0;z-index:151;padding:8px 16px;background:var(--bg2);border-top:1px solid var(--border);box-shadow:0 -2px 10px rgba(0,0,0,0.3)}
   #sidebar-actions .btn{width:100%;min-height:48px;font-size:16px;font-weight:700}
   #sidebar-actions:empty{display:none}
-  #map-container{flex:1;min-height:calc(100vh - 48px - 36px - 44px - 52px)}
+  #map-container{flex:1;min-height:calc(100vh - 48px - 36px - 44px - 52px);min-height:calc(100dvh - 48px - 36px - 44px - 52px)}
   /* Mobile deploy counter in action bar */
   #mobile-deploy-bar{position:fixed;bottom:calc(44px + 52px);left:0;right:0;z-index:151;padding:6px 16px;background:var(--bg2);border-top:1px solid var(--border);text-align:center;font-size:14px;font-weight:700;color:var(--green);display:none}
   #mobile-deploy-bar.visible{display:block}
@@ -548,8 +550,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #game-over .go-actions{flex-direction:column;align-items:stretch}
   #game-over .go-actions button{width:100%}
   #game-over .btn-rematch{padding:10px 20px;font-size:15px}
-  #game-over .go-social{flex-direction:column;align-items:stretch}
-  #game-over .go-social button{width:100%;font-size:12px;padding:8px 12px}
+  #game-over .go-social{display:none}
+  #game-over .go-links{display:none}
   #import-overlay .import-box{padding:24px 20px;margin:16px}
   #kb-help-overlay .kb-card{padding:20px;max-width:95vw}
   #kb-help-overlay .kb-grid{grid-template-columns:80px 1fr;font-size:12px}
@@ -589,8 +591,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 #session-stats-bar span{white-space:nowrap}
 #session-stats-bar .ss-val{color:var(--text2);font-weight:600}
 #session-stats-bar .ss-streak{font-weight:700}
-@media (max-width:768px){#session-stats-bar{gap:10px;font-size:10px}}
-@media (max-width:480px){#session-stats-bar{gap:6px;font-size:9px;height:22px}}
+@media (max-width:768px){#session-stats-bar{display:none !important}}
+@media (max-width:480px){#session-stats-bar{display:none !important}}
 </style>
 </head>
 <body>
@@ -2413,7 +2415,7 @@ function renderOrdersPanel(pp, cp) {
       actionsHtml += '<div class="undeployed-warning">' + deployLeft + ' armies undeployed</div>';
     }
     actionsHtml += '<button class="btn btn-green" onclick="endTurn()">End Turn</button>';
-    actionsHtml += '<button style="background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px;margin-top:8px;width:100%;border-radius:6px;cursor:pointer" onclick="resignGame()">Resign</button>';
+    actionsHtml += '<button class="btn btn-resign" onclick="resignGame()">Resign</button>';
     sa.innerHTML = actionsHtml;
   }
   // Update mobile deploy bar

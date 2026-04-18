@@ -19,8 +19,8 @@
   --blue:#4a9eff;--red:#f87171;--green:#34d399;--gold:#fbbf24;
   --neutral:#6b7280;--fog:#111827;
 }
-html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
-#app{display:flex;flex-direction:column;height:100vh}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
 
 /* TOP BAR */
 #topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-height:48px;flex-shrink:0;gap:12px}
@@ -54,6 +54,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .army-text{pointer-events:none;font-size:13px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:central}
 .army-text.large-army{font-size:15px}
 .deploy-badge{pointer-events:none;font-size:10px;font-weight:700;fill:var(--green);text-anchor:middle;dominant-baseline:central}
+.btn-resign{background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px;margin-top:8px;width:100%;border-radius:6px;cursor:pointer}
+.btn-resign:hover{background:var(--red);color:#fff}
 .connection-line{stroke:var(--bg3);stroke-width:1;opacity:.3}
 .pick-ring{fill:none;stroke:var(--gold);stroke-width:3;pointer-events:none}
 .pick-rank{pointer-events:none;font-size:16px;font-weight:900;fill:var(--gold);text-anchor:middle;dominant-baseline:central}
@@ -174,7 +176,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   .hamburger-btn{display:block !important}
   #mobile-nav-dropdown.open{display:flex !important}
   #main{flex-direction:column;position:relative}
-  #sidebar{position:fixed;bottom:0;left:0;right:0;width:100%;min-width:unset;height:60vh;max-height:60vh;border-left:none;border-top:1px solid var(--border);overflow-y:auto;z-index:200;transform:translateY(calc(100% - 40px));transition:transform .3s ease;box-shadow:0 -4px 20px rgba(0,0,0,.5)}
+  #sidebar{position:fixed;bottom:0;left:0;right:0;width:100%;min-width:unset;height:60vh;max-height:60vh;border-left:none;border-top:1px solid var(--border);overflow-y:auto;z-index:150;transform:translateY(calc(100% - 40px));transition:transform .3s ease;box-shadow:0 -4px 20px rgba(0,0,0,.5)}
   #sidebar.drawer-open{transform:translateY(0)}
   #mobile-drawer-handle{display:flex;align-items:center;justify-content:center;height:40px;cursor:pointer;user-select:none;flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2)}
   #mobile-drawer-handle .handle-bar{width:40px;height:4px;border-radius:2px;background:var(--text3)}
@@ -187,16 +189,17 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #game-over .card h2{font-size:24px}
   .tooltip{font-size:10px;max-width:200px}
   #map-army-popup{transform:scale(1.1);transform-origin:top left}
-  #map-army-popup button{width:40px;height:40px;font-size:18px}
-  #map-army-popup .popup-go{padding:8px 16px;font-size:14px;min-height:40px}
+  #map-army-popup button{width:44px;height:44px;font-size:20px}
+  #map-army-popup .popup-go{padding:8px 16px;font-size:14px;min-height:44px}
+  #map-army-popup .popup-count{font-size:22px;width:52px;min-height:44px}
   .order-item{min-height:44px}
   .bonus-row{min-height:44px}
   .btn{min-height:44px}
   /* Mobile: action buttons always visible above drawer handle */
-  #sidebar-actions{position:fixed;bottom:40px;left:0;right:0;z-index:201;padding:8px 16px;background:var(--bg2);border-top:1px solid var(--border);box-shadow:0 -2px 10px rgba(0,0,0,0.3)}
+  #sidebar-actions{position:fixed;bottom:40px;left:0;right:0;z-index:151;padding:8px 16px;background:var(--bg2);border-top:1px solid var(--border);box-shadow:0 -2px 10px rgba(0,0,0,0.3)}
   #sidebar-actions .btn{width:100%;min-height:48px;font-size:16px;font-weight:700}
   #sidebar-actions:empty{display:none}
-  #map-container{flex:1;min-height:calc(100vh - 48px - 48px - 40px - 52px)}
+  #map-container{flex:1;min-height:calc(100vh - 48px - 48px - 40px - 52px);min-height:calc(100dvh - 48px - 48px - 40px - 52px)}
 }
 
 /* MOBILE: PHONE */
@@ -229,6 +232,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <a href="/ladder" style="color:#8b949e;text-decoration:none;">Ladder</a>
     <a href="/feedback" style="color:#8b949e;text-decoration:none;">Feedback</a>
     <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;font-weight:600;">Discord</a>
+    <span id="nav-auth-area"></span>
   </div>
   <button class="hamburger-btn" onclick="document.getElementById('mobile-nav-dropdown').classList.toggle('open')" style="display:none;background:none;border:none;color:#e6edf3;font-size:22px;cursor:pointer;padding:8px;">&#9776;</button>
   <div id="mobile-nav-dropdown" style="display:none;position:absolute;top:48px;left:0;right:0;background:#0f1419;border-bottom:1px solid #21293a;flex-direction:column;padding:8px 16px;gap:8px;z-index:100;">
@@ -309,9 +313,70 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <button id="copy-link-btn" onclick="copyInviteLink()" style="margin-top:12px;background:transparent;border:1px solid var(--gold);color:var(--gold);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Copy Link</button>
   </div>
 </div>
+<div id="login-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:999">
+  <div style="background:var(--bg2);border:2px solid var(--gold);border-radius:16px;padding:40px 48px;text-align:center;max-width:400px">
+    <h2 style="font-size:22px;color:var(--gold);margin-bottom:8px">Sign in to play</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Enter a username to join this game</p>
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px">
+      <input id="game-register-username" type="text" placeholder="Username (3-16 chars)" maxlength="16" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;outline:none;width:200px" onkeydown="if(event.key==='Enter')gameRegister()">
+      <button onclick="gameRegister()" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:14px;font-weight:600;cursor:pointer">Play</button>
+    </div>
+    <div id="game-register-error" style="color:var(--red);font-size:12px;margin-bottom:12px;display:none"></div>
+    <div style="color:var(--text3);font-size:12px;margin-bottom:12px">&mdash; or &mdash;</div>
+    <a href="/api/auth/discord" style="display:inline-block;background:#5865F2;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:600;text-decoration:none">Sign in with Discord</a>
+    <p style="font-size:11px;color:var(--text3);margin-top:8px">Discord saves your rating history</p>
+  </div>
+</div>
 <div id="toast-container"></div>
 
 <script>
+function showGameLoginPrompt() {
+  document.getElementById('login-overlay').style.display = 'flex';
+}
+function updateNavAuth() {
+  var area = document.getElementById('nav-auth-area');
+  if (!area || !currentUser) return;
+  var name = currentUser.username || '';
+  var safe = name.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (currentUser.has_discord) {
+    area.innerHTML = '<span style="color:#e6edf3;font-weight:600">' + safe + '</span>';
+  } else {
+    area.innerHTML = '<span style="color:#e6edf3;font-weight:600">' + safe + '</span> <a href="/api/auth/link-discord" style="color:#5865F2;text-decoration:none;font-weight:600;margin-left:8px">Link Discord</a>';
+  }
+}
+async function gameRegister() {
+  var input = document.getElementById('game-register-username');
+  var errEl = document.getElementById('game-register-error');
+  var username = input.value.trim();
+  errEl.style.display = 'none';
+  if (!username || username.length < 3 || username.length > 16) {
+    errEl.textContent = 'Username must be 3-16 characters';
+    errEl.style.display = '';
+    return;
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    errEl.textContent = 'Letters, numbers, and underscores only';
+    errEl.style.display = '';
+    return;
+  }
+  try {
+    var res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: username})
+    });
+    if (!res.ok) {
+      var err = await res.text();
+      errEl.textContent = err || 'Registration failed';
+      errEl.style.display = '';
+      return;
+    }
+    window.location.reload();
+  } catch(e) {
+    errEl.textContent = 'Network error';
+    errEl.style.display = '';
+  }
+}
 // ========== CONSTANTS ==========
 const POS = {};
 const BONUS_COLORS=['#58a6ff','#e3b341','#f0883e','#bc8cff','#3fb950','#f778ba'];
@@ -351,14 +416,14 @@ let deadlineInterval = null;
   if (!GAME_ID) { toast('Invalid game URL', 'error'); return; }
   document.getElementById('game-link').textContent = window.location.href;
 
-  // Check auth
+  // Check auth — show login prompt instead of auto-redirect
   try {
     const r = await fetch('/api/auth/me');
-    if (!r.ok) { sessionStorage.setItem('strat_return_to', window.location.pathname); window.location.href = '/api/auth/discord'; return; }
+    if (!r.ok) { showGameLoginPrompt(); return; }
     currentUser = await r.json();
+    updateNavAuth();
   } catch (e) {
-    sessionStorage.setItem('strat_return_to', window.location.pathname);
-    window.location.href = '/api/auth/discord';
+    showGameLoginPrompt();
     return;
   }
 
@@ -1038,7 +1103,8 @@ function renderPickingSidebar(pp, cp) {
   html += renderBonusInfo();
   cp.innerHTML = html;
   var sa = document.getElementById('sidebar-actions');
-  if (sa) sa.innerHTML = '<button class="btn btn-gold" style="width:100%" '+(picks.length<picksNeeded?'disabled':'')+' onclick="confirmPicks()">Confirm Picks</button>';
+  if (sa) sa.innerHTML = '<button class="btn btn-gold" style="width:100%" '+(picks.length<picksNeeded?'disabled':'')+' onclick="confirmPicks()">Confirm Picks</button>' +
+    '<button class="btn btn-resign" onclick="resignGame()">Resign</button>';
 }
 
 function renderOrdersSidebar(pp, cp) {
@@ -1086,7 +1152,7 @@ function renderOrdersSidebar(pp, cp) {
   html += renderBonusInfo();
   var sa = document.getElementById('sidebar-actions');
   if (sa) sa.innerHTML = '<button class="btn btn-green" style="width:100%" onclick="endTurn()">End Turn</button>' +
-    '<button style="background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px;margin-top:8px;width:100%;border-radius:6px;cursor:pointer" onclick="resignGame()">Resign</button>';
+    '<button class="btn btn-resign" onclick="resignGame()">Resign</button>';
   cp.innerHTML = html;
 }
 

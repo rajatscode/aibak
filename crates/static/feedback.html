@@ -56,6 +56,11 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 .resolved-section-label{font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;padding:16px 0 8px}
 
 .empty-state{text-align:center;padding:48px 16px;color:var(--text2);font-size:14px}
+#toast-container{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transform:translateY(-10px);transition:opacity .3s,transform .3s;pointer-events:auto}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{border-color:var(--red);background:#2d1013}
+.toast.success{border-color:var(--green);background:#0d2818}
 
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -121,6 +126,7 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
   </div>
 </div>
 
+<div id="toast-container"></div>
 <footer style="width:100%;text-align:center;padding:24px 16px;font-size:12px;color:#8b949e;border-top:1px solid #21293a;margin-top:24px;">
   strat.club
 </footer>
@@ -128,6 +134,15 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 <script>
 let currentUser = null;
 const ADMIN_USERNAMES = ['minisoldr'];
+
+function toast(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast ' + (type||'');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  requestAnimationFrame(function(){el.classList.add('show');});
+  setTimeout(function(){el.classList.remove('show');setTimeout(function(){el.remove();},300);}, 2500);
+}
 
 async function checkAuth() {
   try {
@@ -171,10 +186,10 @@ submitBtn.addEventListener('click', async () => {
       loadFeedback();
     } else {
       const err = await res.text();
-      alert('Error: ' + err);
+      toast('Error: ' + err, 'error');
     }
   } catch (e) {
-    alert('Failed to submit: ' + e.message);
+    toast('Failed to submit: ' + e.message, 'error');
   }
   submitBtn.disabled = input.value.trim().length === 0;
 });
@@ -247,7 +262,7 @@ function escapeHtml(str) {
 function escId(s) { return String(s).replace(/['"\\]/g, ''); }
 
 async function vote(id, direction) {
-  if (!currentUser) { alert('Sign in to vote.'); return; }
+  if (!currentUser) { toast('Sign in to vote', 'error'); return; }
   try {
     const res = await fetch(`/api/feedback/${id}/vote`, {
       method: 'POST',
@@ -256,7 +271,7 @@ async function vote(id, direction) {
     });
     if (!res.ok) throw new Error(await res.text());
     loadFeedback();
-  } catch (e) { alert('Vote failed: ' + e.message); }
+  } catch (e) { toast('Vote failed: ' + e.message, 'error'); }
 }
 
 async function resolveFeedback(id) {
@@ -265,16 +280,24 @@ async function resolveFeedback(id) {
     const res = await fetch(`/api/feedback/${id}/resolve`, { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     loadFeedback();
-  } catch (e) { alert('Action failed: ' + e.message); }
+  } catch (e) { toast('Action failed: ' + e.message, 'error'); }
 }
 
+var deleteConfirmId = null;
 async function deleteFeedback(id) {
-  if (!confirm('Delete this feedback?')) return;
+  if (deleteConfirmId !== id) {
+    deleteConfirmId = id;
+    var btn = document.querySelector('.feedback-item[data-id="'+id+'"] .delete-btn');
+    if (btn) { btn.textContent = 'confirm delete'; btn.style.color = 'var(--red)'; btn.style.fontWeight = '700'; }
+    setTimeout(function() { deleteConfirmId = null; if (btn) { btn.textContent = 'delete'; btn.style.color = ''; btn.style.fontWeight = ''; } }, 3000);
+    return;
+  }
+  deleteConfirmId = null;
   try {
     const res = await fetch(`/api/feedback/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(await res.text());
     loadFeedback();
-  } catch (e) { alert('Delete failed: ' + e.message); }
+  } catch (e) { toast('Delete failed: ' + e.message, 'error'); }
 }
 
 checkAuth();
