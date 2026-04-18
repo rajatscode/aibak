@@ -178,7 +178,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #sidebar.drawer-open{transform:translateY(0)}
   #mobile-drawer-handle{display:flex;align-items:center;justify-content:center;height:40px;cursor:pointer;user-select:none;flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2)}
   #mobile-drawer-handle .handle-bar{width:40px;height:4px;border-radius:2px;background:var(--text3)}
-  #map-container{flex:1;min-height:calc(100vh - 48px - 48px - 40px)}
   .player-bar{flex-wrap:wrap;gap:6px;padding:4px 10px;font-size:11px}
   .player-bar .rating{display:none}
   .player-bar .vs{font-size:10px}
@@ -193,6 +192,11 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   .order-item{min-height:44px}
   .bonus-row{min-height:44px}
   .btn{min-height:44px}
+  /* Mobile: action buttons always visible above drawer handle */
+  #sidebar-actions{position:fixed;bottom:40px;left:0;right:0;z-index:201;padding:8px 16px;background:var(--bg2);border-top:1px solid var(--border);box-shadow:0 -2px 10px rgba(0,0,0,0.3)}
+  #sidebar-actions .btn{width:100%;min-height:48px;font-size:16px;font-weight:700}
+  #sidebar-actions:empty{display:none}
+  #map-container{flex:1;min-height:calc(100vh - 48px - 48px - 40px - 52px)}
 }
 
 /* MOBILE: PHONE */
