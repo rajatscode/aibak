@@ -784,11 +784,11 @@ function updateMap() {
     var isThem = owner !== mySeat && owner !== 255;
 
     var fill, strokeColor, borderColor;
-    if (isMe) { fill='#1e3a5f'; strokeColor='#1a2744'; borderColor='rgba(96,165,250,0.6)'; }
+    if (isMe) { fill='#1a5294'; strokeColor='#1a2744'; borderColor='rgba(96,165,250,0.8)'; }
     else if (isThem) { fill='#5c1a1a'; strokeColor='#1a2744'; borderColor='rgba(239,68,68,0.6)'; }
     else if (isFogged(t.id)) { fill='#0c1018'; strokeColor='#111827'; borderColor='rgba(255,255,255,0.05)'; }
     else if (t.is_wasteland && owner === 255 && phase === 'picking') { fill='url(#grad-wasteland)'; strokeColor='#3d2f00'; borderColor='rgba(251,191,36,0.4)'; }
-    else { fill='#3d4451'; strokeColor='#1a2744'; borderColor='rgba(255,255,255,0.15)'; }
+    else { fill='#232b3a'; strokeColor='#1a2744'; borderColor='rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
     pathEl.setAttribute('stroke-width', '1');

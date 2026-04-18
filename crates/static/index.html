@@ -1306,16 +1306,16 @@ function applyThemeGradients() {
   document.querySelectorAll('.territory-path').forEach(p => {
     const fill = p.getAttribute('fill');
     if (light) {
-      if (fill === '#1a3f6e') p.setAttribute('stroke', '#93b4e8');
+      if (fill === '#1a5294') p.setAttribute('stroke', '#93b4e8');
       else if (fill === '#6b2020') p.setAttribute('stroke', '#e8a0a0');
       else if (fill === 'url(#grad-wasteland)') p.setAttribute('stroke', '#d97706');
-      else if (fill === '#2a3244') p.setAttribute('stroke', '#b0b8c4');
+      else if (fill === '#232b3a') p.setAttribute('stroke', '#b0b8c4');
       else p.setAttribute('stroke', '#c0c8d0');
     } else {
       if (fill === 'url(#grad-wasteland)') p.setAttribute('stroke', '#3d2f00');
-      else if (fill === '#1a3f6e') p.setAttribute('stroke', '#264d7a');
+      else if (fill === '#1a5294') p.setAttribute('stroke', '#264d7a');
       else if (fill === '#6b2020') p.setAttribute('stroke', '#7a2c2c');
-      else if (fill === '#2a3244') p.setAttribute('stroke', '#343e52');
+      else if (fill === '#232b3a') p.setAttribute('stroke', '#343e52');
       else p.setAttribute('stroke', '#1e2a42');
     }
     p.setAttribute('stroke-width', '1');
@@ -1653,7 +1653,8 @@ function buildMap() {
       }
 
       // Army count background circle with colored border
-      g.appendChild(svgEl('circle', {cx:x, cy:y, r:11, id:'army-bg-'+t.id, fill:'rgba(8,12,24,0.85)', stroke:'rgba(255,255,255,0.12)', 'stroke-width':'1.5', style:'display:none', cursor:'pointer'}));
+      var armyR = window.innerWidth <= 768 ? 14 : 11;
+      g.appendChild(svgEl('circle', {cx:x, cy:y, r:armyR, id:'army-bg-'+t.id, fill:'rgba(8,12,24,0.85)', stroke:'rgba(255,255,255,0.12)', 'stroke-width':'1.5', style:'display:none', cursor:'pointer'}));
       // Army text
       g.appendChild(svgEl('text', {x:x, y:y, class:'army-text', id:'army-'+t.id}, ''));
       // Deploy badge
@@ -1786,13 +1787,13 @@ function updateMap() {
     let fill, strokeColor, ownerBorderColor;
     if (t.visible === false) {
       fill = '#0c1018'; strokeColor = '#111827'; ownerBorderColor = 'rgba(255,255,255,0.05)';
-    } else if (t.owner === 0) { fill = '#1a3f6e'; strokeColor = '#264d7a'; ownerBorderColor = 'rgba(96,165,250,0.6)'; }
+    } else if (t.owner === 0) { fill = '#1a5294'; strokeColor = '#264d7a'; ownerBorderColor = 'rgba(96,165,250,0.8)'; }
     else if (t.owner === 1) { fill = '#6b2020'; strokeColor = '#7a2c2c'; ownerBorderColor = 'rgba(239,68,68,0.6)'; }
     else if (t.is_wasteland && t.owner === 255 && phase === 'picking') { fill = 'url(#grad-wasteland)'; strokeColor = '#3d2f00'; ownerBorderColor = 'rgba(251,191,36,0.4)'; }
     else if (phase === 'picking' && G.pick_options && G.pick_options.includes(t.id) && !picks.includes(t.id)) {
       fill = '#333d2a'; strokeColor = '#4a5a38'; ownerBorderColor = 'rgba(245,158,11,0.5)';
     }
-    else { fill = '#2a3244'; strokeColor = '#343e52'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
+    else { fill = '#232b3a'; strokeColor = '#343e52'; ownerBorderColor = 'rgba(255,255,255,0.15)'; }
     pathEl.setAttribute('fill', fill);
     pathEl.setAttribute('stroke', strokeColor);
     pathEl.setAttribute('stroke-width', '1');
@@ -2449,7 +2450,7 @@ function renderBonusInfo() {
     if (owned) cls += ' owned complete';
     else if (enemyOwned) cls += ' enemy-owned';
     if (nearly) cls += ' nearly';
-    html += '<div class="' + cls + '" onclick="showBonusHighlight(' + b.id + ')">' +
+    html += '<div class="' + cls + '" onclick="showBonusHighlight(' + b.id + ')" onmouseenter="showBonusHighlight(' + b.id + ')" onmouseleave="clearBonusHighlight()">' +
       '<span class="bonus-dot" style="background:' + color + '"></span>' +
       '<span class="bonus-name">' + b.name + '</span>' +
       '<span class="bonus-prog">+' + b.value + '&ensp;' + b.player_count + '/' + b.total + '</span>' +
@@ -3241,7 +3242,7 @@ async function showTurnEvents(events) {
       showCombatText(a.to, a.armies + 'v' + a.defenders, '#fff');
       if (a.captured) {
         const capturedEl = document.getElementById('terr-' + a.to);
-        if (capturedEl) capturedEl.setAttribute('fill', p ? '#1a3f6e' : '#6b2020');
+        if (capturedEl) capturedEl.setAttribute('fill', p ? '#1a5294' : '#6b2020');
         flashTerritory(a.to, 'flash-capture');
         floatText(a.to, 'Captured!', '#4ade80');
         playSound('capture');
@@ -3258,7 +3259,7 @@ async function showTurnEvents(events) {
     } else if (e.Capture) {
       const p = e.Capture.player === 0;
       const capEl = document.getElementById('terr-' + e.Capture.territory);
-      if (capEl) capEl.setAttribute('fill', p ? '#1a3f6e' : '#6b2020');
+      if (capEl) capEl.setAttribute('fill', p ? '#1a5294' : '#6b2020');
       flashTerritory(e.Capture.territory, 'flash-capture');
     }
 
@@ -4030,9 +4031,9 @@ function applyReplayState(state) {
     // Color
     let fill = '#151d30';
     if (t.visible !== false) {
-      if (t.owner === 0) fill = '#1a3f6e';
+      if (t.owner === 0) fill = '#1a5294';
       else if (t.owner === 1) fill = '#6b2020';
-      else fill = '#2a3244';
+      else fill = '#232b3a';
     }
     pathEl.style.transition = 'fill 0.3s ease';
     pathEl.setAttribute('fill', fill);
