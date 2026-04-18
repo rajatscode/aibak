@@ -87,7 +87,6 @@ pub fn resolve_turn(
                 }
                 deployed += allowed;
                 new_state.territory_armies[*territory] += allowed;
-                available[*territory] += allowed;
                 events.push(TurnEvent::Deploy {
                     player,
                     territory: *territory,
@@ -112,7 +111,6 @@ pub fn resolve_turn(
                 {
                     hand.remove(pos);
                     new_state.territory_armies[*target] += value;
-                    available[*target] += value;
                     events.push(TurnEvent::Deploy {
                         player,
                         territory: *target,
@@ -191,7 +189,6 @@ pub fn resolve_turn(
                             // Became a transfer.
                             new_state.territory_armies[*from] -= actual_armies;
                             new_state.territory_armies[*to] += actual_armies;
-                            available[*to] += actual_armies;
                             events.push(TurnEvent::Transfer {
                                 player,
                                 from: *from,
@@ -207,7 +204,7 @@ pub fn resolve_turn(
                             if result.captured {
                                 new_state.territory_owners[*to] = player;
                                 new_state.territory_armies[*to] = result.surviving_attackers;
-                                available[*to] = result.surviving_attackers;
+                                available[*to] = 0;
                                 territories_captured[pidx] += 1;
                                 events.push(TurnEvent::Attack {
                                     player,
@@ -257,7 +254,6 @@ pub fn resolve_turn(
                         available[*from] -= actual_armies;
                         new_state.territory_armies[*from] -= actual_armies;
                         new_state.territory_armies[*to] += actual_armies;
-                        available[*to] += actual_armies;
                         events.push(TurnEvent::Transfer {
                             player,
                             from: *from,
@@ -390,7 +386,7 @@ mod tests {
         let board = Board::from_map(map);
         let mut state = GameState::new(&board);
         state.territory_owners = vec![0, 0, 1, 1];
-        state.territory_armies = vec![1, 1, 1, 1];
+        state.territory_armies = vec![1, 6, 1, 1];
         state.phase = crate::state::Phase::Play;
         state.turn = 1;
 
@@ -425,7 +421,7 @@ mod tests {
         let board = Board::from_map(map);
         let mut state = GameState::new(&board);
         state.territory_owners = vec![0, 0, 1, 1];
-        state.territory_armies = vec![5, 1, 1, 1];
+        state.territory_armies = vec![10, 1, 1, 1];
         state.phase = crate::state::Phase::Play;
         state.turn = 1;
 
@@ -449,20 +445,21 @@ mod tests {
         let result = resolve_turn(&state, [p0_orders, p1_orders], &board, &mut rng);
         let new_state = &result.state;
 
-        assert_eq!(new_state.territory_armies[0], 1);
+        assert_eq!(new_state.territory_armies[0], 6);
         assert_eq!(new_state.territory_armies[1], 10);
     }
 
     #[test]
     fn test_no_chain_attack_from_captured_territory() {
         // Setup: A(0)—B(0)—C(1)—D(1), linear map.
-        // Player 0 deploys on B, attacks C, then tries to chain-attack D from C.
-        // The second attack should be SKIPPED because C was not owned at turn start.
+        // Player 0 has enough armies on B to capture C, then tries to
+        // chain-attack D from C.  The second attack should be SKIPPED
+        // because C was not owned at turn start.
         let map = test_map();
         let board = Board::from_map(map);
         let mut state = GameState::new(&board);
         state.territory_owners = vec![0, 0, 1, 1];
-        state.territory_armies = vec![1, 1, 1, 1];
+        state.territory_armies = vec![1, 21, 1, 1];
         state.phase = crate::state::Phase::Play;
         state.turn = 1;
 
@@ -559,5 +556,54 @@ mod tests {
             "enemy territory should still belong to player 1");
         assert_eq!(result.state.territory_armies[2], 5 + state.income(1, &board),
             "enemy territory armies should reflect their deploy, not be zeroed");
+    }
+
+    #[test]
+    fn test_transferred_armies_cannot_attack_same_turn() {
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
+        state.territory_owners = vec![0, 0, 1, 1];
+        state.territory_armies = vec![5, 3, 10, 1];
+        state.phase = Phase::Play;
+        state.turn = 1;
+
+        let mut rng = StdRng::seed_from_u64(42);
+        let income = state.income(0, &board);
+        let p0_orders = vec![
+            Order::Deploy { territory: 0, armies: income },
+            Order::Transfer { from: 0, to: 1, armies: 4 },
+            Order::Attack { from: 1, to: 2, armies: 100 },
+        ];
+        let p1_orders = vec![Order::Deploy { territory: 2, armies: state.income(1, &board) }];
+
+        let result = resolve_turn(&state, [p0_orders, p1_orders], &board, &mut rng);
+
+        assert_eq!(result.state.territory_owners[2], 1,
+            "C should not be captured — transferred armies must not attack same turn");
+    }
+
+    #[test]
+    fn test_deployed_armies_cannot_attack_same_turn() {
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
+        state.territory_owners = vec![0, 0, 1, 1];
+        state.territory_armies = vec![1, 3, 10, 1];
+        state.phase = Phase::Play;
+        state.turn = 1;
+
+        let mut rng = StdRng::seed_from_u64(42);
+        let income = state.income(0, &board);
+        let p0_orders = vec![
+            Order::Deploy { territory: 1, armies: income },
+            Order::Attack { from: 1, to: 2, armies: 100 },
+        ];
+        let p1_orders = vec![Order::Deploy { territory: 2, armies: state.income(1, &board) }];
+
+        let result = resolve_turn(&state, [p0_orders, p1_orders], &board, &mut rng);
+
+        assert_eq!(result.state.territory_owners[2], 1,
+            "C should not be captured — deployed armies must not attack same turn");
     }
 }

@@ -8,7 +8,7 @@ use strat_engine::ai::{self, AiStrength};
 use strat_engine::analysis::{material_evaluation, quick_win_probability};
 use strat_engine::cards::Card;
 use strat_engine::combat::resolve_attack;
-use strat_engine::fog::{fog_filter, visible_territories};
+use strat_engine::fog::{fog_filter, visible_territories, visible_territories_from_owners};
 use strat_engine::game_analysis::analyze_game;
 use strat_engine::board::Board;
 use strat_engine::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
@@ -622,6 +622,8 @@ fn test_concurrent_attacks_same_territory() {
 
 #[test]
 fn test_transfer_chain() {
+    // Armies that arrive via transfer should NOT be available for a second
+    // transfer in the same turn (no double movement).
     let map = load_small_earth();
     let board = Board::from_map(map);
     let mut state = GameState::new(&board);
@@ -658,11 +660,14 @@ fn test_transfer_chain() {
     ];
 
     let result = resolve_turn(&state, orders, &board, &mut rng);
-    // Armies should flow from 0 -> 1 -> 3.
-    // Territory 0 should keep 1 army. The rest go to 1, then from 1 to 3.
-    assert_eq!(result.state.territory_armies[0], 1);
-    // All transferred armies should end up somewhere.
-    // Original: 20 + 1 + 1 = 22. Deploy 5 to territory 0 = 27 total.
+    // Territory 0 had 20 armies (available=20). Deploy adds 5 (armies=25,
+    // available stays 20). Transfer 19 to territory 1 (keep 1).
+    // Territory 1 originally had 1 army (available=1), so it cannot forward
+    // the transferred armies — the second transfer is a no-op (0 available
+    // after keeping 1 behind).
+    assert_eq!(result.state.territory_armies[0], 6);
+    assert_eq!(result.state.territory_armies[3], 1,
+        "transferred armies must not chain through territory 1");
     let total: u32 = result.state.territory_armies[0]
         + result.state.territory_armies[1]
         + result.state.territory_armies[3];
@@ -2378,6 +2383,142 @@ fn test_fog_own_territory_always_visible() {
     let filtered = fog_filter(&state, 0, &board);
     assert_eq!(filtered.territory_owners[0], 0);
     assert_eq!(filtered.territory_armies[0], 42);
+}
+
+// ========== FOG EVENT FILTERING (INCREMENTAL VISIBILITY) ==========
+
+/// Helper: filter events with incremental visibility tracking, matching
+/// the server's `fog_filter_events` logic.
+fn fog_filter_events_incremental(
+    events: &[TurnEvent],
+    player: u8,
+    territory_owners: &[u8],
+    board: &Board,
+) -> Vec<TurnEvent> {
+    let mut owners = territory_owners.to_vec();
+    let mut visible = visible_territories_from_owners(&owners, player, &board.map);
+    let mut result = Vec::new();
+
+    for event in events {
+        let dominated = match event {
+            TurnEvent::Deploy { territory, .. } => visible.contains(territory),
+            TurnEvent::Attack { from, to, .. } => {
+                visible.contains(from) || visible.contains(to)
+            }
+            TurnEvent::Transfer { from, to, .. } => {
+                visible.contains(from) || visible.contains(to)
+            }
+            TurnEvent::Capture { territory, .. } => visible.contains(territory),
+            TurnEvent::Blockade { territory, .. } => visible.contains(territory),
+            TurnEvent::Eliminated { .. } | TurnEvent::Victory { .. } => true,
+        };
+
+        if dominated {
+            result.push(event.clone());
+        }
+
+        if let TurnEvent::Capture { player: cap_player, territory } = event {
+            owners[*territory] = *cap_player;
+            visible = visible_territories_from_owners(&owners, player, &board.map);
+        }
+    }
+
+    result
+}
+
+#[test]
+fn test_fog_lost_territory_hides_subsequent_events() {
+    // Map: A(0)—B(1)—C(2)—D(3), linear.
+    // Player 0 owns A(0) and B(1). Player 1 owns C(2) and D(3).
+    // Player 0 can see: A, B, C (adjacent to B). Cannot see D.
+    //
+    // Simulate: Player 1 captures B from player 0 (event 1),
+    // then deploys on C (event 2).
+    // After losing B, player 0 can only see A and B (adjacent to A).
+    // Player 0 should NOT see the deploy on C that happens after losing B.
+    let board = Board::from_map(test_map_4());
+    let owners = vec![0, 0, 1, 1]; // A=p0, B=p0, C=p1, D=p1
+
+    let events = vec![
+        // Player 1 attacks B and captures it.
+        TurnEvent::Attack {
+            player: 1,
+            from: 2,
+            to: 1,
+            armies: 5,
+            defenders: 2,
+            attackers_killed: 1,
+            defenders_killed: 2,
+            captured: true,
+            surviving_attackers: 4,
+        },
+        TurnEvent::Capture { player: 1, territory: 1 },
+        // After capture, player 0 only owns A. Visibility: A, B (adj to A).
+        // C is no longer visible.
+        TurnEvent::Deploy { player: 1, territory: 2, armies: 5 },
+    ];
+
+    let filtered = fog_filter_events_incremental(&events, 0, &owners, &board);
+
+    // Player 0 should see the attack on B (was visible when it happened).
+    assert!(filtered.iter().any(|e| matches!(e, TurnEvent::Attack { to: 1, .. })),
+        "Player 0 should see the attack on their territory B");
+    // Player 0 should see the capture of B.
+    assert!(filtered.iter().any(|e| matches!(e, TurnEvent::Capture { territory: 1, .. })),
+        "Player 0 should see B being captured");
+    // Player 0 should NOT see the deploy on C after losing B.
+    assert!(!filtered.iter().any(|e| matches!(e, TurnEvent::Deploy { territory: 2, .. })),
+        "Player 0 should NOT see deploy on C after losing visibility");
+}
+
+#[test]
+fn test_fog_gained_territory_hides_prior_events() {
+    // Map: A(0)—B(1)—C(2)—D(3), linear.
+    // Player 0 owns A(0). Player 1 owns B(1), C(2), D(3).
+    // Player 0 can see: A, B (adjacent to A). Cannot see C or D.
+    //
+    // Simulate: Player 1 deploys on C (event 1, before player 0 gains visibility),
+    // then player 0 captures B (event 2).
+    // After gaining B, player 0 can see A, B, C. But the deploy on C happened
+    // BEFORE player 0 gained visibility of C — should NOT be visible.
+    let board = Board::from_map(test_map_4());
+    let owners = vec![0, 1, 1, 1]; // A=p0, B/C/D=p1
+
+    let events = vec![
+        // Player 1 deploys on C — player 0 can't see C yet.
+        TurnEvent::Deploy { player: 1, territory: 2, armies: 5 },
+        // Player 0 attacks B and captures it.
+        TurnEvent::Attack {
+            player: 0,
+            from: 0,
+            to: 1,
+            armies: 8,
+            defenders: 2,
+            attackers_killed: 1,
+            defenders_killed: 2,
+            captured: true,
+            surviving_attackers: 7,
+        },
+        TurnEvent::Capture { player: 0, territory: 1 },
+        // Now player 0 owns A and B, can see A, B, C.
+        // Deploy on D — player 0 still can't see D.
+        TurnEvent::Deploy { player: 1, territory: 3, armies: 3 },
+    ];
+
+    let filtered = fog_filter_events_incremental(&events, 0, &owners, &board);
+
+    // Player 0 should NOT see deploy on C that happened before gaining visibility.
+    assert!(!filtered.iter().any(|e| matches!(e, TurnEvent::Deploy { territory: 2, .. })),
+        "Player 0 should NOT see deploy on C before gaining visibility");
+    // Player 0 should see the attack on B (B was visible from A).
+    assert!(filtered.iter().any(|e| matches!(e, TurnEvent::Attack { to: 1, .. })),
+        "Player 0 should see attack on visible territory B");
+    // Player 0 should see the capture of B.
+    assert!(filtered.iter().any(|e| matches!(e, TurnEvent::Capture { territory: 1, .. })),
+        "Player 0 should see capturing B");
+    // Player 0 should NOT see deploy on D (never visible).
+    assert!(!filtered.iter().any(|e| matches!(e, TurnEvent::Deploy { territory: 3, .. })),
+        "Player 0 should NOT see deploy on D (never visible)");
 }
 
 // ========== GAME END CONDITIONS ==========
