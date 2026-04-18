@@ -3267,7 +3267,7 @@ async function showTurnEvents(events) {
 }
 
 var resignConfirming = false;
-function resignGame() {
+async function resignGame() {
   if (resolving) return;
   if (!resignConfirming) {
     resignConfirming = true;
@@ -3284,6 +3284,8 @@ function resignGame() {
   }
   turnTimerStop();
   showGameOver(1);
+  // Notify server so the game doesn't resurrect on reload
+  try { await api('POST', '/api/new', lastGameSettings || {}); } catch(e) {}
 }
 
 // ========== GAME OVER ==========

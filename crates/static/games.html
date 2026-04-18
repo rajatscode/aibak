@@ -530,12 +530,22 @@ async function refreshLocalSpectate() {
 
 async function loadLocalReplayData() {
   localReplayData = {};
-  for (var i = 0; i < 200; i++) {
+  var i = 0;
+  while (i < 200) {
+    var batch = [];
+    for (var j = 0; j < 10 && i + j < 200; j++) {
+      batch.push(fetch('/api/game/replay/' + (i + j)));
+    }
     try {
-      var res = await fetch('/api/game/replay/' + i);
-      if (!res.ok) break;
-      localReplayData[i] = await res.json();
+      var results = await Promise.all(batch);
+      var done = false;
+      for (var k = 0; k < results.length; k++) {
+        if (!results[k].ok) { done = true; break; }
+        localReplayData[i + k] = await results[k].json();
+      }
+      if (done) break;
     } catch(e) { break; }
+    i += batch.length;
   }
 }
 

@@ -58,6 +58,10 @@ async fn handle_socket(mut socket: WebSocket, auth: AuthUser, state: AppState) {
                                         }
                                     }
                                 });
+                                // Remove any existing subscription for this game to avoid duplicates on reconnect.
+                                subscriptions.retain(|(gid, h)| {
+                                    if *gid == game_id { h.abort(); false } else { true }
+                                });
                                 subscriptions.push((game_id, handle));
                             }
                             Ok(ClientMessage::Unsubscribe { game_id }) => {
