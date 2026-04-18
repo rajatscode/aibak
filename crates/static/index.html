@@ -310,7 +310,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* TEMPLATE MODAL */
 #template-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:1000}
 #template-modal.show{display:flex}
-#template-modal .modal-content{position:relative;text-align:center;max-height:90vh;overflow-y:auto;padding:24px 16px}
+#template-modal .modal-content{position:relative;text-align:center;max-height:90vh;overflow-y:auto;padding:24px 16px;background:var(--bg2);border-radius:20px;border:1px solid var(--border)}
 #template-modal .modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
 #template-modal .modal-close:hover{color:var(--text)}
 #template-modal .modal-content h2{font-size:24px;font-weight:700;color:var(--text);margin-bottom:6px}
@@ -546,6 +546,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #import-overlay .import-box{padding:24px 20px;margin:16px}
   #kb-help-overlay .kb-card{padding:20px;max-width:95vw}
   #kb-help-overlay .kb-grid{grid-template-columns:80px 1fr;font-size:12px}
+  .popup-cancel{font-size:14px !important;color:var(--text2) !important;min-height:44px}
 }
 
 
@@ -660,7 +661,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <button class="popup-go" id="popup-go-btn" onclick="popupConfirm()">Go</button>
         </div>
         <div class="popup-preview" id="popup-preview"></div>
-        <button onclick="cancelPending()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;margin-top:4px;width:100%;text-align:center">Cancel (Esc)</button>
+        <button class="popup-cancel" onclick="cancelPending()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;margin-top:4px;width:100%;text-align:center">Cancel (Esc)</button>
       </div>
       <div class="phase-flash" id="phase-flash"><span id="flash-text"></span></div>
       <div class="tooltip" id="tooltip"></div>
@@ -893,6 +894,15 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 <div id="toast-container"></div>
 
 <script>
+// Auth redirect: return to game page after Discord login
+(function() {
+  var returnTo = sessionStorage.getItem('strat_return_to');
+  if (returnTo && returnTo !== '/') {
+    sessionStorage.removeItem('strat_return_to');
+    window.location.href = returnTo;
+  }
+})();
+
 // ========== CONSTANTS ==========
 // POS is populated dynamically from API territory label_x/label_y
 const POS = {};
@@ -1993,19 +2003,17 @@ function drawOrderLines() {
 }
 
 // Estimate deterministic combat outcome (60% offense / 70% defense kill rates)
+// Engine uses single-round combat, not multi-round loop
 function estimateCombat(attackers, defenders) {
-  let atk = attackers;
-  let def = defenders;
-  // Simulate rounds of combat
-  for (let i = 0; i < 100 && atk > 0 && def > 0; i++) {
-    const atkKills = Math.round(atk * 0.6);
-    const defKills = Math.round(def * 0.7);
-    def = Math.max(0, def - atkKills);
-    atk = Math.max(0, atk - defKills);
-    if (atkKills === 0 && defKills === 0) break;
-  }
-  if (def <= 0 && atk > 0) return 'Capture (' + atk + ' survive)';
-  if (atk <= 0) return 'Fail';
+  if (defenders <= 0) return 'Capture (' + attackers + ' survive)';
+  var offenseKills = Math.floor(attackers * 0.6 + 0.5);
+  var defenseKills = Math.floor(defenders * 0.7 + 0.5);
+  offenseKills = Math.min(offenseKills, defenders);
+  defenseKills = Math.min(defenseKills, attackers);
+  var remainDef = defenders - offenseKills;
+  var remainAtk = attackers - defenseKills;
+  if (remainDef <= 0 && remainAtk > 0) return 'Capture (' + remainAtk + ' survive)';
+  if (remainAtk <= 0) return 'Fail';
   return 'Stalemate';
 }
 
@@ -2162,7 +2170,7 @@ function onStateUpdate() {
     incomeSpan.title = tip;
   }
   document.getElementById('my-terr').textContent = G.my_territories || 0;
-  var fogOn = document.getElementById('set-fog') && document.getElementById('set-fog').checked;
+  var fogOn = lastGameSettings && lastGameSettings.settings ? lastGameSettings.settings.fog_of_war : (document.getElementById('set-fog') && document.getElementById('set-fog').checked);
   if (G.phase === 'finished' || !fogOn) {
     document.getElementById('enemy-terr').textContent = G.enemy_territories || 0;
   } else {
@@ -2172,6 +2180,10 @@ function onStateUpdate() {
   // Determine phase
   if (G.phase === 'finished') {
     phase = 'finished';
+    gameStats.turnsPlayed = G.turn || gameStats.turnsPlayed || 0;
+    if (!lastGameSettings && G.board_name) {
+      lastGameSettings = { template: G.board_name };
+    }
     turnTimerHide();
   } else if (G.phase === 'picking') {
     phase = 'picking';
@@ -3204,7 +3216,7 @@ async function showTurnEvents(events) {
       showCombatText(a.to, a.armies + 'v' + a.defenders, '#fff');
       if (a.captured) {
         const capturedEl = document.getElementById('terr-' + a.to);
-        if (capturedEl) capturedEl.setAttribute('fill', p ? 'url(#grad-player)' : 'url(#grad-enemy)');
+        if (capturedEl) capturedEl.setAttribute('fill', p ? '#1a3f6e' : '#6b2020');
         flashTerritory(a.to, 'flash-capture');
         floatText(a.to, 'Captured!', '#4ade80');
         playSound('capture');
@@ -3221,7 +3233,7 @@ async function showTurnEvents(events) {
     } else if (e.Capture) {
       const p = e.Capture.player === 0;
       const capEl = document.getElementById('terr-' + e.Capture.territory);
-      if (capEl) capEl.setAttribute('fill', p ? 'url(#grad-player)' : 'url(#grad-enemy)');
+      if (capEl) capEl.setAttribute('fill', p ? '#1a3f6e' : '#6b2020');
       flashTerritory(e.Capture.territory, 'flash-capture');
     }
 

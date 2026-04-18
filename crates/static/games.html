@@ -394,8 +394,14 @@ function renderGameList(listId, emptyId, games, type) {
     var p2 = g.player_b_name || (g.status === 'waiting' ? 'Waiting...' : 'Player 2');
     var statusClass = 'status-' + g.status;
     var actionBtn = '';
-    if (type === 'active' && g.status === 'finished') {
-      actionBtn = '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Watch</button>';
+    if (type === 'active') {
+      if (g.status === 'waiting') {
+        actionBtn = '<button class="btn" onclick="window.location.href=\'/game/' + escId(g.id) + '\'">Join</button>';
+      } else if (g.status === 'finished') {
+        actionBtn = '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Watch</button>';
+      } else {
+        actionBtn = '<button class="btn" onclick="window.location.href=\'/game/' + escId(g.id) + '\'">View</button>';
+      }
     } else if (type === 'recent') {
       actionBtn = '<button class="btn btn-replay" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Replay</button>';
     }

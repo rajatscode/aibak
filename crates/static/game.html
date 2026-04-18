@@ -349,9 +349,10 @@ let deadlineInterval = null;
   // Check auth
   try {
     const r = await fetch('/api/auth/me');
-    if (!r.ok) { window.location.href = '/api/auth/discord'; return; }
+    if (!r.ok) { sessionStorage.setItem('strat_return_to', window.location.pathname); window.location.href = '/api/auth/discord'; return; }
     currentUser = await r.json();
   } catch (e) {
+    sessionStorage.setItem('strat_return_to', window.location.pathname);
     window.location.href = '/api/auth/discord';
     return;
   }
@@ -503,12 +504,13 @@ function handleGameEvent(event) {
   if (event.type === 'opponent_committed') {
     toast('Opponent submitted', 'success');
   }
-  if (event.type === 'turn_resolved' || event.type === 'game_state_updated' || event.type === 'game_finished') {
+  if (event.type === 'turn_resolved' || event.type === 'game_state_updated' || event.type === 'game_finished' || event.type === 'game_draw') {
     submitted = false;
     deploys = {};
     orders = [];
     selectedSource = null;
     pendingTarget = null;
+    hidePopup();
     hideSubmitted();
     fetchGameState();
   }
@@ -942,15 +944,16 @@ function convexHull(points) {
 }
 
 function estimateCombat(attackers, defenders) {
-  var atk=attackers, def=defenders;
-  for (var i=0;i<100&&atk>0&&def>0;i++){
-    var atkKills=Math.round(atk*0.6), defKills=Math.round(def*0.7);
-    def=Math.max(0,def-atkKills); atk=Math.max(0,atk-defKills);
-    if (atkKills===0&&defKills===0) break;
-  }
-  if (def<=0&&atk>0) return 'Capture ('+atk+')';
-  if (atk<=0) return 'Fail';
-  return 'Stalemate';
+  if (defenders <= 0) return 'Capture (' + attackers + ')';
+  var offenseKills = Math.floor(attackers * 0.6 + 0.5);
+  var defenseKills = Math.floor(defenders * 0.7 + 0.5);
+  offenseKills = Math.min(offenseKills, defenders);
+  defenseKills = Math.min(defenseKills, attackers);
+  var remainDef = defenders - offenseKills;
+  var remainAtk = attackers - defenseKills;
+  if (remainDef <= 0 && remainAtk > 0) return 'Capture (' + remainAtk + ')';
+  if (remainAtk <= 0) return 'Fail';
+  return 'Stalemate (' + remainAtk + 'v' + remainDef + ')';
 }
 
 // ========== TERRITORY HELPERS ==========
@@ -1351,7 +1354,7 @@ function editSubmittedOrders() {
   window._mySubmittedOrders = null;
   hideSubmitted();
   // Recalculate deployLeft
-  var income = STATE ? STATE.income || 5 : 5;
+  var income = calculateIncome();
   var totalDeployed = 0;
   Object.values(deploys).forEach(function(v) { totalDeployed += v; });
   deployLeft = income - totalDeployed;

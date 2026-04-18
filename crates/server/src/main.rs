@@ -263,6 +263,7 @@ struct GameView {
     history: Vec<TurnLog>,
     win_probability: WinProbView,
     win_prob_history: Vec<f64>,
+    board_name: String,
 }
 
 #[derive(Serialize)]
@@ -419,6 +420,7 @@ fn build_game_view(app: &LocalState) -> GameView {
         territories,
         bonuses,
         history: app.turn_history.clone(),
+        board_name: app.board.name.clone(),
         win_probability: WinProbView {
             player_0: wp.player_0,
             player_1: wp.player_1,
