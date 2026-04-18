@@ -1308,36 +1308,6 @@ function popupConfirm() {
 function cancelPending() { hidePopup(); pendingTarget = null; updateMap(); renderSidebar(); }
 function hidePopup() { document.getElementById('map-army-popup').style.display = 'none'; }
 
-// ========== BONUS HIGHLIGHT ==========
-var bonusHighlightTimer = null;
-function showBonusHighlight(bonusId) {
-  clearBonusHighlight();
-  if (!MAP || !MAP.bonuses) return;
-  var b = MAP.bonuses.find(function(x) { return x.id === bonusId; });
-  if (!b) return;
-  var tids = b.territory_ids || [];
-  var color = BONUS_COLORS[b.id % BONUS_COLORS.length];
-  tids.forEach(function(tid) {
-    var el = document.getElementById('terr-' + tid);
-    if (el) {
-      el.setAttribute('data-orig-stroke', el.getAttribute('stroke') || '');
-      el.setAttribute('data-orig-sw', el.getAttribute('stroke-width') || '');
-      el.setAttribute('stroke', color);
-      el.setAttribute('stroke-width', '3');
-    }
-  });
-  bonusHighlightTimer = setTimeout(clearBonusHighlight, 2000);
-}
-function clearBonusHighlight() {
-  if (bonusHighlightTimer) { clearTimeout(bonusHighlightTimer); bonusHighlightTimer = null; }
-  document.querySelectorAll('[data-orig-stroke]').forEach(function(el) {
-    el.setAttribute('stroke', el.getAttribute('data-orig-stroke'));
-    el.setAttribute('stroke-width', el.getAttribute('data-orig-sw') || '1');
-    el.removeAttribute('data-orig-stroke');
-    el.removeAttribute('data-orig-sw');
-  });
-}
-
 var editingOrders = false;
 function editSubmittedOrders() {
   editingOrders = true;

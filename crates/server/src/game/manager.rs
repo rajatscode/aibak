@@ -210,13 +210,6 @@ impl GameManager {
             });
         }
 
-        // Reject late submissions.
-        if let Some(deadline) = db::get_turn_deadline(&self.pool, game_id, 0).await? {
-            if chrono::Utc::now() > deadline {
-                return Err(GameError::DeadlinePassed);
-            }
-        }
-
         let seat = self.player_seat_by_id(&game, user_id)?;
 
         let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
@@ -281,6 +274,14 @@ impl GameManager {
                 expected: "picking".to_string(),
                 actual: game.status,
             });
+        }
+
+        // Reject late submissions (checked inside transaction, after acquiring row lock).
+        if let Some(deadline) = db::get_turn_deadline(&self.pool, game_id, 0).await? {
+            if chrono::Utc::now() > deadline {
+                tx.rollback().await?;
+                return Err(GameError::DeadlinePassed);
+            }
         }
 
         // Store picks as orders for turn 0.

@@ -454,8 +454,10 @@ async function refreshMultiplayerSpectate() {
       document.getElementById('spec-turn').textContent = state.turn || g.turn;
       document.getElementById('spec-phase').textContent =
         state.phase === 'Finished' ? 'Finished' : state.phase === 'Picking' ? 'Picking' : 'In Progress';
-      document.getElementById('spec-p0-income').textContent = '~' + Math.max(5, Math.floor(p0count / 3));
-      document.getElementById('spec-p1-income').textContent = '~' + Math.max(5, Math.floor(p1count / 3));
+      var baseIncome = (data.map && data.map.settings && data.map.settings.base_income) || 5;
+      var bonuses = data.map && data.map.bonuses;
+      document.getElementById('spec-p0-income').textContent = calcSpectatorIncome(owners, bonuses, 0, baseIncome);
+      document.getElementById('spec-p1-income').textContent = calcSpectatorIncome(owners, bonuses, 1, baseIncome);
       renderSpectatorMap(data.state, data.map);
     }
 
@@ -655,6 +657,18 @@ function renderLocalSpectatorMap(data) {
       if (textEl) textEl.textContent = t.armies || '';
     });
   }
+}
+
+function calcSpectatorIncome(owners, bonuses, seat, baseIncome) {
+  var income = baseIncome || 5;
+  if (bonuses) {
+    bonuses.forEach(function(b) {
+      if (b.territory_ids.every(function(tid) { return owners[tid] === seat; })) {
+        income += b.value;
+      }
+    });
+  }
+  return income;
 }
 
 function renderSpectatorMap(state, mapData) {
