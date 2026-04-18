@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -25,6 +26,8 @@ pub struct MatchedPair {
 /// Real-time matchmaking queue that pairs players of similar skill.
 pub struct MatchmakingQueue {
     entries: Arc<Mutex<Vec<QueueEntry>>>,
+    /// Stores match results so HTTP polling clients can discover their matched game.
+    match_results: Arc<Mutex<HashMap<Uuid, Uuid>>>,
 }
 
 /// Initial rating-difference threshold for matching.
@@ -40,6 +43,7 @@ impl MatchmakingQueue {
     pub fn new() -> Self {
         Self {
             entries: Arc::new(Mutex::new(Vec::new())),
+            match_results: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -125,6 +129,19 @@ impl MatchmakingQueue {
         };
 
         Some((position, estimated_wait))
+    }
+
+    /// Record a match result so HTTP-polling clients can discover it.
+    pub async fn store_match_result(&self, user_id: Uuid, game_id: Uuid) {
+        let mut results = self.match_results.lock().await;
+        results.insert(user_id, game_id);
+    }
+
+    /// Consume a match result for a user. Returns the game_id if matched, removing
+    /// the entry so it's only returned once.
+    pub async fn take_match_result(&self, user_id: Uuid) -> Option<Uuid> {
+        let mut results = self.match_results.lock().await;
+        results.remove(&user_id)
     }
 
     /// Try to find matches among queued players. Returns matched pairs and removes
@@ -252,6 +269,10 @@ pub async fn matchmaking_task(
                             player_b = %player_b.user_id,
                             "matchmaking created game"
                         );
+
+                        // Store match results for HTTP-polling clients.
+                        queue.store_match_result(player_a.user_id, game_id).await;
+                        queue.store_match_result(player_b.user_id, game_id).await;
 
                         // Notify both players via WebSocket.
                         // We use a user-specific channel approach: broadcast on a

@@ -105,20 +105,20 @@ pub fn resolve_turn(
                 target,
             } = order
             {
-                new_state.territory_armies[*target] += value;
-                available[*target] += value;
                 let hand = &mut new_state.hands[player as usize];
                 if let Some(pos) = hand
                     .iter()
                     .position(|c| matches!(c, Card::Reinforcement(v) if *v == *value))
                 {
                     hand.remove(pos);
+                    new_state.territory_armies[*target] += value;
+                    available[*target] += value;
+                    events.push(TurnEvent::Deploy {
+                        player,
+                        territory: *target,
+                        armies: *value,
+                    });
                 }
-                events.push(TurnEvent::Deploy {
-                    player,
-                    territory: *target,
-                    armies: *value,
-                });
             }
         }
     }
@@ -132,13 +132,14 @@ pub fn resolve_turn(
             } = order
             {
                 let old = new_state.territory_armies[*target];
-                apply_blockade(&mut new_state, player, *target);
-                available[*target] = 0;
-                events.push(TurnEvent::Blockade {
-                    player,
-                    territory: *target,
-                    new_armies: old * 3,
-                });
+                if apply_blockade(&mut new_state, player, *target) {
+                    available[*target] = 0;
+                    events.push(TurnEvent::Blockade {
+                        player,
+                        territory: *target,
+                        new_armies: old * 3,
+                    });
+                }
             }
         }
     }
@@ -305,6 +306,7 @@ mod tests {
     use super::*;
     use crate::board::Board;
     use crate::map::{Bonus, MapFile, MapSettings, PickingConfig, PickingMethod, Territory};
+    use crate::state::Phase;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
@@ -500,5 +502,62 @@ mod tests {
             new_state.territory_owners[3], 1,
             "D should still belong to player 1 — chain attack must be rejected"
         );
+    }
+
+    #[test]
+    fn test_duplicate_reinforcement_card_only_grants_once() {
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
+        state.territory_owners = vec![0, 0, 1, 1];
+        state.territory_armies = vec![5, 5, 5, 5];
+        state.phase = Phase::Play;
+        state.turn = 1;
+        // Give player 0 exactly ONE reinforcement card.
+        state.hands[0] = vec![Card::Reinforcement(3)];
+
+        let income = state.income(0, &board); // 7
+        let p0_orders = vec![
+            Order::Deploy { territory: 0, armies: income },
+            // Two PlayCard orders referencing the same single card.
+            Order::PlayCard { card: Card::Reinforcement(3), target: 0 },
+            Order::PlayCard { card: Card::Reinforcement(3), target: 0 },
+        ];
+        let p1_orders = vec![Order::Deploy { territory: 2, armies: state.income(1, &board) }];
+        let mut rng = StdRng::seed_from_u64(42);
+        let result = resolve_turn(&state, [p0_orders, p1_orders], &board, &mut rng);
+
+        // Only 3 armies from the card (not 6). Total = 5 original + 7 deploy + 3 card = 15.
+        assert_eq!(result.state.territory_armies[0], 15,
+            "duplicate reinforcement card should only grant armies once");
+        assert!(result.state.hands[0].is_empty(), "card should be consumed");
+    }
+
+    #[test]
+    fn test_blockade_on_enemy_territory_has_no_effect() {
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
+        state.territory_owners = vec![0, 0, 1, 1];
+        state.territory_armies = vec![5, 5, 5, 5];
+        state.phase = Phase::Play;
+        state.turn = 1;
+        state.hands[0] = vec![Card::Blockade];
+
+        let income = state.income(0, &board);
+        let p0_orders = vec![
+            Order::Deploy { territory: 0, armies: income },
+            // Attempt blockade on enemy territory 2.
+            Order::PlayCard { card: Card::Blockade, target: 2 },
+        ];
+        let p1_orders = vec![Order::Deploy { territory: 2, armies: state.income(1, &board) }];
+        let mut rng = StdRng::seed_from_u64(42);
+        let result = resolve_turn(&state, [p0_orders, p1_orders], &board, &mut rng);
+
+        // Enemy territory should be unaffected.
+        assert_eq!(result.state.territory_owners[2], 1,
+            "enemy territory should still belong to player 1");
+        assert_eq!(result.state.territory_armies[2], 5 + state.income(1, &board),
+            "enemy territory armies should reflect their deploy, not be zeroed");
     }
 }

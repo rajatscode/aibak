@@ -247,4 +247,96 @@ mod tests {
         // Should NOT see distant territories like Argentina (12).
         assert!(!vis.contains(&12));
     }
+
+    #[test]
+    fn test_visible_enemy_bonus_count_excludes_fogged() {
+        // Simulates the fix: bonus enemy counts must only include visible territories.
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
+        // Player 0 owns territory 0, enemy owns territories 2 and 3 (bonus "Right").
+        state.territory_owners[0] = 0;
+        state.territory_owners[2] = 1;
+        state.territory_owners[3] = 1;
+
+        let visible = visible_territories(&state, 0, &board);
+        // Player 0 sees: 0 (own), 1 (adjacent). Does NOT see 2 or 3.
+        assert!(!visible.contains(&2));
+        assert!(!visible.contains(&3));
+
+        // Bonus "Right" has territories [2, 3], both enemy-owned but invisible.
+        let right_bonus = &board.map.bonuses[1];
+        let visible_enemy_count = right_bonus
+            .territory_ids
+            .iter()
+            .filter(|&&tid| {
+                let owner = state.territory_owners[tid];
+                owner != 0 && owner != NEUTRAL && visible.contains(&tid)
+            })
+            .count();
+        assert_eq!(visible_enemy_count, 0, "should not see any enemies in fogged bonus");
+
+        // Total visible enemy territories should also be 0.
+        let total_visible_enemies = visible
+            .iter()
+            .filter(|&&tid| state.territory_owners[tid] == 1)
+            .count();
+        assert_eq!(total_visible_enemies, 0);
+    }
+
+    #[test]
+    fn test_visible_enemy_count_includes_seen_enemies() {
+        // When enemies ARE visible, they should be counted.
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
+        // Player 0 owns territory 0, enemy owns territory 1 (adjacent, so visible).
+        state.territory_owners[0] = 0;
+        state.territory_owners[1] = 1;
+        state.territory_owners[3] = 1;
+
+        let visible = visible_territories(&state, 0, &board);
+        assert!(visible.contains(&1), "adjacent enemy should be visible");
+        assert!(!visible.contains(&3), "distant enemy should not be visible");
+
+        // Bonus "Left" has [0, 1]. Territory 1 is enemy and visible.
+        let left_bonus = &board.map.bonuses[0];
+        let visible_enemy_count = left_bonus
+            .territory_ids
+            .iter()
+            .filter(|&&tid| {
+                let owner = state.territory_owners[tid];
+                owner != 0 && owner != NEUTRAL && visible.contains(&tid)
+            })
+            .count();
+        assert_eq!(visible_enemy_count, 1);
+
+        // Total visible enemy territories: only territory 1.
+        let total_visible_enemies = visible
+            .iter()
+            .filter(|&&tid| state.territory_owners[tid] == 1)
+            .count();
+        assert_eq!(total_visible_enemies, 1);
+    }
+
+    #[test]
+    fn test_no_fog_counts_all_enemies() {
+        // When fog is disabled, all enemies should be counted (no visibility filter).
+        let mut map = test_map();
+        map.settings.fog_of_war = false;
+        let board = Board::from_map(map);
+        let mut state = GameState::new(&board);
+        state.territory_owners[0] = 0;
+        state.territory_owners[2] = 1;
+        state.territory_owners[3] = 1;
+
+        // With fog disabled, fog_filter returns unmodified state.
+        let filtered = fog_filter(&state, 0, &board);
+        let enemy_total = filtered
+            .territory_owners
+            .iter()
+            .filter(|&&o| o == 1)
+            .count();
+        assert_eq!(enemy_total, 2, "without fog, all enemy territories are visible");
+    }
 }

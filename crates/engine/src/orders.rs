@@ -88,6 +88,7 @@ pub fn validate_orders(
             }
             Order::PlayCard { card, target } => {
                 check_bounds(*target, board)?;
+                check_owned(*target, player, state)?;
                 let hand = &state.hands[player as usize];
                 if !hand.contains(card) {
                     return Err(OrderError::CardNotInHand(card.clone()));
@@ -344,5 +345,37 @@ mod tests {
             result.unwrap_err(),
             OrderError::TransferToEnemy(2)
         ));
+    }
+
+    #[test]
+    fn test_validate_rejects_playcard_on_enemy_territory() {
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = setup_state(&board);
+        state.hands[0] = vec![Card::Reinforcement(3)];
+        let income = state.income(0, &board);
+        let orders = vec![
+            Order::Deploy { territory: 0, armies: income },
+            Order::PlayCard { card: Card::Reinforcement(3), target: 2 }, // enemy territory
+        ];
+        let result = validate_orders(&orders, 0, &state, &board);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), OrderError::NotOwned(2, 0)));
+    }
+
+    #[test]
+    fn test_validate_rejects_blockade_on_enemy_territory() {
+        let map = test_map();
+        let board = Board::from_map(map);
+        let mut state = setup_state(&board);
+        state.hands[0] = vec![Card::Blockade];
+        let income = state.income(0, &board);
+        let orders = vec![
+            Order::Deploy { territory: 0, armies: income },
+            Order::PlayCard { card: Card::Blockade, target: 3 }, // enemy territory
+        ];
+        let result = validate_orders(&orders, 0, &state, &board);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), OrderError::NotOwned(3, 0)));
     }
 }

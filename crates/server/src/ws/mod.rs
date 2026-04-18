@@ -29,6 +29,9 @@ pub enum GameEvent {
         game_id: Uuid,
         winner_id: Uuid,
     },
+    GameDraw {
+        game_id: Uuid,
+    },
     MatchFound {
         game_id: Uuid,
         opponent_name: String,

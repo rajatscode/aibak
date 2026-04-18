@@ -116,14 +116,18 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
-  nav{flex-wrap:wrap}
-  .tabs{padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .nav-links-desktop{display:none !important}
+  .hamburger-btn{display:block !important}
+  #mobile-nav-dropdown.open{display:flex !important}
+  .tabs{padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
   .tab{padding:10px 14px;font-size:12px;white-space:nowrap}
   .game-card{flex-direction:column;align-items:flex-start;gap:10px}
   .game-actions{width:100%;justify-content:flex-start}
   .spec-stats{flex-direction:column}
   .stat-card{min-width:unset}
   .turn-stepper{flex-wrap:wrap}
+  .btn{min-height:44px}
 }
 @media (max-width: 480px) {
   #mp-actions > div:first-child{flex-direction:column}
@@ -136,14 +140,23 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 </head>
 <body>
 <div style="position:fixed;bottom:8px;right:8px;z-index:9999;background:#d29922;color:#000;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;opacity:0.75;">ALPHA — expect bugs</div>
-<nav style="background:#0f1419;border-bottom:1px solid #21293a;padding:4px 16px;display:flex;align-items:center;gap:16px;font-size:12px;">
+<nav id="main-nav" style="background:#0f1419;border-bottom:1px solid #21293a;padding:0 16px;display:flex;align-items:center;justify-content:space-between;font-size:12px;height:48px;position:relative;">
   <a href="/" style="color:#fbbf24;font-weight:700;text-decoration:none;font-size:14px;">strat.club</a>
-  <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
-  <a href="/games" style="color:#fff;text-decoration:none;">Games</a>
-  <a href="/ladder" style="color:#8b949e;text-decoration:none;">Ladder</a>
-  <a href="/history" style="color:#8b949e;text-decoration:none;">History</a>
-  <a href="/feedback" style="color:#8b949e;text-decoration:none;">Feedback</a>
-  <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;margin-left:auto;font-weight:600;">Discord</a>
+  <div class="nav-links-desktop" style="display:flex;gap:16px;align-items:center;">
+    <a href="/" style="color:#8b949e;text-decoration:none;">Play</a>
+    <a href="/games" style="color:#fff;text-decoration:none;">Games</a>
+    <a href="/ladder" style="color:#8b949e;text-decoration:none;">Ladder</a>
+    <a href="/feedback" style="color:#8b949e;text-decoration:none;">Feedback</a>
+    <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;font-weight:600;">Discord</a>
+  </div>
+  <button class="hamburger-btn" onclick="document.getElementById('mobile-nav-dropdown').classList.toggle('open')" style="display:none;background:none;border:none;color:#e6edf3;font-size:22px;cursor:pointer;padding:8px;">&#9776;</button>
+  <div id="mobile-nav-dropdown" style="display:none;position:absolute;top:48px;left:0;right:0;background:#0f1419;border-bottom:1px solid #21293a;flex-direction:column;padding:8px 16px;gap:8px;z-index:100;">
+    <a href="/" style="color:#8b949e;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid #21293a;">Play</a>
+    <a href="/games" style="color:#fff;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid #21293a;">Games</a>
+    <a href="/ladder" style="color:#8b949e;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid #21293a;">Ladder</a>
+    <a href="/feedback" style="color:#8b949e;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid #21293a;">Feedback</a>
+    <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;padding:10px 0;display:block;font-weight:600;">Discord</a>
+  </div>
 </nav>
 
 <div id="browser-view">

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>strat.club</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="description" content="Competitive territory strategy. 1v1, pure skill, zero luck. Play free at strat.club">
@@ -455,29 +455,46 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* THREAT HEATMAP */
 
 
+/* MOBILE SIDEBAR DRAWER */
+#mobile-drawer-handle{display:none}
+#mobile-drawer-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:149}
+#mobile-drawer-backdrop.show{display:block}
+
 /* ========== RESPONSIVE: TABLET (768px) ========== */
 @media (max-width: 768px) {
-  nav{padding:3px 10px !important;gap:10px !important;font-size:11px !important;flex-wrap:wrap}
+  .nav-links-desktop{display:none !important}
+  .hamburger-btn{display:block !important}
+  #mobile-nav-dropdown.open{display:flex !important}
   #main{flex-direction:column;position:relative}
-  #sidebar{width:100%;min-width:unset;max-height:40vh;border-left:none;border-top:1px solid var(--border)}
-  #map-container{flex:1;min-height:50vh}
+  /* Sidebar as bottom drawer overlay */
+  #sidebar{position:fixed;bottom:0;left:0;right:0;width:100%;min-width:unset;height:60vh;max-height:60vh;border-left:none;border-top:1px solid var(--border);overflow-y:auto;z-index:150;transform:translateY(calc(100% - 44px));transition:transform .3s ease;box-shadow:0 -4px 20px rgba(0,0,0,.5)}
+  #sidebar.drawer-open{transform:translateY(0)}
+  #mobile-drawer-handle{display:flex;align-items:center;justify-content:center;height:44px;cursor:pointer;user-select:none;flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2)}
+  #mobile-drawer-handle .handle-bar{width:40px;height:4px;border-radius:2px;background:var(--text3)}
+  #mobile-drawer-handle .handle-label{font-size:11px;color:var(--gold);font-weight:600;margin-left:8px}
+  #map-container{flex:1;min-height:calc(100vh - 48px - 48px - 44px)}
   #sidebar-toggle{display:none}
-  #mobile-sidebar-tab{display:block}
-  /* Mobile: sidebar always visible at bottom */
-  #sidebar{overflow-y:auto}
   #mobile-sidebar-tab{display:none !important}
-  /* Topbar adjustments */
-  #topbar{padding:6px 10px;gap:8px;flex-wrap:wrap}
-  #topbar h1{font-size:14px}
-  #topbar .stats{font-size:11px;gap:8px}
-  #topbar .controls{gap:4px;flex-wrap:wrap}
-  #topbar .session-info{font-size:10px}
-  #topbar button{padding:3px 8px;font-size:11px}
-
-  #topbar select{padding:3px 6px;font-size:11px}
+  /* Topbar: compact for mobile — hide non-essential, keep turn/armies/submit */
+  #topbar{padding:4px 10px;gap:6px;min-height:36px}
+  #topbar h1{display:none}
+  #board-name-display{display:none !important}
+  #topbar .session-info{display:none}
+  #topbar .stats{font-size:11px;gap:6px}
+  #income-span{display:none}
+  #topbar .controls{gap:4px}
+  #theme-toggle{display:none !important}
+  #mute-toggle{display:none !important}
+  #difficulty-select{display:none !important}
+  #topbar button{padding:3px 8px;font-size:11px;min-height:36px}
+  #topbar select{padding:3px 6px;font-size:11px;min-height:36px}
+  /* Auth area compact — just icon */
+  #topbar .auth-area a.discord-btn{padding:4px 8px;font-size:10px}
+  #topbar .auth-area .username{font-size:10px;max-width:60px;overflow:hidden;text-overflow:ellipsis}
+  #topbar .auth-area button.signout-btn{padding:3px 6px;font-size:10px}
   /* Replay stepper adjustments */
   #replay-stepper{padding:6px 10px}
-  #replay-stepper button{height:28px;padding:0 8px;font-size:11px}
+  #replay-stepper button{height:28px;padding:0 8px;font-size:11px;min-height:44px}
   #replay-stepper .turn-display{font-size:11px;min-width:70px}
   /* Game over overlay */
   #game-over .card{padding:24px 20px;max-width:90vw}
@@ -487,37 +504,35 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #template-modal .template-cards{flex-direction:column;align-items:center;gap:12px}
   .template-card{width:100%;max-width:280px;padding:20px 16px}
   .settings-grid{grid-template-columns:1fr}
-  /* Tooltip: position at top of map to avoid finger occlusion */
   .tooltip{font-size:10px;max-width:200px}
-  /* Map army popup */
+  /* Map army popup - bigger touch targets */
   #map-army-popup{transform:scale(1.1);transform-origin:top left}
-  #map-army-popup button{width:40px;height:40px;font-size:20px}
-  #map-army-popup .popup-go{padding:8px 18px;font-size:15px}
+  #map-army-popup button{width:44px;height:44px;font-size:20px}
+  #map-army-popup .popup-go{padding:8px 18px;font-size:15px;min-height:44px}
   #map-army-popup .popup-max{padding:0 10px}
-  #map-army-popup .popup-count{font-size:22px;width:52px}
+  #map-army-popup .popup-count{font-size:22px;width:52px;min-height:44px}
+  /* Touch targets */
+  .order-item{min-height:44px;padding:8px 10px}
+  .bonus-row{min-height:44px}
+  .btn{min-height:44px}
 }
 
 /* ========== RESPONSIVE: PHONE (480px) ========== */
 @media (max-width: 480px) {
-  #topbar{padding:4px 8px;gap:6px}
+  #topbar{padding:4px 8px;gap:4px}
   #topbar h1{font-size:13px;letter-spacing:0.5px}
-  #topbar .stats{font-size:10px;gap:6px}
+  #topbar .stats{font-size:10px;gap:4px}
   #topbar .stats .dot{width:6px;height:6px}
   #topbar .controls{gap:3px}
-  #topbar .session-info{display:none}
-  #topbar button{padding:2px 6px;font-size:10px}
-
+  #topbar button{padding:2px 6px;font-size:10px;min-height:36px}
   #topbar select{font-size:10px}
-  #map-container{min-height:55vh}
-  #sidebar{max-height:35vh}
-  #main.mobile-sidebar-open #sidebar{max-height:35vh}
   .sb-section{padding:8px}
   .sb-phase{font-size:15px}
   .sb-sub{font-size:11px}
   .deploy-counter{font-size:22px;padding:4px 0}
   .deploy-hint{font-size:10px}
-  .order-item{padding:4px 6px;font-size:11px}
-  .btn{padding:8px;font-size:13px}
+  .order-item{padding:4px 6px;font-size:11px;min-height:44px}
+  .btn{padding:8px;font-size:13px;min-height:44px}
   #game-over .card{padding:20px 16px}
   #game-over .card h2{font-size:20px}
   #game-over .card p{font-size:13px}
@@ -529,7 +544,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   #game-over .go-social{flex-direction:column;align-items:stretch}
   #game-over .go-social button{width:100%;font-size:12px;padding:8px 12px}
   #import-overlay .import-box{padding:24px 20px;margin:16px}
-  /* KB help overlay */
   #kb-help-overlay .kb-card{padding:20px;max-width:95vw}
   #kb-help-overlay .kb-grid{grid-template-columns:80px 1fr;font-size:12px}
 }
@@ -573,14 +587,23 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 </head>
 <body>
 <div style="position:fixed;bottom:8px;right:8px;z-index:9999;background:#d29922;color:#000;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;opacity:0.75;">ALPHA — expect bugs</div>
-<nav style="background:#0d1220;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:20px;font-size:13px;">
-  <a href="/" style="color:var(--text);font-weight:700;text-decoration:none;font-size:14px;letter-spacing:.3px;">strat.club</a>
-  <a href="/" style="color:#f1f5f9;text-decoration:none;font-weight:500;">Play</a>
-  <a href="/games" style="color:#94a3b8;text-decoration:none;transition:color .15s;" onmouseenter="this.style.color='#f1f5f9'" onmouseleave="this.style.color='#94a3b8'">Games</a>
-  <a href="/ladder" style="color:#94a3b8;text-decoration:none;transition:color .15s;" onmouseenter="this.style.color='#f1f5f9'" onmouseleave="this.style.color='#94a3b8'">Ladder</a>
-  <a href="/history" style="color:#94a3b8;text-decoration:none;transition:color .15s;" onmouseenter="this.style.color='#f1f5f9'" onmouseleave="this.style.color='#94a3b8'">History</a>
-  <a href="/feedback" style="color:#94a3b8;text-decoration:none;transition:color .15s;" onmouseenter="this.style.color='#f1f5f9'" onmouseleave="this.style.color='#94a3b8'">Feedback</a>
-  <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#818cf8;text-decoration:none;margin-left:auto;font-weight:600;transition:color .15s;" onmouseenter="this.style.color='#a5b4fc'" onmouseleave="this.style.color='#818cf8'">Discord</a>
+<nav id="main-nav" style="background:#0d1220;border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;justify-content:space-between;font-size:13px;height:48px;position:relative;flex-shrink:0;">
+  <a href="/" style="color:var(--gold);font-weight:700;text-decoration:none;font-size:14px;letter-spacing:.3px;">strat.club</a>
+  <div class="nav-links-desktop" style="display:flex;gap:20px;align-items:center;">
+    <a href="/" style="color:#f1f5f9;text-decoration:none;font-weight:500;">Play</a>
+    <a href="/games" style="color:#94a3b8;text-decoration:none;">Games</a>
+    <a href="/ladder" style="color:#94a3b8;text-decoration:none;">Ladder</a>
+    <a href="/feedback" style="color:#94a3b8;text-decoration:none;">Feedback</a>
+    <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#818cf8;text-decoration:none;font-weight:600;">Discord</a>
+  </div>
+  <button class="hamburger-btn" onclick="document.getElementById('mobile-nav-dropdown').classList.toggle('open')" style="display:none;background:none;border:none;color:#e6edf3;font-size:22px;cursor:pointer;padding:8px;">&#9776;</button>
+  <div id="mobile-nav-dropdown" style="display:none;position:absolute;top:48px;left:0;right:0;background:#0d1220;border-bottom:1px solid var(--border);flex-direction:column;padding:8px 20px;gap:8px;z-index:100;">
+    <a href="/" style="color:#f1f5f9;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid var(--border);">Play</a>
+    <a href="/games" style="color:#94a3b8;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid var(--border);">Games</a>
+    <a href="/ladder" style="color:#94a3b8;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid var(--border);">Ladder</a>
+    <a href="/feedback" style="color:#94a3b8;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid var(--border);">Feedback</a>
+    <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#818cf8;text-decoration:none;padding:10px 0;display:block;font-weight:600;">Discord</a>
+  </div>
 </nav>
 <div id="app">
   <div id="topbar">
@@ -626,6 +649,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <button id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar"><span class="toggle-icon">&#9654;</span></button>
     <div id="map-container">
       <svg id="map-svg" viewBox="0 0 900 470"></svg>
+      <button id="reset-zoom-btn" onclick="resetMapZoom()" style="display:none;position:absolute;bottom:8px;right:8px;z-index:50;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;min-height:36px;">Reset Zoom</button>
       <div id="map-army-popup">
         <div class="popup-label" id="popup-label"></div>
         <div class="popup-row">
@@ -653,7 +677,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
         </div>
       </div>
     </div>
+    <div id="mobile-drawer-backdrop" onclick="closeMobileDrawer()"></div>
     <div id="sidebar">
+      <div id="mobile-drawer-handle" onclick="toggleMobileDrawer()"><div class="handle-bar"></div><span class="handle-label" id="drawer-label">Orders</span></div>
       <div id="sidebar-content">
         <div class="sb-section" id="phase-panel"></div>
         <div id="income-breakdown"></div>
@@ -2203,18 +2229,16 @@ function renderSidebar() {
   // Update overview and income if visible
   if (overviewVisible) { renderOverview(); renderIncomeBreakdown(); }
 
-  // Update mobile sidebar tab text
-  const tab = document.getElementById('mobile-sidebar-tab');
-  if (tab) {
-    const main = document.getElementById('main');
-    const isOpen = main.classList.contains('mobile-sidebar-open');
-    let label = 'Show Orders';
-    if (phase === 'picking') label = isOpen ? 'Hide Picks' : 'Show Picks';
+  // Update mobile drawer handle label
+  const drawerLabel = document.getElementById('drawer-label');
+  if (drawerLabel) {
+    let label = 'Orders';
+    if (phase === 'picking') label = 'Picks';
     else if (phase === 'orders') {
       const orderCount = Object.keys(deploys).filter(k => deploys[k] > 0).length + orders.length;
-      label = isOpen ? 'Hide Orders' : ('Show Orders' + (orderCount > 0 ? ' (' + orderCount + ')' : ''));
+      label = 'Orders' + (orderCount > 0 ? ' (' + orderCount + ')' : '');
     }
-    tab.innerHTML = label + ' <span class="tab-arrow">' + (isOpen ? '&#9660;' : '&#9650;') + '</span>';
+    drawerLabel.textContent = label;
   }
 
 }
@@ -2843,15 +2867,28 @@ function showMapArmyPopup(territoryId) {
     if (ctm) {
       const screenPt = pt.matrixTransform(ctm);
       const containerRect = container.getBoundingClientRect();
-      let left = screenPt.x - containerRect.left + 15;
-      let top = screenPt.y - containerRect.top - 30;
-      // Keep popup on screen
-      if (left + 200 > containerRect.width) left = screenPt.x - containerRect.left - 215;
-      if (left < 5) left = 5;
-      if (top < 0) top = screenPt.y - containerRect.top + 15;
-      if (top + 80 > containerRect.height) top = containerRect.height - 85;
-      popup.style.left = left + 'px';
-      popup.style.top = top + 'px';
+      // On mobile, use fixed positioning at bottom center
+      if (window.innerWidth <= 768) {
+        popup.style.position = 'fixed';
+        popup.style.left = '50%';
+        popup.style.transform = 'translateX(-50%)';
+        popup.style.bottom = '52px';
+        popup.style.top = 'auto';
+      } else {
+        popup.style.position = 'absolute';
+        popup.style.transform = '';
+        popup.style.bottom = '';
+        let left = screenPt.x - containerRect.left + 15;
+        let top = screenPt.y - containerRect.top - 30;
+        const popupW = 220;
+        const popupH = 100;
+        if (left + popupW > containerRect.width) left = containerRect.width - popupW - 5;
+        if (left < 5) left = 5;
+        if (top < 5) top = screenPt.y - containerRect.top + 15;
+        if (top + popupH > containerRect.height) top = containerRect.height - popupH - 5;
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+      }
     }
   }
   popup.style.display = 'block';
@@ -4126,10 +4163,24 @@ function toggleSidebar() {
 }
 
 function toggleMobileSidebar() {
-  const main = document.getElementById('main');
-  const tab = document.getElementById('mobile-sidebar-tab');
-  const isOpen = main.classList.toggle('mobile-sidebar-open');
-  tab.innerHTML = (isOpen ? 'Hide Orders' : 'Show Orders') + ' <span class="tab-arrow">' + (isOpen ? '&#9660;' : '&#9650;') + '</span>';
+  toggleMobileDrawer();
+}
+
+function toggleMobileDrawer() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('mobile-drawer-backdrop');
+  const isOpen = sidebar.classList.toggle('drawer-open');
+  if (backdrop) {
+    if (isOpen) backdrop.classList.add('show');
+    else backdrop.classList.remove('show');
+  }
+}
+
+function closeMobileDrawer() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('mobile-drawer-backdrop');
+  sidebar.classList.remove('drawer-open');
+  if (backdrop) backdrop.classList.remove('show');
 }
 
 // ========== TOUCH CONTROLS ==========
@@ -4202,6 +4253,9 @@ function toggleMobileSidebar() {
       return;
     }
 
+    // Prevent native click from firing (fixes double-fire bug)
+    e.preventDefault();
+
     const now = Date.now();
     const isDoubleTap = (terrId === lastTapId && now - lastTapTime < 350);
 
@@ -4231,8 +4285,15 @@ function toggleMobileSidebar() {
     }
 
     touchStartId = null;
-  }, { passive: true });
+  }, { passive: false });
 })();
+
+function resetMapZoom() {
+  const svg = document.getElementById('map-svg');
+  if (svg) { svg.style.transform = ''; svg.style.transition = 'transform 0.3s ease'; setTimeout(function(){svg.style.transition='';},300); }
+  const btn = document.getElementById('reset-zoom-btn');
+  if (btn) btn.style.display = 'none';
+}
 
 // ========== MAP ZOOM/PAN (Touch Gestures) ==========
 (function() {
@@ -4256,6 +4317,8 @@ function toggleMobileSidebar() {
   function applyTransform() {
     mapSvg.style.transform = 'translate(' + currentTranslateX + 'px, ' + currentTranslateY + 'px) scale(' + currentScale + ')';
     mapSvg.style.transformOrigin = '50% 50%';
+    const btn = document.getElementById('reset-zoom-btn');
+    if (btn) btn.style.display = (currentScale !== 1 || currentTranslateX !== 0 || currentTranslateY !== 0) ? 'block' : 'none';
   }
 
   function getTouchDist(t1, t2) {

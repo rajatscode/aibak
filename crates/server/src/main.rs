@@ -359,6 +359,7 @@ fn build_game_view(app: &LocalState) -> GameView {
         })
         .collect();
 
+    let fog_enabled = app.board.config.settings.fog_of_war && !is_picking;
     let bonuses: Vec<BonusView> = app
         .board
         .map
@@ -370,12 +371,15 @@ fn build_game_view(app: &LocalState) -> GameView {
                 .iter()
                 .filter(|&&tid| app.game.territory_owners[tid] == PLAYER)
                 .count();
+            // Only count enemies in territories the player can actually see.
             let enemy_count = b
                 .territory_ids
                 .iter()
                 .filter(|&&tid| {
                     let owner = app.game.territory_owners[tid];
-                    owner != PLAYER && owner != NEUTRAL
+                    owner != PLAYER
+                        && owner != NEUTRAL
+                        && (!fog_enabled || visible.contains(&tid))
                 })
                 .count();
             BonusView {
@@ -403,7 +407,12 @@ fn build_game_view(app: &LocalState) -> GameView {
         income: app.game.income(PLAYER, &app.board),
         base_income: app.board.config.settings.base_income,
         my_territories: app.game.territory_count_for(PLAYER) as u32,
-        enemy_territories: app.game.territory_count_for(AI_PLAYER) as u32,
+        // Only count enemy territories the player can see through fog.
+        enemy_territories: if fog_enabled {
+            visible.iter().filter(|&&tid| app.game.territory_owners[tid] == AI_PLAYER).count() as u32
+        } else {
+            app.game.territory_count_for(AI_PLAYER) as u32
+        },
         winner: app.game.winner,
         pick_options: app.pick_options.clone(),
         picks_needed: app.board.config.picking.num_picks,
@@ -1213,7 +1222,7 @@ async fn import_game(
             name: map.name.clone(),
             config: strat_engine::board::BoardConfig {
                 picking: strat_engine::map::PickingConfig {
-                    num_picks: map.bonuses.len(),
+                    num_picks: std::cmp::min(map.bonuses.len(), std::cmp::max(2, map.territories.len() / 10)),
                     method: strat_engine::map::PickingMethod::RandomWarlords,
                 },
                 settings: strat_engine::map::MapSettings {

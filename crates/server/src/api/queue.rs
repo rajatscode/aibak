@@ -1,5 +1,6 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::AuthUser;
@@ -22,6 +23,12 @@ pub struct QueueStatusResponse {
     pub position: Option<usize>,
     pub estimated_wait_secs: Option<u32>,
     pub queue_size: usize,
+    /// Set when matchmaking has found a match for this player.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched: Option<bool>,
+    /// The game ID of the matched game.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_id: Option<Uuid>,
 }
 
 /// POST /api/queue/join -- Join the matchmaking queue.
@@ -81,6 +88,18 @@ pub async fn queue_status(
 ) -> Json<QueueStatusResponse> {
     let queue_size = state.matchmaking.queue_size().await;
 
+    // Check if matchmaking already found a match for this player.
+    if let Some(game_id) = state.matchmaking.take_match_result(auth.user_id).await {
+        return Json(QueueStatusResponse {
+            queued: false,
+            position: None,
+            estimated_wait_secs: None,
+            queue_size,
+            matched: Some(true),
+            game_id: Some(game_id),
+        });
+    }
+
     if let Some((position, estimated_wait_secs)) =
         state.matchmaking.queue_status(auth.user_id).await
     {
@@ -89,6 +108,8 @@ pub async fn queue_status(
             position: Some(position),
             estimated_wait_secs: Some(estimated_wait_secs),
             queue_size,
+            matched: None,
+            game_id: None,
         })
     } else {
         Json(QueueStatusResponse {
@@ -96,6 +117,8 @@ pub async fn queue_status(
             position: None,
             estimated_wait_secs: None,
             queue_size,
+            matched: None,
+            game_id: None,
         })
     }
 }

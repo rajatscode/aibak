@@ -340,30 +340,10 @@ impl GameManager {
         user_id: Uuid,
         orders: Vec<Order>,
     ) -> Result<(), GameError> {
-        let game = db::get_game(&self.pool, game_id)
-            .await?
-            .ok_or(GameError::NotFound)?;
-
-        if game.status != "active" {
-            return Err(GameError::WrongStatus {
-                expected: "active".to_string(),
-                actual: game.status,
-            });
-        }
-
-        // Reject late submissions.
-        if let Some(deadline) = db::get_turn_deadline(&self.pool, game_id, game.turn).await? {
-            if chrono::Utc::now() > deadline {
-                return Err(GameError::DeadlinePassed);
-            }
-        }
-
-        let seat = self.player_seat_by_id(&game, user_id)?;
-
         let orders_json =
             serde_json::to_value(&orders).map_err(|e| GameError::Serialization(e.to_string()))?;
 
-        // Use a transaction with FOR UPDATE to prevent double resolution.
+        // Use a transaction with FOR UPDATE to prevent double resolution and TOCTOU on deadline.
         let mut tx = self.pool.begin().await?;
 
         // Lock the game row to serialize concurrent order submissions.
@@ -380,6 +360,16 @@ impl GameManager {
         }
 
         let current_turn = game.turn;
+
+        // Reject late submissions (checked inside transaction, after acquiring row lock).
+        if let Some(deadline) = db::get_turn_deadline(&self.pool, game_id, current_turn).await? {
+            if chrono::Utc::now() > deadline {
+                tx.rollback().await?;
+                return Err(GameError::DeadlinePassed);
+            }
+        }
+
+        let seat = self.player_seat_by_id(&game, user_id)?;
 
         // Validate orders before inserting.
         let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
@@ -420,13 +410,17 @@ impl GameManager {
             return Ok(());
         }
 
-        let rating_update = self.resolve_turn_inner_tx(&mut tx, game_id, &game, &all_orders)
+        let (rating_update, pending_broadcasts) = self.resolve_turn_inner_tx(&mut tx, game_id, &game, &all_orders)
             .await?;
 
         tx.commit().await?;
 
+        // Send broadcasts AFTER commit to prevent clients seeing uncommitted state.
         self.hub
             .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat }).await;
+        for (channel, event) in pending_broadcasts {
+            self.hub.broadcast(channel, event).await;
+        }
 
         // Update ratings after commit to avoid deadlock from pool contention.
         if let Some((winner_id, loser_id)) = rating_update {
@@ -491,14 +485,19 @@ impl GameManager {
 
         // Re-fetch and resolve.
         let all_orders = db::get_orders_for_turn_tx(&mut tx, game_id, turn).await?;
-        let rating_update = if all_orders.len() >= 2 {
+        let (rating_update, pending_broadcasts) = if all_orders.len() >= 2 {
             self.resolve_turn_inner_tx(&mut tx, game_id, &game, &all_orders)
                 .await?
         } else {
-            None
+            (None, Vec::new())
         };
 
         tx.commit().await?;
+
+        // Send broadcasts AFTER commit.
+        for (channel, event) in pending_broadcasts {
+            self.hub.broadcast(channel, event).await;
+        }
 
         if let Some((winner_id, loser_id)) = rating_update {
             if let Err(e) = self.update_ratings(game_id, winner_id, loser_id).await {
@@ -600,15 +599,15 @@ impl GameManager {
     }
 
     /// Internal: resolve a turn once both players' orders are in (within a transaction).
-    /// Returns Some((winner_id, loser_id)) if the game finished, for the caller
-    /// to update ratings AFTER committing the transaction.
+    /// Returns (Option<(winner_id, loser_id)>, Vec<pending_broadcasts>).
+    /// The caller MUST commit the transaction BEFORE sending the pending broadcasts.
     async fn resolve_turn_inner_tx(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         game_id: Uuid,
         game: &db::GameRow,
         all_orders: &[db::OrderRow],
-    ) -> Result<Option<(Uuid, Uuid)>, GameError> {
+    ) -> Result<(Option<(Uuid, Uuid)>, Vec<(Uuid, ws::GameEvent)>), GameError> {
         let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
         let board = Board::from_map(map_file);
@@ -638,6 +637,7 @@ impl GameManager {
 
         let new_state = result.state;
         let new_turn = new_state.turn as i32;
+        let mut pending_broadcasts = Vec::new();
 
         if new_state.phase == Phase::Finished {
             // Game over.
@@ -657,18 +657,14 @@ impl GameManager {
                 };
 
                 db::finish_game_tx(tx, game_id, winner_id, &state_json).await?;
+                pending_broadcasts.push((game_id, ws::GameEvent::GameFinished { game_id, winner_id }));
 
-                self.hub
-                    .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id }).await;
-
-                return Ok(Some((winner_id, loser_id)));
+                return Ok((Some((winner_id, loser_id)), pending_broadcasts));
             } else {
-                // Simultaneous elimination (no winner) — still mark game as finished.
+                // Simultaneous elimination (no winner) — finish as a draw, no rating update.
                 error!("Game {game_id} finished with no winner (simultaneous elimination)");
-                let fallback_winner = game.player_a.ok_or(GameError::NotFound)?;
-                db::finish_game_tx(tx, game_id, fallback_winner, &state_json).await?;
-                self.hub
-                    .broadcast(game_id, ws::GameEvent::GameFinished { game_id, winner_id: fallback_winner }).await;
+                db::finish_game_draw_tx(tx, game_id, &state_json).await?;
+                pending_broadcasts.push((game_id, ws::GameEvent::GameDraw { game_id }));
             }
         } else {
             let state_json = serde_json::to_value(&new_state)
@@ -680,43 +676,44 @@ impl GameManager {
             let deadline = chrono::Utc::now() + chrono::Duration::hours(24);
             db::set_turn_deadline_tx(tx, game_id, new_turn, deadline).await?;
 
-            self.hub.broadcast(
-            game_id,
-            ws::GameEvent::TurnResolved {
-                    game_id,
-                    turn: new_turn,
-                },
-            ).await;
+            pending_broadcasts.push((game_id, ws::GameEvent::TurnResolved { game_id, turn: new_turn }));
         }
 
-        Ok(None)
+        Ok((None, pending_broadcasts))
     }
 
     /// Update ratings for winner and loser after a game.
-    /// Idempotent: checks if ratings were already updated for this game.
+    /// Idempotent: uses a transactional check with FOR UPDATE to prevent double-counting.
     async fn update_ratings(
         &self,
         game_id: Uuid,
         winner_id: Uuid,
         loser_id: Uuid,
     ) -> Result<(), GameError> {
-        // Idempotency check: skip if ratings already recorded for this game.
+        let mut tx = self.pool.begin().await?;
+
+        // Idempotency check inside transaction: use advisory-style lock via
+        // checking rating_history with FOR UPDATE to serialize concurrent calls.
         let already_done: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM rating_history WHERE game_id = $1)"
+            "SELECT EXISTS(SELECT 1 FROM rating_history WHERE game_id = $1 FOR UPDATE)"
         )
         .bind(game_id)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await
         .unwrap_or(false);
         if already_done {
             tracing::info!("Skipping rating update for game {game_id}: already done");
+            tx.commit().await?;
             return Ok(());
         }
 
         // Verify game is actually finished before updating.
-        let game = db::get_game(&self.pool, game_id).await?.ok_or(GameError::NotFound)?;
+        let game = db::get_game_for_update(&mut tx, game_id)
+            .await?
+            .ok_or(GameError::NotFound)?;
         if game.status != "finished" {
             tracing::warn!("Skipping rating update for game {game_id}: status={}", game.status);
+            tx.commit().await?;
             return Ok(());
         }
 
@@ -777,6 +774,8 @@ impl GameManager {
             new_loser.rating,
         )
         .await?;
+
+        tx.commit().await?;
 
         Ok(())
     }

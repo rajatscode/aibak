@@ -278,6 +278,25 @@ pub async fn finish_game_tx(
 }
 
 
+/// Finish a game as a draw (no winner) within an existing transaction.
+pub async fn finish_game_draw_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    game_id: Uuid,
+    state_json: &serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE games SET status = 'finished', winner_id = NULL, state_json = $2, finished_at = now()
+        WHERE id = $1
+        "#,
+    )
+    .bind(game_id)
+    .bind(state_json)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 /// Set a turn deadline (non-transactional).
 pub async fn set_turn_deadline(
     pool: &PgPool,
