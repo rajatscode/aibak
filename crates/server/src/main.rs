@@ -1833,7 +1833,7 @@ async fn app_placeholder() -> Html<&'static str> {
 }
 
 async fn multiplayer_game_page() -> Html<&'static str> {
-    Html(include_str!("../../static/game.html"))
+    Html(include_str!("../../static/index.html"))
 }
 
 // ── Opening book ──
