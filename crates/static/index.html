@@ -4057,6 +4057,10 @@ async function fetchReplayState(turn) {
     const res = await api('GET', '/api/game/replay/' + turn);
     if (!res) return; // Don't advance replayTurn on failure
     replayCache[turn] = res;
+    // Populate win_prob_history from replay response if available
+    if (res.win_prob_history && res.win_prob_history.length > 0) {
+      winProbHistory = res.win_prob_history;
+    }
   }
 
   // Only advance turn after successful fetch

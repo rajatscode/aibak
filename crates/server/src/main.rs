@@ -559,6 +559,13 @@ async fn submit_local_picks(
         starting_armies,
     );
 
+    // Snapshot the post-picks state as turn 0 for replay.
+    app.state_history.push(app.game.clone());
+
+    // Record initial win probability for turn 0.
+    let wp0 = analysis::win_probability_with_lookahead(&app.game, &app.board);
+    app.win_prob_history.push(wp0.player_0);
+
     // Record starting territories for flawless victory tracking.
     app.starting_territories = (0..app.game.territory_owners.len())
         .filter(|&i| app.game.territory_owners[i] == PLAYER)
@@ -954,6 +961,7 @@ async fn get_replay_turn(
         "territories": territories,
         "events": app.turn_history.get(idx).map(|tl| &tl.events),
         "win_probability": app.win_prob_history.get(idx),
+        "win_prob_history": &app.win_prob_history,
     }))
 }
 
