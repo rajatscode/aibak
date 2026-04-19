@@ -276,8 +276,8 @@ impl GameManager {
             });
         }
 
-        // Reject late submissions (checked inside transaction, after acquiring row lock).
-        if let Some(deadline) = db::get_turn_deadline(&self.pool, game_id, 0).await? {
+        // Reject late submissions (checked inside transaction with FOR UPDATE lock on deadline row).
+        if let Some(deadline) = db::get_turn_deadline_tx(&mut tx, game_id, 0).await? {
             if chrono::Utc::now() > deadline {
                 tx.rollback().await?;
                 return Err(GameError::DeadlinePassed);
@@ -370,8 +370,8 @@ impl GameManager {
 
         let current_turn = game.turn;
 
-        // Reject late submissions (checked inside transaction, after acquiring row lock).
-        if let Some(deadline) = db::get_turn_deadline(&self.pool, game_id, current_turn).await? {
+        // Reject late submissions (checked inside transaction with FOR UPDATE lock on deadline row).
+        if let Some(deadline) = db::get_turn_deadline_tx(&mut tx, game_id, current_turn).await? {
             if chrono::Utc::now() > deadline {
                 tx.rollback().await?;
                 return Err(GameError::DeadlinePassed);
@@ -427,8 +427,15 @@ impl GameManager {
         // Send broadcasts AFTER commit to prevent clients seeing uncommitted state.
         self.hub
             .broadcast(game_id, ws::GameEvent::OpponentCommitted { game_id, seat }).await;
+        let game_finished = rating_update.is_some()
+            || pending_broadcasts.iter().any(|(_, e)| matches!(e, ws::GameEvent::GameDraw { .. }));
         for (channel, event) in pending_broadcasts {
             self.hub.broadcast(channel, event).await;
+        }
+
+        // Clean up WS channel if game finished.
+        if game_finished {
+            self.hub.remove_channel(game_id).await;
         }
 
         // Update ratings after commit to avoid deadlock from pool contention.
@@ -504,8 +511,15 @@ impl GameManager {
         tx.commit().await?;
 
         // Send broadcasts AFTER commit.
+        let game_finished = rating_update.is_some()
+            || pending_broadcasts.iter().any(|(_, e)| matches!(e, ws::GameEvent::GameDraw { .. }));
         for (channel, event) in pending_broadcasts {
             self.hub.broadcast(channel, event).await;
+        }
+
+        // Clean up WS channel if game finished.
+        if game_finished {
+            self.hub.remove_channel(game_id).await;
         }
 
         if let Some((winner_id, loser_id)) = rating_update {
@@ -838,6 +852,9 @@ impl GameManager {
             game_id,
             winner_id,
         }).await;
+
+        // Clean up WS channel after game finished.
+        self.hub.remove_channel(game_id).await;
 
         Ok(())
     }

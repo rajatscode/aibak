@@ -358,6 +358,22 @@ pub async fn set_turn_deadline(
     Ok(())
 }
 
+/// Fetch the deadline for a specific game turn within a transaction, locking the row.
+pub async fn get_turn_deadline_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    game_id: Uuid,
+    turn: i32,
+) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
+    let row = sqlx::query(
+        "SELECT deadline FROM turn_deadlines WHERE game_id = $1 AND turn = $2 FOR UPDATE",
+    )
+    .bind(game_id)
+    .bind(turn)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(|r| r.get("deadline")))
+}
+
 /// Set a turn deadline within an existing transaction.
 pub async fn set_turn_deadline_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
@@ -463,6 +479,7 @@ pub async fn get_expired_deadlines(pool: &PgPool) -> Result<Vec<(Uuid, i32)>, sq
         FROM turn_deadlines td
         JOIN games g ON g.id = td.game_id
         WHERE td.deadline < now() AND g.status IN ('active', 'picking')
+        LIMIT 10
         "#,
     )
     .fetch_all(pool)
@@ -474,6 +491,33 @@ pub async fn get_expired_deadlines(pool: &PgPool) -> Result<Vec<(Uuid, i32)>, sq
 pub async fn cleanup_stale_waiting_games(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         r#"DELETE FROM games WHERE status = 'waiting' AND created_at < now() - interval '30 minutes'"#,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+/// Delete games stuck in "picking" status for more than 30 minutes.
+/// Cleans up related orders and turn_deadlines first (no CASCADE on FKs).
+pub async fn cleanup_stale_picking_games(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let stale_condition =
+        r#"SELECT id FROM games WHERE status = 'picking' AND created_at < now() - interval '30 minutes'"#;
+
+    // Delete dependent records first.
+    sqlx::query(&format!(
+        "DELETE FROM orders WHERE game_id IN ({stale_condition})"
+    ))
+    .execute(pool)
+    .await?;
+
+    sqlx::query(&format!(
+        "DELETE FROM turn_deadlines WHERE game_id IN ({stale_condition})"
+    ))
+    .execute(pool)
+    .await?;
+
+    let result = sqlx::query(
+        r#"DELETE FROM games WHERE status = 'picking' AND created_at < now() - interval '30 minutes'"#,
     )
     .execute(pool)
     .await?;

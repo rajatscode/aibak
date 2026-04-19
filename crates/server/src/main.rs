@@ -6,8 +6,10 @@ mod game;
 mod ws;
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
@@ -58,6 +60,8 @@ pub struct AppState {
     pub local: Arc<Mutex<HashMap<String, LocalState>>>,
     /// Default board used as template for new sessions.
     pub default_board: Arc<Board>,
+    /// IP-based rate limiter for anonymous account registration.
+    pub register_rate_limit: Arc<Mutex<HashMap<IpAddr, Vec<Instant>>>>,
 }
 
 impl AppState {
@@ -974,7 +978,7 @@ async fn favicon() -> impl IntoResponse {
 
 async fn auth_discord_redirect(
     State(state): State<AppState>,
-) -> Result<Redirect, (StatusCode, String)> {
+) -> Result<impl IntoResponse, (StatusCode, String)> {
     let client_id = state.config.discord_client_id.as_ref().ok_or((
         StatusCode::SERVICE_UNAVAILABLE,
         "Discord OAuth not configured".to_string(),
@@ -983,8 +987,18 @@ async fn auth_discord_redirect(
         StatusCode::SERVICE_UNAVAILABLE,
         "Discord OAuth not configured".to_string(),
     ))?;
-    let url = auth::discord::build_auth_url(client_id, redirect_uri);
-    Ok(Redirect::temporary(&url))
+    // Generate random CSRF nonce and store in HttpOnly cookie.
+    let nonce = Uuid::new_v4().to_string();
+    let oauth_state = format!("csrf:{}", nonce);
+    let url = auth::discord::build_auth_url_with_state(client_id, redirect_uri, &oauth_state);
+    let csrf_cookie = format!(
+        "oauth_state={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600",
+        nonce
+    );
+    Ok((
+        [(axum::http::header::SET_COOKIE, csrf_cookie)],
+        Redirect::temporary(&url),
+    ))
 }
 
 #[derive(Deserialize)]
@@ -996,6 +1010,7 @@ struct CallbackQuery {
 
 async fn auth_discord_callback(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     axum::extract::Query(query): axum::extract::Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let client_id = state.config.discord_client_id.as_ref().ok_or((
@@ -1011,6 +1026,31 @@ async fn auth_discord_callback(
         "Discord OAuth not configured".to_string(),
     ))?;
     let pool = state.require_db()?;
+
+    // Validate CSRF state for non-link flows.
+    let is_link_flow = query
+        .state
+        .as_ref()
+        .map_or(false, |s| s.starts_with("link:"));
+    if !is_link_flow {
+        // Extract oauth_state cookie.
+        let cookie_nonce = headers
+            .get("cookie")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|cookies| {
+                cookies.split(';').find_map(|c| {
+                    let c = c.trim();
+                    c.strip_prefix("oauth_state=")
+                })
+            });
+        let expected_state = cookie_nonce.map(|n| format!("csrf:{}", n));
+        if expected_state.is_none() || query.state != expected_state {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "Invalid OAuth state — possible CSRF attack".to_string(),
+            ));
+        }
+    }
 
     // Exchange code for access token.
     let access_token =
@@ -1046,7 +1086,7 @@ async fn auth_discord_callback(
         && let Ok(anon_user_id) = Uuid::parse_str(uid_str)
     {
         // Try linking Discord to the anonymous account.
-        match db::link_discord(
+        db::link_discord(
             pool,
             anon_user_id,
             discord_id,
@@ -1054,20 +1094,12 @@ async fn auth_discord_callback(
             discord_user.avatar_url().as_deref(),
         )
         .await
-        {
-            Ok(user) => user,
-            Err(_) => {
-                // Link failed (already linked or discord_id conflict) — fall back to upsert.
-                db::upsert_user(
-                    pool,
-                    discord_id,
-                    &discord_user.username,
-                    discord_user.avatar_url().as_deref(),
-                )
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-            }
-        }
+        .map_err(|_| {
+            (
+                StatusCode::CONFLICT,
+                "This Discord account is already linked to another user".to_string(),
+            )
+        })?
     } else {
         db::upsert_user(
             pool,
@@ -1088,15 +1120,22 @@ async fn auth_discord_callback(
             )
         })?;
 
-    // Set cookie and redirect to app.
-    let cookie = format!(
+    // Set cookie and redirect to app. Clear the oauth_state cookie.
+    let token_cookie = format!(
         "token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800",
         token
     );
-    Ok((
-        [(axum::http::header::SET_COOKIE, cookie)],
-        Redirect::temporary("/"),
-    ))
+    let clear_csrf = "oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0".to_string();
+    let mut response = Redirect::temporary("/").into_response();
+    response.headers_mut().append(
+        axum::http::header::SET_COOKIE,
+        token_cookie.parse().unwrap(),
+    );
+    response.headers_mut().append(
+        axum::http::header::SET_COOKIE,
+        clear_csrf.parse().unwrap(),
+    );
+    Ok(response)
 }
 
 // ── Anonymous auth ──
@@ -1120,11 +1159,49 @@ fn validate_username(username: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Max anonymous registrations per IP per hour.
+const REGISTER_RATE_LIMIT: usize = 5;
+const REGISTER_RATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// Extract client IP from X-Forwarded-For header (Fly.io) or fallback.
+fn extract_client_ip(headers: &axum::http::HeaderMap) -> IpAddr {
+    headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED))
+}
+
+fn check_register_rate_limit(
+    limiter: &Arc<Mutex<HashMap<IpAddr, Vec<Instant>>>>,
+    ip: IpAddr,
+) -> Result<(), (StatusCode, String)> {
+    let mut map = limiter.lock().unwrap_or_else(|e| e.into_inner());
+    let now = Instant::now();
+    let entries = map.entry(ip).or_default();
+    entries.retain(|t| now.duration_since(*t) < REGISTER_RATE_WINDOW);
+    if entries.len() >= REGISTER_RATE_LIMIT {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many registrations — try again later".to_string(),
+        ));
+    }
+    entries.push(now);
+    Ok(())
+}
+
 async fn auth_register(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     SanitizedJson(body): SanitizedJson<RegisterRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let pool = state.require_db()?;
+
+    // Rate limit by IP.
+    let ip = extract_client_ip(&headers);
+    check_register_rate_limit(&state.register_rate_limit, ip)?;
+
     let username = body.username.trim().to_string();
 
     validate_username(&username)
@@ -1785,6 +1862,7 @@ async fn main() {
         matchmaking,
         local: Arc::new(Mutex::new(HashMap::new())),
         default_board,
+        register_rate_limit: Arc::new(Mutex::new(HashMap::new())),
     };
 
     // Local play routes with per-session cookie middleware.

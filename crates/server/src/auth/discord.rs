@@ -37,17 +37,7 @@ struct TokenResponse {
     token_type: String,
 }
 
-/// Build the Discord authorization URL for the OAuth2 code grant flow.
-pub fn build_auth_url(client_id: &str, redirect_uri: &str) -> String {
-    format!(
-        "{}?client_id={}&redirect_uri={}&response_type=code&scope=identify",
-        DISCORD_AUTH_URL,
-        client_id,
-        urlencoding::encode(redirect_uri)
-    )
-}
-
-/// Build the Discord authorization URL with an OAuth state parameter (for account linking).
+/// Build the Discord authorization URL with an OAuth state parameter.
 pub fn build_auth_url_with_state(client_id: &str, redirect_uri: &str, state: &str) -> String {
     format!(
         "{}?client_id={}&redirect_uri={}&response_type=code&scope=identify&state={}",
