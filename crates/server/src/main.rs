@@ -86,6 +86,16 @@ impl AppState {
 
 // ── Local play state (preserved from original server) ──
 
+/// Pick resolution data for replay animation.
+#[derive(Clone, Serialize)]
+struct PickResolution {
+    player_0_picks: Vec<usize>,
+    player_1_picks: Vec<usize>,
+    resolution_order: Vec<picking::PickStep>,
+    /// Win probability at balanced points (after each pair of picks).
+    win_probs_at_balanced_points: Vec<f64>,
+}
+
 pub struct LocalState {
     board: Board,
     game: GameState,
@@ -107,6 +117,8 @@ pub struct LocalState {
     starting_territories: Vec<usize>,
     /// Maximum number of complete bonuses owned simultaneously during the current game.
     max_simultaneous_bonuses: u32,
+    /// Pick resolution log for turn 0 replay animation.
+    pick_resolution: Option<PickResolution>,
 }
 
 /// Cumulative statistics for local play sessions (no database required).
@@ -247,6 +259,7 @@ fn create_fresh_local_state(board: &Board) -> LocalState {
         achievements: Vec::new(),
         starting_territories: Vec::new(),
         max_simultaneous_bonuses: 0,
+        pick_resolution: None,
     }
 }
 
@@ -552,12 +565,43 @@ async fn submit_local_picks(
     let board = app.board.clone();
 
     let starting_armies = app.starting_armies;
-    picking::resolve_picks(
+    let resolution_log = picking::resolve_picks_logged(
         &mut app.game,
         [&body.picks, &ai_picks],
         &board,
         starting_armies,
     );
+
+    // Compute win probability at balanced points (after each pair of picks).
+    let mut balanced_probs = Vec::new();
+    {
+        let mut temp_state = GameState::new(&board);
+        temp_state.phase = Phase::Play;
+        temp_state.turn = 1;
+        let mut p0_count = 0usize;
+        let mut p1_count = 0usize;
+        for step in &resolution_log.resolution_order {
+            temp_state.territory_owners[step.territory] = step.player;
+            temp_state.territory_armies[step.territory] = starting_armies;
+            if step.player == 0 {
+                p0_count += 1;
+            } else {
+                p1_count += 1;
+            }
+            // Only compute at balanced points (equal picks per player)
+            if p0_count == p1_count && p0_count > 0 {
+                let wp = analysis::quick_win_probability(&temp_state, &board);
+                balanced_probs.push(wp.player_0);
+            }
+        }
+    }
+
+    app.pick_resolution = Some(PickResolution {
+        player_0_picks: resolution_log.player_0_picks,
+        player_1_picks: resolution_log.player_1_picks,
+        resolution_order: resolution_log.resolution_order,
+        win_probs_at_balanced_points: balanced_probs,
+    });
 
     // Snapshot the post-picks state as turn 0 for replay.
     app.state_history.push(app.game.clone());
@@ -889,6 +933,7 @@ async fn new_local_game(
     app.win_prob_history.clear();
     app.starting_territories.clear();
     app.max_simultaneous_bonuses = 0;
+    app.pick_resolution = None;
     let board_name = app.board.name.clone();
     Ok(Json(ActionResult {
         success: true,
@@ -951,7 +996,7 @@ async fn get_replay_turn(
         })
         .collect();
 
-    Json(serde_json::json!({
+    let mut response = serde_json::json!({
         "turn": turn,
         "phase": match historical_state.phase {
             Phase::Picking => "picking",
@@ -962,7 +1007,19 @@ async fn get_replay_turn(
         "events": app.turn_history.get(idx).map(|tl| &tl.events),
         "win_probability": app.win_prob_history.get(idx),
         "win_prob_history": &app.win_prob_history,
-    }))
+    });
+
+    // Include pick resolution data for turn 0
+    if idx == 0 {
+        if let Some(ref pr) = app.pick_resolution {
+            response.as_object_mut().unwrap().insert(
+                "pick_resolution".to_string(),
+                serde_json::to_value(pr).unwrap(),
+            );
+        }
+    }
+
+    Json(response)
 }
 
 async fn index() -> Html<&'static str> {
@@ -1388,6 +1445,7 @@ async fn export_game(State(state): State<AppState>, session: SessionId) -> impl 
         "state_history": state_snapshots,
         "win_prob_history": app.win_prob_history,
         "ai_strength": format!("{:?}", app.ai_strength),
+        "pick_resolution": app.pick_resolution,
     });
 
     let json_str = serde_json::to_string_pretty(&export).unwrap_or_default();
@@ -1561,6 +1619,31 @@ async fn import_game(
     app.win_prob_history = win_prob_history;
     app.starting_territories.clear();
     app.max_simultaneous_bonuses = 0;
+
+    // Restore pick resolution if present in export
+    app.pick_resolution = body
+        .get("pick_resolution")
+        .and_then(|v| {
+            let pr_val = v.clone();
+            let player_0_picks: Vec<usize> = pr_val.get("player_0_picks")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let player_1_picks: Vec<usize> = pr_val.get("player_1_picks")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let resolution_order: Vec<picking::PickStep> = pr_val.get("resolution_order")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let win_probs_at_balanced_points: Vec<f64> = pr_val.get("win_probs_at_balanced_points")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            Some(PickResolution {
+                player_0_picks,
+                player_1_picks,
+                resolution_order,
+                win_probs_at_balanced_points,
+            })
+        });
 
     Ok(Json(ActionResult {
         success: true,

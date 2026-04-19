@@ -2,9 +2,29 @@
 
 use rand::Rng;
 use rand::seq::SliceRandom;
+use serde::{Deserialize, Serialize};
 
 use crate::board::Board;
 use crate::state::{GameState, NEUTRAL, Phase};
+
+/// A single pick step in the draft resolution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PickStep {
+    /// Which player (0 or 1) received this pick.
+    pub player: u8,
+    /// Territory ID assigned.
+    pub territory: usize,
+    /// 1-based round number in the draft.
+    pub round: usize,
+}
+
+/// Full log of the pick resolution process.
+#[derive(Debug, Clone, Serialize)]
+pub struct PickResolutionLog {
+    pub player_0_picks: Vec<usize>,
+    pub player_1_picks: Vec<usize>,
+    pub resolution_order: Vec<PickStep>,
+}
 
 /// Generate Random Warlords pick options.
 /// Selects exactly one random territory from each bonus that has value > 0.
@@ -115,6 +135,99 @@ pub fn resolve_picks(state: &mut GameState, picks: [&Picks; 2], board: &Board, s
 
     state.phase = Phase::Play;
     state.turn = 1;
+}
+
+/// Resolve picks and return a log of the resolution order.
+///
+/// Same logic as `resolve_picks` but also records each step for replay.
+pub fn resolve_picks_logged(
+    state: &mut GameState,
+    picks: [&Picks; 2],
+    board: &Board,
+    starting_armies: u32,
+) -> PickResolutionLog {
+    let map = &board.map;
+    let num_picks = board.picking().num_picks;
+    let mut claimed: Vec<bool> = vec![false; board.map.territory_count()];
+    let mut player_assigned: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
+    let mut pick_indices: [usize; 2] = [0, 0];
+
+    let total_picks = num_picks * 2;
+    let draft_order = snake_draft_order(total_picks);
+
+    let all_pickable: Vec<usize> = (0..board.map.territory_count())
+        .filter(|&tid| !map.territories[tid].is_wasteland)
+        .collect();
+
+    let mut rng = rand::thread_rng();
+    let mut resolution_order = Vec::with_capacity(total_picks);
+    let mut round = 0usize;
+
+    for &seat in &draft_order {
+        if player_assigned[seat].len() >= num_picks {
+            continue;
+        }
+
+        let mut found = false;
+        while pick_indices[seat] < picks[seat].len() {
+            let tid = picks[seat][pick_indices[seat]];
+            pick_indices[seat] += 1;
+            if tid >= board.map.territory_count() || claimed[tid] {
+                continue;
+            }
+            claimed[tid] = true;
+            player_assigned[seat].push(tid);
+            round += 1;
+            resolution_order.push(PickStep {
+                player: seat as u8,
+                territory: tid,
+                round,
+            });
+            found = true;
+            break;
+        }
+
+        if !found {
+            let mut unclaimed: Vec<usize> = all_pickable
+                .iter()
+                .copied()
+                .filter(|&tid| !claimed[tid])
+                .collect();
+            unclaimed.shuffle(&mut rng);
+            if let Some(tid) = unclaimed.first() {
+                claimed[*tid] = true;
+                player_assigned[seat].push(*tid);
+                round += 1;
+                resolution_order.push(PickStep {
+                    player: seat as u8,
+                    territory: *tid,
+                    round,
+                });
+            }
+        }
+    }
+
+    for seat in 0..2u8 {
+        for &tid in &player_assigned[seat as usize] {
+            state.territory_owners[tid] = seat;
+            state.territory_armies[tid] = starting_armies;
+        }
+    }
+
+    for tid in 0..board.map.territory_count() {
+        if state.territory_owners[tid] == NEUTRAL && !map.territories[tid].is_wasteland {
+            state.territory_armies[tid] = map.territories[tid].default_armies;
+        }
+    }
+
+    state.phase = Phase::Play;
+    state.turn = 1;
+
+    PickResolutionLog {
+        player_0_picks: picks[0].clone(),
+        player_1_picks: picks[1].clone(),
+        resolution_order,
+    }
 }
 
 /// Generate ABBAABBA snake draft order for N total picks.

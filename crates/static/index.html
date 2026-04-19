@@ -3976,6 +3976,11 @@ let replayAutoPlay = false;
 let replayAutoTimer = null;
 let replayCache = {}; // turn -> fetched state
 
+// Pick resolution replay state
+let pickReplayActive = false;
+let pickReplayData = null; // pick_resolution from API
+let pickReplayStep = 0; // current step index (0 = none shown, 1..N = steps shown)
+
 async function enterReplayMode() {
   // Hide game over overlay
   document.getElementById('game-over').classList.remove('show');
@@ -4014,6 +4019,9 @@ function exitReplayMode() {
   replayMode = false;
   replayStopAutoPlay();
   replayCache = {};
+  pickReplayActive = false;
+  pickReplayData = null;
+  pickReplayStep = 0;
 
   // Hide replay UI
   document.getElementById('replay-stepper').style.display = 'none';
@@ -4067,9 +4075,24 @@ async function fetchReplayState(turn) {
 
   // Only advance turn after successful fetch
   replayTurn = turn;
-  updateReplayControls();
 
   const state = replayCache[turn];
+
+  // Handle pick resolution on turn 0
+  if (turn === 0 && state.pick_resolution) {
+    pickReplayData = state.pick_resolution;
+    pickReplayActive = true;
+    pickReplayStep = pickReplayData.resolution_order.length; // start fully resolved
+    applyPickReplayState(state);
+    updateReplayControls();
+    renderPickReplaySparkline();
+    renderPickReplayLog();
+    return;
+  }
+
+  pickReplayActive = false;
+  pickReplayData = null;
+  updateReplayControls();
   applyReplayState(state);
   renderReplaySparkline(turn);
   renderReplayLog(state);
@@ -4147,11 +4170,231 @@ function applyReplayState(state) {
   document.getElementById('turn-num').textContent = (state.turn || 0) + 1;
 }
 
+// ── Pick resolution replay functions ──
+
+function applyPickReplayState(state) {
+  if (!state || !state.territories || !pickReplayData) return;
+
+  // Start with all territories neutral, then apply picks up to current step
+  state.territories.forEach(function(t) {
+    var pathEl = document.getElementById('terr-' + t.id);
+    var armyEl = document.getElementById('army-' + t.id);
+    var armyBg = document.getElementById('army-bg-' + t.id);
+    var badgeEl = document.getElementById('deploy-badge-' + t.id);
+    var highlightEl = document.getElementById('highlight-' + t.id);
+    var hatchEl = document.getElementById('wasteland-hatch-' + t.id);
+
+    if (!pathEl) return;
+
+    // Default: neutral appearance
+    pathEl.style.transition = 'fill 0.3s ease';
+    pathEl.setAttribute('fill', '#232b3a');
+    if (hatchEl) hatchEl.style.display = 'none';
+
+    // Show neutral armies
+    if (t.armies > 0 && !t.is_wasteland) {
+      armyEl.textContent = t.armies;
+      if (armyBg) armyBg.style.display = '';
+    } else if (t.is_wasteland) {
+      armyEl.textContent = t.armies;
+      if (armyBg) armyBg.style.display = '';
+    } else {
+      armyEl.textContent = '';
+      if (armyBg) armyBg.style.display = 'none';
+    }
+
+    if (badgeEl) badgeEl.textContent = '';
+    if (highlightEl) {
+      highlightEl.setAttribute('stroke', 'none');
+      highlightEl.setAttribute('stroke-dasharray', 'none');
+    }
+  });
+
+  // Apply picks up to current step
+  var steps = pickReplayData.resolution_order;
+  var latestStep = pickReplayStep > 0 ? steps[pickReplayStep - 1] : null;
+  for (var i = 0; i < pickReplayStep && i < steps.length; i++) {
+    var step = steps[i];
+    var tid = step.territory;
+    var pathEl = document.getElementById('terr-' + tid);
+    var armyEl = document.getElementById('army-' + tid);
+    var armyBg = document.getElementById('army-bg-' + tid);
+    var highlightEl = document.getElementById('highlight-' + tid);
+
+    if (!pathEl) continue;
+
+    var fill = step.player === 0 ? '#1a5294' : '#6b2020';
+    pathEl.setAttribute('fill', fill);
+
+    // Show starting armies (5)
+    var startingArmies = state.territories[tid] ? state.territories[tid].armies : 5;
+    armyEl.textContent = startingArmies;
+    if (armyBg) armyBg.style.display = '';
+
+    // Highlight the latest pick
+    if (highlightEl && step === latestStep) {
+      highlightEl.setAttribute('stroke', step.player === 0 ? '#60a5fa' : '#f87171');
+      highlightEl.setAttribute('stroke-width', '3');
+      highlightEl.setAttribute('stroke-dasharray', '6,3');
+    }
+  }
+
+  // Clear order lines
+  var orderLines = document.getElementById('order-lines');
+  if (orderLines) orderLines.innerHTML = '';
+
+  // Update topbar
+  document.getElementById('turn-num').textContent = 'Draft';
+}
+
+function pickReplayStepForward() {
+  if (!pickReplayData) return;
+  var maxStep = pickReplayData.resolution_order.length;
+  if (pickReplayStep < maxStep) {
+    pickReplayStep++;
+    var state = replayCache[0];
+    applyPickReplayState(state);
+    updateReplayControls();
+    renderPickReplaySparkline();
+    renderPickReplayLog();
+  }
+}
+
+function pickReplayStepBack() {
+  if (!pickReplayData) return;
+  if (pickReplayStep > 0) {
+    pickReplayStep--;
+    var state = replayCache[0];
+    applyPickReplayState(state);
+    updateReplayControls();
+    renderPickReplaySparkline();
+    renderPickReplayLog();
+  }
+}
+
+function renderPickReplayLog() {
+  var logEl = document.getElementById('replay-log');
+  if (!pickReplayData) return;
+
+  var steps = pickReplayData.resolution_order;
+  var html = '<h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:0 0 6px">Pick Resolution</h3>';
+
+  if (pickReplayStep === 0) {
+    html += '<div style="font-size:11px;color:var(--text3)">Press Next to step through picks</div>';
+  } else {
+    for (var i = 0; i < pickReplayStep && i < steps.length; i++) {
+      var step = steps[i];
+      var terrName = 'Territory ' + step.territory;
+      // Try to get territory name from cached state
+      if (replayCache[0] && replayCache[0].territories) {
+        var terr = replayCache[0].territories.find(function(t) { return t.id === step.territory; });
+        if (terr) terrName = terr.name;
+      }
+      var playerLabel = step.player === 0 ? '<span class="log-player">You</span>' : '<span class="log-enemy">AI</span>';
+      var isCurrent = (i === pickReplayStep - 1);
+      html += '<div class="log-entry" style="' + (isCurrent ? 'font-weight:700;' : 'opacity:0.7;') + '">';
+      html += '<span style="color:var(--text3);font-size:10px;margin-right:4px">' + step.round + '.</span> ';
+      html += playerLabel + ' picks <strong>' + terrName + '</strong>';
+      html += '</div>';
+    }
+    if (pickReplayStep >= steps.length) {
+      html += '<div class="log-entry" style="margin-top:6px"><span class="log-system">Pick resolution complete</span></div>';
+    }
+  }
+
+  logEl.innerHTML = html;
+}
+
+function renderPickReplaySparkline() {
+  var container = document.getElementById('replay-sparkline-svg');
+  if (!pickReplayData) return;
+
+  var balancedProbs = pickReplayData.win_probs_at_balanced_points || [];
+  // Determine how many balanced points have been revealed
+  var steps = pickReplayData.resolution_order;
+  var p0Count = 0, p1Count = 0;
+  var revealedBalancedIdx = 0;
+  for (var i = 0; i < pickReplayStep && i < steps.length; i++) {
+    if (steps[i].player === 0) p0Count++;
+    else p1Count++;
+    if (p0Count === p1Count && p0Count > 0) revealedBalancedIdx++;
+  }
+
+  // Combine: revealed balanced probs from picks + rest of game win prob history
+  var allData = [];
+  for (var j = 0; j < revealedBalancedIdx && j < balancedProbs.length; j++) {
+    allData.push(balancedProbs[j]);
+  }
+  // Add game win prob history (skip the first entry which duplicates end-of-picks)
+  var gameProbs = winProbHistory || [];
+  for (var k = 0; k < gameProbs.length; k++) {
+    allData.push(gameProbs[k]);
+  }
+
+  if (allData.length < 2) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--text3)">Picking phase...</div>';
+    return;
+  }
+
+  var w = Math.max(200, container.clientWidth - 4) || 300, h = 70, pad = 6;
+  var usableW = w - pad * 2;
+  var usableH = h - pad * 2;
+
+  var points = allData.map(function(v, i) {
+    var x = pad + (i / Math.max(1, allData.length - 1)) * usableW;
+    var y = pad + (1 - v) * usableH;
+    return x + ',' + y;
+  }).join(' ');
+
+  var areaPath = 'M ' + pad + ',' + (pad + usableH);
+  allData.forEach(function(v, i) {
+    var x = pad + (i / Math.max(1, allData.length - 1)) * usableW;
+    var y = pad + (1 - v) * usableH;
+    areaPath += ' L ' + x + ',' + y;
+  });
+  areaPath += ' L ' + (pad + usableW) + ',' + (pad + usableH) + ' Z';
+
+  // Current position indicator = number of revealed balanced points
+  var currentIdx = Math.max(0, revealedBalancedIdx - 1);
+  var cx = pad + (currentIdx / Math.max(1, allData.length - 1)) * usableW;
+
+  var svg = '<svg width="' + w + '" height="' + h + '" style="background:var(--bg);border-radius:6px;border:1px solid var(--border)">';
+  svg += '<line x1="' + pad + '" y1="' + (pad + usableH/2) + '" x2="' + (w-pad) + '" y2="' + (pad + usableH/2) + '" stroke="var(--border)" stroke-dasharray="4,4"/>';
+  svg += '<path d="' + areaPath + '" fill="rgba(37,99,235,0.15)"/>';
+  svg += '<polyline points="' + points + '" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round"/>';
+  svg += '<line x1="' + cx + '" y1="' + pad + '" x2="' + cx + '" y2="' + (pad + usableH) + '" stroke="var(--gold)" stroke-width="2" opacity="0.8"/>';
+  if (currentIdx < allData.length) {
+    var cy = pad + (1 - allData[currentIdx]) * usableH;
+    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="4" fill="var(--gold)" stroke="var(--bg)" stroke-width="1.5"/>';
+    svg += '<text x="' + cx + '" y="' + (cy - 8) + '" text-anchor="middle" font-size="9" font-weight="700" fill="var(--gold)">' + Math.round(allData[currentIdx] * 100) + '%</text>';
+  }
+  svg += '<text x="' + (w-pad) + '" y="' + (pad+6) + '" text-anchor="end" font-size="8" fill="var(--text3)">100%</text>';
+  svg += '<text x="' + (w-pad) + '" y="' + (pad+usableH) + '" text-anchor="end" font-size="8" fill="var(--text3)">0%</text>';
+  // Label for pick phase
+  if (revealedBalancedIdx > 0 && revealedBalancedIdx <= balancedProbs.length) {
+    svg += '<text x="' + pad + '" y="' + (pad+6) + '" font-size="8" fill="var(--text3)">Draft</text>';
+  }
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
 function updateReplayControls() {
-  document.getElementById('rs-turn-display').textContent = 'Turn ' + (replayTurn + 1) + ' / ' + (replayMaxTurn + 1);
-  document.getElementById('rs-prev').disabled = replayTurn <= 0;
-  document.getElementById('rs-next').disabled = replayTurn >= replayMaxTurn;
-  document.getElementById('rs-slider').value = replayTurn;
+  if (pickReplayActive && pickReplayData) {
+    var maxStep = pickReplayData.resolution_order.length;
+    document.getElementById('rs-turn-display').textContent = 'Pick ' + pickReplayStep + ' / ' + maxStep;
+    document.getElementById('rs-prev').disabled = pickReplayStep <= 0;
+    document.getElementById('rs-next').disabled = false; // can always advance to turn 1
+    document.getElementById('rs-slider').min = 0;
+    document.getElementById('rs-slider').max = maxStep;
+    document.getElementById('rs-slider').value = pickReplayStep;
+  } else {
+    document.getElementById('rs-turn-display').textContent = 'Turn ' + (replayTurn + 1) + ' / ' + (replayMaxTurn + 1);
+    document.getElementById('rs-prev').disabled = replayTurn <= 0;
+    document.getElementById('rs-next').disabled = replayTurn >= replayMaxTurn;
+    document.getElementById('rs-slider').min = 0;
+    document.getElementById('rs-slider').max = replayMaxTurn;
+    document.getElementById('rs-slider').value = replayTurn;
+  }
 
   const playBtn = document.getElementById('rs-play');
   if (replayAutoPlay) {
@@ -4165,6 +4408,34 @@ function updateReplayControls() {
 
 async function replayStep(dir) {
   replayStopAutoPlay();
+
+  // Handle pick replay stepping
+  if (pickReplayActive && pickReplayData) {
+    var maxStep = pickReplayData.resolution_order.length;
+    if (dir > 0) {
+      if (pickReplayStep < maxStep) {
+        pickReplayStepForward();
+      } else {
+        // Done with picks, advance to turn 1
+        pickReplayActive = false;
+        pickReplayData = null;
+        if (replayMaxTurn >= 1) {
+          await fetchReplayState(1);
+        }
+      }
+    } else {
+      pickReplayStepBack();
+    }
+    return;
+  }
+
+  // If going back to turn 0 and we have pick data, re-enter pick replay
+  if (dir < 0 && replayTurn === 0) return;
+  if (dir < 0 && replayTurn === 1 && replayCache[0] && replayCache[0].pick_resolution) {
+    await fetchReplayState(0);
+    return;
+  }
+
   const newTurn = Math.max(0, Math.min(replayMaxTurn, replayTurn + dir));
   if (newTurn !== replayTurn) {
     await fetchReplayState(newTurn);
@@ -4173,9 +4444,25 @@ async function replayStep(dir) {
 
 async function replaySliderChange(value) {
   replayStopAutoPlay();
-  const turn = parseInt(value);
-  if (turn !== replayTurn) {
-    await fetchReplayState(turn);
+  var val = parseInt(value);
+
+  // Handle pick replay slider
+  if (pickReplayActive && pickReplayData) {
+    var maxStep = pickReplayData.resolution_order.length;
+    val = Math.max(0, Math.min(maxStep, val));
+    if (val !== pickReplayStep) {
+      pickReplayStep = val;
+      var state = replayCache[0];
+      applyPickReplayState(state);
+      updateReplayControls();
+      renderPickReplaySparkline();
+      renderPickReplayLog();
+    }
+    return;
+  }
+
+  if (val !== replayTurn) {
+    await fetchReplayState(val);
   }
 }
 
@@ -4186,6 +4473,23 @@ function replayToggleAutoPlay() {
     replayAutoPlay = true;
     updateReplayControls();
     replayAutoTimer = setInterval(async function() {
+      // Handle pick replay auto-step
+      if (pickReplayActive && pickReplayData) {
+        var maxStep = pickReplayData.resolution_order.length;
+        if (pickReplayStep < maxStep) {
+          pickReplayStepForward();
+        } else {
+          // Done with picks, advance to turn 1
+          pickReplayActive = false;
+          pickReplayData = null;
+          if (replayMaxTurn >= 1) {
+            await fetchReplayState(1);
+          } else {
+            replayStopAutoPlay();
+          }
+        }
+        return;
+      }
       if (replayTurn >= replayMaxTurn) {
         replayStopAutoPlay();
         return;
