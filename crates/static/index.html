@@ -2242,6 +2242,20 @@ function onStateUpdate() {
           clearDeployState();
         }
       } catch(e) {}
+      if (restored) {
+        var validDeploys = {};
+        var reclaimed = 0;
+        for (var tid in deploys) {
+          if (isOwned(parseInt(tid))) {
+            validDeploys[tid] = deploys[tid];
+          } else {
+            reclaimed += deploys[tid];
+          }
+        }
+        deploys = validDeploys;
+        deployLeft += reclaimed;
+        orders = orders.filter(function(o) { return isOwned(o.from); });
+      }
       if (!restored) {
         deploys = {};
         deployLeft = G.income || 5;

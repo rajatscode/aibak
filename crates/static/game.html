@@ -410,6 +410,7 @@ let submitted = false;
 var gameOverShown = false;
 let ws = null;
 let wsReconnectDelay = 3000;
+let wsRetries = 0;
 let lastTurn = -1;        // track turn transitions
 let turnDeadline = null;  // ISO string from API
 let deadlineInterval = null;
@@ -586,8 +587,8 @@ function connectWebSocket() {
   ws.onopen = function() {
     updateWsStatus(true);
     wsReconnectDelay = 3000;
+    wsRetries = 0;
     ws.send(JSON.stringify({type: 'subscribe', game_id: GAME_ID}));
-    // Refresh game state after reconnect to catch any missed updates
     fetchGameState();
   };
   ws.onmessage = function(evt) {
@@ -598,6 +599,11 @@ function connectWebSocket() {
   };
   ws.onclose = function() {
     updateWsStatus(false);
+    wsRetries++;
+    if (wsRetries > 10) {
+      toast('Connection lost. Please refresh the page.', 'error');
+      return;
+    }
     toast('Connection lost, reconnecting...', 'error');
     setTimeout(connectWebSocket, wsReconnectDelay);
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, 60000);

@@ -110,6 +110,12 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--border)}
 
+#toast-container{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transform:translateY(-10px);transition:opacity .3s,transform .3s;pointer-events:auto}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{border-color:var(--red);background:#2d1013}
+.toast.success{border-color:var(--green);background:#0d2818}
+
 .local-game-card{padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
 .local-game-card h3{font-size:14px;font-weight:600;margin-bottom:8px}
 .local-game-card .meta{font-size:12px;color:var(--text2);margin-bottom:12px}
@@ -323,11 +329,21 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
   </div>
 </div>
 
+<div id="toast-container"></div>
 <footer style="width:100%;text-align:center;padding:24px 16px;font-size:12px;color:#8b949e;border-top:1px solid #21293a;margin-top:24px;">
   strat.club
 </footer>
 
 <script>
+function toast(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast ' + (type||'');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  requestAnimationFrame(function(){el.classList.add('show');});
+  setTimeout(function(){el.classList.remove('show');setTimeout(function(){el.remove();},300);}, 2500);
+}
+
 document.querySelectorAll('.tab').forEach(function(tab) {
   tab.addEventListener('click', function() {
     document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
@@ -437,6 +453,7 @@ function renderGameList(listId, emptyId, games, type) {
 }
 
 async function spectateMultiplayer(gameId) {
+  if (spectatorInterval) clearInterval(spectatorInterval);
   spectateMode = 'multiplayer';
   currentSpectateId = gameId;
   document.getElementById('browser-view').classList.add('hidden');
@@ -489,6 +506,7 @@ async function refreshMultiplayerSpectate() {
 }
 
 async function spectateLocal() {
+  if (spectatorInterval) clearInterval(spectatorInterval);
   spectateMode = 'local';
   document.getElementById('browser-view').classList.add('hidden');
   document.getElementById('spectator-view').classList.add('active');
@@ -902,13 +920,13 @@ async function cancelGame(gameId) {
     var res = await fetch('/api/games/' + encodeURIComponent(gameId) + '/cancel', { method: 'POST' });
     if (!res.ok) {
       var err = await res.text();
-      alert('Could not cancel game: ' + err);
+      toast('Could not cancel game: ' + err, 'error');
       return;
     }
     loadMyGames();
     loadActiveGames();
   } catch(e) {
-    alert('Network error');
+    toast('Network error', 'error');
   }
 }
 
