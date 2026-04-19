@@ -651,21 +651,6 @@ body.has-stats-bar #sidebar-actions{padding-bottom:32px}
       <div class="auth-area" id="auth-area"></div>
     </div>
   </div>
-  <div class="player-bar" id="player-bar">
-    <div class="player" id="player-a-info">
-      <span class="dot" style="background:var(--blue)"></span>
-      <span class="name" id="pa-name">Player A</span>
-      <span class="rating" id="pa-rating"></span>
-    </div>
-    <span class="vs">vs</span>
-    <div class="player" id="player-b-info">
-      <span class="dot" style="background:var(--red)"></span>
-      <span class="name" id="pb-name">Player B</span>
-      <span class="rating" id="pb-rating"></span>
-    </div>
-    <div class="turn-info" id="turn-info"></div>
-    <span class="deadline-timer" id="deadline-timer"></span>
-  </div>
   <div id="win-prob-wrap">
     <div id="win-prob-label">Win Probability</div>
     <div id="win-prob-bar">
@@ -705,7 +690,6 @@ body.has-stats-bar #sidebar-actions{padding-bottom:32px}
           <button id="replay-exit-btn" onclick="exitReplayMode()">Exit Review</button>
         </div>
       </div>
-      <div id="submitted-overlay"><div class="msg" id="submitted-msg">Orders submitted - waiting for opponent...</div></div>
     </div>
     <div id="mobile-drawer-backdrop" onclick="closeMobileDrawer()"></div>
     <div id="sidebar">
@@ -731,7 +715,6 @@ body.has-stats-bar #sidebar-actions{padding-bottom:32px}
         <div class="history-section" id="history-panel"></div>
       </div>
       <div id="sidebar-actions"></div>
-      <div id="ws-status"><span class="disconnected">Connecting...</span></div>
     </div>
     <div id="mobile-sidebar-tab" onclick="toggleMobileSidebar()">Show Orders <span class="tab-arrow">&#9650;</span></div>
   </div>
@@ -759,29 +742,6 @@ body.has-stats-bar #sidebar-actions{padding-bottom:32px}
       <button class="btn-export" onclick="exportGame()">&#128190; Export Game</button>
       <button class="btn-import" onclick="showImportOverlay()">&#128194; Import Game</button>
     </div>
-  </div>
-</div>
-<div id="waiting-overlay">
-  <div class="card">
-    <div class="spinner"></div>
-    <h2>Waiting for opponent...</h2>
-    <p>Share this link to invite a player</p>
-    <p style="margin-top:12px;color:var(--gold);font-family:monospace;font-size:12px;word-break:break-all" id="game-link"></p>
-    <button id="copy-link-btn" onclick="copyInviteLink()" style="margin-top:12px;background:transparent;border:1px solid var(--gold);color:var(--gold);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Copy Link</button>
-  </div>
-</div>
-<div id="login-overlay">
-  <div style="background:var(--bg2);border:2px solid var(--gold);border-radius:16px;padding:40px 48px;text-align:center;max-width:400px;width:calc(100% - 32px);box-sizing:border-box">
-    <h2 style="font-size:22px;color:var(--gold);margin-bottom:8px">Sign in to play</h2>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Enter a username to join this game</p>
-    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap">
-      <input id="game-register-username" type="text" placeholder="Username (3-16 chars)" maxlength="16" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;outline:none;width:200px;min-height:44px" onkeydown="if(event.key==='Enter')gameRegister()">
-      <button class="btn" onclick="gameRegister()" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:14px;font-weight:600;cursor:pointer;width:auto">Play</button>
-    </div>
-    <div id="game-register-error" style="color:var(--red);font-size:12px;margin-bottom:12px;display:none"></div>
-    <div style="color:var(--text3);font-size:12px;margin-bottom:12px">&mdash; or &mdash;</div>
-    <a href="/api/auth/discord" class="btn" style="display:inline-flex;align-items:center;background:#5865F2;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:600;text-decoration:none;min-height:44px">Sign in with Discord</a>
-    <p style="font-size:11px;color:var(--text3);margin-top:8px">Discord saves your rating history</p>
   </div>
 </div>
 <div id="import-overlay">
@@ -956,27 +916,6 @@ body.has-stats-bar #sidebar-actions{padding-bottom:32px}
     window.location.href = returnTo;
   }
 })();
-
-// ========== MODE DETECTION ==========
-const MODE = window.location.pathname.startsWith('/game/') ? 'multiplayer' : 'local';
-let GAME_ID = null;
-let GAME = null;
-let mySeat = null;
-let mpSubmitted = false;
-let ws = null;
-let wsReconnectDelay = 3000;
-let wsRetries = 0;
-let mpLastTurn = -1;
-let turnDeadline = null;
-let deadlineInterval = null;
-let editingOrders = false;
-
-if (MODE === 'multiplayer') {
-  const pathParts = window.location.pathname.split('/');
-  GAME_ID = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
-  var gameLinkEl = document.getElementById('game-link');
-  if (gameLinkEl) gameLinkEl.textContent = window.location.href;
-}
 
 // ========== CONSTANTS ==========
 // POS is populated dynamically from API territory label_x/label_y
@@ -2355,43 +2294,6 @@ function renderSidebar() {
   const pp = document.getElementById('phase-panel');
   const cp = document.getElementById('control-panel');
 
-  // Multiplayer: spectator mode
-  if (MODE === 'multiplayer' && !currentUser) {
-    var phaseLabel = phase === 'picking' ? 'Pick Phase' : phase === 'orders' ? 'Turn ' + (G ? G.turn : 0) : phase === 'finished' ? 'Game Over' : 'Loading...';
-    pp.innerHTML = '<div class="sb-phase">' + phaseLabel + '</div><div class="sb-sub" style="color:var(--text2)">Spectating</div>';
-    cp.innerHTML = renderBonusInfo();
-    var sa0 = document.getElementById('sidebar-actions');
-    if (sa0) sa0.innerHTML = '<a href="#" onclick="showGameLoginPrompt();return false" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">Log in to play</a>';
-    return;
-  }
-
-  // Multiplayer: submitted state
-  if (MODE === 'multiplayer' && mpSubmitted) {
-    pp.innerHTML = '<div class="sb-phase" style="color:var(--green)">\u2713 Orders Submitted</div><div class="sb-sub">Waiting for opponent...</div>';
-    var ordersHtml = '';
-    if (window._mySubmittedOrders && window._mySubmittedOrders.length > 0) {
-      ordersHtml = '<h3 style="margin-top:8px;font-size:12px;color:var(--text3)">Your submitted orders:</h3>';
-      window._mySubmittedOrders.forEach(function(o) {
-        if (o.Deploy) {
-          var t = G ? terr(o.Deploy.territory) : null;
-          ordersHtml += '<div style="font-size:12px;color:var(--text2);padding:2px 0">\u2795 Deploy +' + o.Deploy.armies + ' to ' + (t ? t.name : o.Deploy.territory) + '</div>';
-        } else if (o.Attack) {
-          var from = G ? terr(o.Attack.from) : null;
-          var to = G ? terr(o.Attack.to) : null;
-          ordersHtml += '<div style="font-size:12px;color:var(--text2);padding:2px 0">\u2694 Attack ' + (from?from.name:o.Attack.from) + ' \u2192 ' + (to?to.name:o.Attack.to) + ' (' + o.Attack.armies + ')</div>';
-        } else if (o.Transfer) {
-          var from2 = G ? terr(o.Transfer.from) : null;
-          var to2 = G ? terr(o.Transfer.to) : null;
-          ordersHtml += '<div style="font-size:12px;color:var(--text2);padding:2px 0">\u2192 Transfer ' + (from2?from2.name:o.Transfer.from) + ' \u2192 ' + (to2?to2.name:o.Transfer.to) + ' (' + o.Transfer.armies + ')</div>';
-        }
-      });
-    }
-    cp.innerHTML = ordersHtml;
-    var sa1 = document.getElementById('sidebar-actions');
-    if (sa1) sa1.innerHTML = '<button class="btn btn-primary" style="width:100%" onclick="mpEditSubmittedOrders()">Edit Orders</button>';
-    return;
-  }
-
   if (phase === 'picking') {
     renderPickingPanel(pp, cp);
   } else if (phase === 'orders') {
@@ -2725,12 +2627,6 @@ function unpick(id) {
 }
 
 async function confirmPicks() {
-  if (MODE === 'multiplayer') {
-    if (picks.length < (G ? G.picks_needed : 1)) { toast('Rank more territories', 'error'); return; }
-    if (mpSubmitted) return;
-    await mpSubmitPicks(picks);
-    return;
-  }
   const res = await api('POST', '/api/picks', {picks: picks});
   if (res) {
     clearUndoRedo();
@@ -3364,7 +3260,11 @@ function turnTimerAutoSubmit() {
 
 // ========== END TURN ==========
 async function endTurn() {
-  // Build API orders (shared between modes)
+  if (resolving) return;
+  resolving = true;
+  turnTimerStop();
+
+  // Build API orders
   const apiOrders = [];
   Object.entries(deploys).forEach(([id, count]) => {
     if (count > 0) apiOrders.push({Deploy: {territory: parseInt(id), armies: count}});
@@ -3376,21 +3276,6 @@ async function endTurn() {
       apiOrders.push({Transfer: {from: o.from, to: o.to, armies: o.armies}});
     }
   });
-
-  if (MODE === 'multiplayer') {
-    if (mpSubmitted) return;
-    var success = await mpSubmitOrders(apiOrders);
-    if (success) {
-      editingOrders = false;
-      window._mySubmittedOrders = apiOrders;
-      renderSidebar();
-    }
-    return;
-  }
-
-  if (resolving) return;
-  resolving = true;
-  turnTimerStop();
 
   const res = await api('POST', '/api/orders', {orders: apiOrders});
   if (res) {
@@ -3479,23 +3364,6 @@ async function resignGame() {
     return;
   }
   resignConfirming = false;
-
-  if (MODE === 'multiplayer') {
-    try {
-      var r = await fetch('/api/games/' + GAME_ID + '/resign', { method: 'POST' });
-      if (r.ok) {
-        toast('Resigned', 'success');
-        mpFetchGameState();
-      } else {
-        var err = await r.text();
-        toast(err || 'Could not resign', 'error');
-      }
-    } catch (e) {
-      toast('Network error: ' + e.message, 'error');
-    }
-    return;
-  }
-
   phase = 'finished';
   if (G) {
     G.phase = 'finished';
@@ -3513,48 +3381,8 @@ function showGameOver(winner) {
   const el = document.getElementById('game-over');
   const title = document.getElementById('go-title');
   const msg = document.getElementById('go-msg');
-
-  if (MODE === 'multiplayer') {
-    // Multiplayer game over
-    var mpWinner = G ? G.winner : null;
-    var mpTurns = G ? (G.turn || 0) : 0;
-    if (mpWinner === 0) {
-      title.textContent = 'Victory!';
-      title.style.color = 'var(--green)';
-      msg.textContent = 'You won in ' + mpTurns + ' turns!';
-    } else if (mpWinner === 1) {
-      title.textContent = 'Defeat';
-      title.style.color = 'var(--red)';
-      msg.textContent = 'You lost after ' + mpTurns + ' turns.';
-    } else {
-      title.textContent = 'Game Over';
-      title.style.color = 'var(--gold)';
-      msg.textContent = 'Game ended after ' + mpTurns + ' turns.';
-    }
-    // Hide SP-specific game over elements
-    var statsDiv = document.getElementById('go-stats');
-    var analysisDiv = document.getElementById('go-analysis');
-    var achDiv = document.getElementById('go-achievements');
-    if (statsDiv) statsDiv.innerHTML = '';
-    if (analysisDiv) analysisDiv.innerHTML = '';
-    if (achDiv) achDiv.innerHTML = '';
-    // Replace action buttons with "Back to Games"
-    var rematchBtn = document.getElementById('go-rematch-btn');
-    if (rematchBtn) rematchBtn.style.display = 'none';
-    var reviewBtn = document.getElementById('go-review-btn');
-    if (reviewBtn) reviewBtn.style.display = 'none';
-    var mpLink = el.querySelector('.btn-mp');
-    if (mpLink) { mpLink.textContent = 'Back to Games'; mpLink.href = '/games'; }
-    var socialDiv = el.querySelector('.go-social');
-    if (socialDiv) socialDiv.style.display = 'none';
-    var linksDiv = el.querySelector('.go-links');
-    if (linksDiv) linksDiv.style.display = 'none';
-    el.classList.add('show');
-    return;
-  }
-
-  var statsDiv = document.getElementById('go-stats');
-  var analysisDiv = document.getElementById('go-analysis');
+  const statsDiv = document.getElementById('go-stats');
+  const analysisDiv = document.getElementById('go-analysis');
   var boardName = getBoardDisplayName();
   var turns = gameStats.turnsPlayed || 0;
   if (winner === 0) {
@@ -3926,8 +3754,6 @@ function onTerritoryClick(id, e) {
   showAdjacencyHighlight(id);
   if (replayMode) return;
   if (resolving) return;
-  if (MODE === 'multiplayer' && !currentUser) { showGameLoginPrompt(); return; }
-  if (MODE === 'multiplayer' && mpSubmitted) return;
   if (phase === 'picking') {
     onPickClick(id);
   } else if (phase === 'orders') {
@@ -5496,324 +5322,17 @@ async function signOut() {
   updateAuthUI();
 }
 
-// ========== MULTIPLAYER FUNCTIONS ==========
-function showGameLoginPrompt() {
-  document.getElementById('login-overlay').style.display = 'flex';
-}
-
-async function gameRegister() {
-  var input = document.getElementById('game-register-username');
-  var errEl = document.getElementById('game-register-error');
-  var username = input.value.trim();
-  errEl.style.display = 'none';
-  if (!username || username.length < 3 || username.length > 16) {
-    errEl.textContent = 'Username must be 3-16 characters'; errEl.style.display = ''; return;
-  }
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-    errEl.textContent = 'Letters, numbers, and underscores only'; errEl.style.display = ''; return;
-  }
-  try {
-    var res = await fetch('/api/auth/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: username}) });
-    if (!res.ok) { var err = await res.text(); errEl.textContent = err || 'Registration failed'; errEl.style.display = ''; return; }
-    window.location.reload();
-  } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = ''; }
-}
-
-function adaptMultiplayerToG(data) {
-  var map = data.map;
-  var state = data.state;
-  var game = data.game;
-  if (!map || !state) return null;
-
-  var owners = state.territory_owners || [];
-  var armies = state.territory_armies || [];
-  var seat = data.my_seat;
-
-  var territories = map.territories.map(function(t) {
-    var owner = owners[t.id];
-    var lp = t.visual ? t.visual.label_pos : [0, 0];
-    var fogged = false;
-    if (seat !== null && seat !== undefined && owner !== seat) {
-      if (owner === 255) {
-        var adj = t.adjacent || [];
-        fogged = !adj.some(function(a) { return owners[a] === seat; });
-      }
-    }
-    return {
-      id: t.id, name: t.name,
-      owner: owner === seat ? 0 : (owner === 255 ? 255 : 1),
-      armies: armies[t.id] || 0, adjacent: t.adjacent || [],
-      label_x: lp[0], label_y: lp[1],
-      path: t.visual ? t.visual.path : null,
-      is_wasteland: t.is_wasteland || false, visible: !fogged,
-      _raw_owner: owner
-    };
-  });
-
-  var bonuses = (map.bonuses || []).map(function(b) {
-    var tids = b.territory_ids || [];
-    var playerCount = tids.filter(function(tid) { return owners[tid] === seat; }).length;
-    var enemySeat = seat === 0 ? 1 : 0;
-    var enemyCount = tids.filter(function(tid) { return owners[tid] === enemySeat; }).length;
-    return { id: b.id, name: b.name, value: b.value, territory_ids: tids, territories: tids, player_count: playerCount, enemy_count: enemyCount, total: tids.length };
-  });
-
-  var baseIncome = (map.settings && map.settings.base_income) || 5;
-  var income = baseIncome;
-  bonuses.forEach(function(b) { if (b.player_count === b.total) income += b.value; });
-
-  var myTerr = territories.filter(function(t) { return t.owner === 0; }).length;
-  var enemyTerr = territories.filter(function(t) { return t.owner === 1; }).length;
-
-  var statePhase = state.phase;
-  var gamePhase;
-  if (game.status === 'finished' || statePhase === 'Finished') gamePhase = 'finished';
-  else if (game.status === 'picking' || statePhase === 'Picking') gamePhase = 'picking';
-  else if (game.status === 'active' || statePhase === 'Play') gamePhase = 'play';
-  else gamePhase = 'waiting';
-
-  var adjacency = {};
-  territories.forEach(function(t) { adjacency[t.id] = t.adjacent; });
-
-  var winner = null;
-  if (game.winner_id) {
-    if (seat === 0) winner = (game.winner_id === game.player_a) ? 0 : 1;
-    else if (seat === 1) winner = (game.winner_id === game.player_b) ? 0 : 1;
-    else winner = (game.winner_id === game.player_a) ? 0 : 1;
-  }
-
-  return {
-    territories: territories, bonuses: bonuses, phase: gamePhase,
-    turn: state.turn || game.turn || 0, income: income, base_income: baseIncome,
-    winner: winner, pick_options: data.pick_options || [],
-    picks_needed: data.picks_needed || (data.pick_options || []).length,
-    my_territories: myTerr, enemy_territories: enemyTerr,
-    adjacency: adjacency, board_name: map.name || '',
-    _mp_game: game, _mp_state: state, _mp_map: map, _mp_seat: seat,
-    _mp_has_submitted: data.has_submitted, _mp_my_orders: data.my_orders,
-    _mp_turn_deadline: data.turn_deadline,
-    _mp_player_a_info: data.player_a_info, _mp_player_b_info: data.player_b_info
-  };
-}
-
-async function mpFetchGameState() {
-  try {
-    var r = await fetch('/api/games/' + GAME_ID);
-    if (!r.ok) { var err = {}; try { err = await r.json(); } catch(e) {} toast(err.message || 'Failed to load game', 'error'); return; }
-    var data = await r.json();
-    GAME = data.game;
-    mySeat = data.my_seat;
-    if (data.player_a_info) { document.getElementById('pa-name').textContent = data.player_a_info.username; document.getElementById('pa-rating').textContent = Math.round(data.player_a_info.rating); }
-    if (data.player_b_info) { document.getElementById('pb-name').textContent = data.player_b_info.username; document.getElementById('pb-rating').textContent = Math.round(data.player_b_info.rating); }
-    document.getElementById('player-a-info').classList.toggle('active', mySeat === 0);
-    document.getElementById('player-b-info').classList.toggle('active', mySeat === 1);
-    if (data.has_submitted && !editingOrders) { mpSubmitted = true; window._mySubmittedOrders = data.my_orders || []; showMpSubmitted('Orders submitted - waiting for opponent...'); }
-    else if (!editingOrders) { window._mySubmittedOrders = null; }
-    turnDeadline = data.turn_deadline || null;
-    startDeadlineTimer();
-    G = adaptMultiplayerToG(data);
-    if (G) mpOnStateUpdate();
-  } catch(e) { toast('Network error: ' + e.message, 'error'); }
-}
-
-async function mpFetchSpectateState() {
-  try {
-    var r = await fetch('/api/games/' + GAME_ID + '/spectate');
-    if (!r.ok) { showGameLoginPrompt(); return; }
-    var data = await r.json();
-    GAME = data.game; mySeat = null;
-    G = adaptMultiplayerToG(data);
-    if (G) mpOnStateUpdate();
-  } catch(e) { toast('Network error: ' + e.message, 'error'); }
-}
-
-function mpOnStateUpdate() {
-  if (!G) return;
-  var waitingEl = document.getElementById('waiting-overlay');
-  if (GAME && GAME.status === 'waiting') {
-    var card = waitingEl.querySelector('.card');
-    if (mySeat !== null) {
-      card.innerHTML = '<div class="spinner"></div><h2>Waiting for opponent...</h2><p>Share this link to invite a player</p><p style="margin-top:12px;color:var(--gold);font-family:monospace;font-size:12px;word-break:break-all" id="game-link">' + window.location.href + '</p><button id="copy-link-btn" onclick="copyInviteLink()" style="margin-top:12px;background:transparent;border:1px solid var(--gold);color:var(--gold);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Copy Link</button>';
-    } else if (currentUser) {
-      card.innerHTML = '<h2 style="color:var(--gold)">Join Game</h2><p style="margin-top:8px;color:var(--text2)">This game is waiting for an opponent.</p><button onclick="joinThisGame()" style="margin-top:16px;background:var(--blue);color:#fff;border:none;border-radius:6px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer">Join Game</button>';
-    } else {
-      card.innerHTML = '<h2 style="color:var(--gold)">Game Waiting</h2><p style="margin-top:8px;color:var(--text2)">This game is waiting for an opponent.</p><button onclick="showGameLoginPrompt()" style="margin-top:16px;background:var(--blue);color:#fff;border:none;border-radius:6px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer">Log in to join</button>';
-    }
-    waitingEl.classList.add('show'); return;
-  } else { waitingEl.classList.remove('show'); }
-
-  var turnInfoEl = document.getElementById('turn-info');
-  if (turnInfoEl) {
-    turnInfoEl.textContent = G.phase === 'picking' ? 'Pick Phase' : G.phase === 'play' ? 'Turn ' + (G.turn||0) + ' - Deploy & Attack' : G.phase === 'finished' ? 'Game Over' : '';
-  }
-
-  if (mpSubmitted) {
-    var currentTurn = G.turn || 0;
-    if (mpLastTurn !== -1 && mpLastTurn !== currentTurn) { mpSubmitted = false; hideMpSubmitted(); }
-    mpLastTurn = currentTurn;
-  }
-
-  onStateUpdate();
-}
-
-function connectWebSocket() {
-  var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(proto + '//' + location.host + '/ws');
-  ws.onopen = function() { updateWsStatus(true); wsReconnectDelay = 3000; wsRetries = 0; ws.send(JSON.stringify({type: 'subscribe', game_id: GAME_ID})); mpFetchGameState(); };
-  ws.onmessage = function(evt) { try { handleGameEvent(JSON.parse(evt.data)); } catch(e) { console.error('WebSocket message error:', e); } };
-  ws.onclose = function() { updateWsStatus(false); wsRetries++; if (wsRetries > 10) { toast('Connection lost. Please refresh.', 'error'); return; } toast('Connection lost, reconnecting...', 'error'); setTimeout(connectWebSocket, wsReconnectDelay); wsReconnectDelay = Math.min(wsReconnectDelay * 2, 60000); };
-  ws.onerror = function() { updateWsStatus(false); };
-}
-
-function handleGameEvent(event) {
-  if (event.type === 'opponent_committed') { toast('Opponent submitted', 'success'); }
-  if (event.type === 'turn_resolved' || event.type === 'game_state_updated' || event.type === 'game_finished' || event.type === 'game_draw') {
-    mpSubmitted = false; deploys = {}; orders = []; selectedSource = null; pendingTarget = null;
-    hideMapArmyPopup(); hideMpSubmitted(); mpFetchGameState();
-  }
-}
-
-function updateWsStatus(connected) {
-  var el = document.getElementById('ws-status'); if (!el) return;
-  el.innerHTML = connected ? '<span class="connected">Connected</span>' : '<span class="disconnected">Disconnected - reconnecting...</span>';
-}
-
-async function mpSubmitPicks(picksArr) {
-  for (var attempt = 0; attempt < 2; attempt++) {
-    try {
-      var r = await fetch('/api/games/' + GAME_ID + '/picks', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({picks: picksArr}) });
-      var data; try { data = await r.json(); } catch(e) { data = {success:false, message:'Server error'}; }
-      if (!r.ok || data.success === false) { toast(data.message || 'Failed to submit picks', 'error'); return false; }
-      toast('Picks submitted!', 'success'); mpSubmitted = true; showMpSubmitted('Picks submitted - waiting for opponent...'); renderSidebar(); return true;
-    } catch(e) {
-      if (attempt === 0) { toast('Network error, retrying...', 'error'); await new Promise(function(r){setTimeout(r,1000)}); }
-      else { toast('Network error: ' + e.message, 'error'); return false; }
-    }
-  }
-}
-
-async function mpSubmitOrders(apiOrders) {
-  for (var attempt = 0; attempt < 2; attempt++) {
-    try {
-      var r = await fetch('/api/games/' + GAME_ID + '/orders', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({orders: apiOrders}) });
-      var data; try { data = await r.json(); } catch(e) { data = {success:false, message:'Server error'}; }
-      if (!r.ok || data.success === false) { toast(data.message || 'Failed to submit orders', 'error'); return false; }
-      toast('Orders submitted!', 'success'); mpSubmitted = true; showMpSubmitted('Orders submitted - waiting for opponent...'); renderSidebar(); return true;
-    } catch(e) {
-      if (attempt === 0) { toast('Network error, retrying...', 'error'); await new Promise(function(r){setTimeout(r,1000)}); }
-      else { toast('Network error: ' + e.message, 'error'); return false; }
-    }
-  }
-}
-
-function showMpSubmitted(msg) { document.getElementById('submitted-msg').textContent = msg; document.getElementById('submitted-overlay').classList.add('show'); }
-function hideMpSubmitted() { var el = document.getElementById('submitted-overlay'); if (el) el.classList.remove('show'); }
-
-function mpEditSubmittedOrders() {
-  editingOrders = true; mpSubmitted = false; deploys = {}; orders = [];
-  if (window._mySubmittedOrders) {
-    window._mySubmittedOrders.forEach(function(o) {
-      if (o.Deploy) { deploys[o.Deploy.territory] = (deploys[o.Deploy.territory] || 0) + o.Deploy.armies; }
-      else if (o.Attack) { orders.push({type:'attack', from:o.Attack.from, to:o.Attack.to, armies:o.Attack.armies}); }
-      else if (o.Transfer) { orders.push({type:'transfer', from:o.Transfer.from, to:o.Transfer.to, armies:o.Transfer.armies}); }
-    });
-  }
-  window._mySubmittedOrders = null; hideMpSubmitted();
-  var income = G ? G.income : 5;
-  var totalDeployed = 0; Object.values(deploys).forEach(function(v) { totalDeployed += v; });
-  deployLeft = income - totalDeployed; phase = 'orders'; renderSidebar(); updateMap();
-}
-
-async function joinThisGame() {
-  try {
-    var r = await fetch('/api/games/' + GAME_ID + '/join', { method: 'POST' });
-    if (!r.ok) { var err = await r.text(); toast(err || 'Could not join', 'error'); return; }
-    toast('Joined!', 'success'); await mpFetchGameState();
-  } catch(e) { toast('Network error: ' + e.message, 'error'); }
-}
-
-async function copyInviteLink() {
-  var linkEl = document.getElementById('game-link'); if (!linkEl) return;
-  await navigator.clipboard.writeText(linkEl.textContent);
-  var btn = document.getElementById('copy-link-btn');
-  if (btn) { btn.textContent = 'Copied!'; setTimeout(function(){ btn.textContent = 'Copy Link'; }, 2000); }
-}
-
-function startDeadlineTimer() {
-  if (deadlineInterval) clearInterval(deadlineInterval);
-  updateDeadlineDisplay();
-  deadlineInterval = setInterval(updateDeadlineDisplay, 1000);
-}
-
-function updateDeadlineDisplay() {
-  var el = document.getElementById('deadline-timer'); if (!el) return;
-  if (!turnDeadline || phase === 'finished' || (GAME && (GAME.status === 'finished' || GAME.winner_id))) {
-    el.textContent = ''; el.className = 'deadline-timer';
-    if (deadlineInterval) { clearInterval(deadlineInterval); deadlineInterval = null; } return;
-  }
-  var diff = new Date(turnDeadline) - new Date();
-  if (diff <= 0) { el.textContent = 'Time expired'; el.className = 'deadline-timer critical'; return; }
-  var hours = Math.floor(diff / 3600000);
-  var mins = Math.floor((diff % 3600000) / 60000);
-  var secs = Math.floor((diff % 60000) / 1000);
-  if (hours > 0) el.textContent = hours + 'h ' + mins + 'm';
-  else if (mins > 0) el.textContent = mins + 'm ' + secs + 's';
-  else el.textContent = secs + 's';
-  if (diff < 300000) el.className = 'deadline-timer critical';
-  else if (diff < 3600000) el.className = 'deadline-timer urgent';
-  else el.className = 'deadline-timer';
-}
-
 // ========== INIT ==========
 document.getElementById('set-fog').addEventListener('change', function() {
   document.getElementById('fog-label').textContent = this.checked ? 'On' : 'Off';
 });
-
-if (MODE === 'local') {
-  // Singleplayer init
-  startSessionTimer();
-  buildMap();
-  if (isLightTheme()) applyThemeGradients();
-  checkAuth().then(() => {
-    if (!currentUser && !localStorage.getItem('strat_seen_tutorial')) { showRulesModal(); }
-  });
-  fetchState();
-  // Hide MP-only elements
-  document.getElementById('player-bar').style.display = 'none';
-  document.getElementById('ws-status').style.display = 'none';
-} else {
-  // Multiplayer init - hide SP-only elements
-  var boardNameEl = document.getElementById('board-name-display');
-  if (boardNameEl) boardNameEl.style.display = 'none';
-  var incomeSpanEl = document.getElementById('income-span');
-  if (incomeSpanEl) incomeSpanEl.style.display = 'none';
-  var gameCounterEl = document.getElementById('game-counter');
-  if (gameCounterEl) gameCounterEl.style.display = 'none';
-  var sessionTimerEl = document.getElementById('session-timer');
-  if (sessionTimerEl) sessionTimerEl.style.display = 'none';
-  var difficultyEl = document.getElementById('difficulty-select');
-  if (difficultyEl) difficultyEl.style.display = 'none';
-  var newGameBtn = document.querySelector('#topbar button[onclick="newGame()"]');
-  if (newGameBtn) newGameBtn.style.display = 'none';
-  var winProbEl = document.getElementById('win-prob-wrap');
-  if (winProbEl) winProbEl.style.display = 'none';
-  var turnTimerEl = document.getElementById('turn-timer-wrap');
-  if (turnTimerEl) turnTimerEl.style.display = 'none';
-  // Show MP elements
-  document.getElementById('player-bar').classList.add('show');
-  document.getElementById('ws-status').classList.add('show');
-  // Auth check, then connect
-  buildMap();
-  if (isLightTheme()) applyThemeGradients();
-  checkAuth().then(function() {
-    if (currentUser) {
-      mpFetchGameState();
-      connectWebSocket();
-    } else {
-      mpFetchSpectateState();
-    }
-  });
-}
+startSessionTimer();
+buildMap();
+if (isLightTheme()) applyThemeGradients();
+checkAuth().then(() => {
+  if (!currentUser && !localStorage.getItem('strat_seen_tutorial')) { showRulesModal(); }
+});
+fetchState();
 </script>
 <div id="session-stats-bar"></div>
 </body>
