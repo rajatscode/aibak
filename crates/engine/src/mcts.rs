@@ -295,7 +295,7 @@ fn bonus_proximity_score(state: &GameState, player: PlayerId, board: &Board) -> 
     let map = &board.map;
     let mut score = 0.0;
     for bonus in &map.bonuses {
-        if bonus.value == 0 {
+        if bonus.value == 0 || bonus.territory_ids.is_empty() {
             continue;
         }
         let owned = bonus
@@ -563,7 +563,7 @@ fn generate_variation(
             let mut best = None;
             let mut best_frac = 0.0f64;
             for bonus in &map.bonuses {
-                if bonus.value == 0 { continue; }
+                if bonus.value == 0 || bonus.territory_ids.is_empty() { continue; }
                 let total = bonus.territory_ids.len();
                 let owned = bonus.territory_ids.iter().filter(|&&t| state.territory_owners[t] == player).count();
                 if owned == 0 || owned == total { continue; }
@@ -743,7 +743,7 @@ fn best_bonus_border(
     let mut best_score = -1.0f64;
 
     for bonus in &map.bonuses {
-        if bonus.value == 0 {
+        if bonus.value == 0 || bonus.territory_ids.is_empty() {
             continue;
         }
         let owned = bonus

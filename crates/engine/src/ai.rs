@@ -164,7 +164,7 @@ pub fn generate_orders_with_profile(
     let mut counter_targets: Vec<(usize, f64)> = Vec::new(); // (territory_id, priority)
 
     for bonus in &map.bonuses {
-        if bonus.value == 0 {
+        if bonus.value == 0 || bonus.territory_ids.is_empty() {
             continue;
         }
 
@@ -274,8 +274,8 @@ pub fn generate_orders_with_profile(
             cost,
         });
     }
-    bonus_priorities.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-    counter_targets.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    bonus_priorities.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    counter_targets.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     // ========== PLAN ATTACKS ==========
     // Build attack chain: try to capture multiple territories in sequence
@@ -975,6 +975,9 @@ fn find_most_threatened_border(state: &GameState, player: PlayerId, board: &Boar
 fn is_bonus_denial_worthwhile(target: usize, opp: PlayerId, board: &Board, state: &GameState) -> bool {
     let map = &board.map;
     let bonus = &map.bonuses[map.territories[target].bonus_id];
+    if bonus.territory_ids.is_empty() {
+        return false;
+    }
     let opp_owned = bonus
         .territory_ids
         .iter()
@@ -1132,15 +1135,18 @@ pub fn generate_picks(state: &GameState, board: &Board, pick_options: &[usize]) 
         .iter()
         .copied()
         .filter(|&tid| !map.territories[tid].is_wasteland && state.territory_owners[tid] == NEUTRAL)
-        .map(|tid| {
+        .filter_map(|tid| {
             let bonus = &map.bonuses[map.territories[tid].bonus_id];
+            if bonus.territory_ids.is_empty() || map.territories[tid].adjacent.is_empty() {
+                return None;
+            }
             let efficiency = bonus.value as f64 / bonus.territory_ids.len() as f64;
             let defensibility = 1.0 / map.territories[tid].adjacent.len() as f64;
             // Prefer picking in different bonuses for strategic spread
-            (tid, efficiency * 4.0 + defensibility)
+            Some((tid, efficiency * 4.0 + defensibility))
         })
         .collect();
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.into_iter().map(|(tid, _)| tid).collect()
 }
 
