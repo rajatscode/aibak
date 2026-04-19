@@ -282,17 +282,22 @@ pub async fn update_game_state_tx(
     Ok(())
 }
 
+/// Atomically set player_b only if the slot is still empty.
+/// Returns `true` if the row was updated (join succeeded),
+/// `false` if another player already claimed the slot.
 pub async fn set_game_player_b(
     pool: &PgPool,
     game_id: Uuid,
     player_b: Uuid,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE games SET player_b = $2 WHERE id = $1")
-        .bind(game_id)
-        .bind(player_b)
-        .execute(pool)
-        .await?;
-    Ok(())
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE games SET player_b = $2 WHERE id = $1 AND player_b IS NULL",
+    )
+    .bind(game_id)
+    .bind(player_b)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() > 0)
 }
 
 /// Finish a game within an existing transaction.
@@ -522,6 +527,31 @@ pub async fn cleanup_stale_picking_games(pool: &PgPool) -> Result<u64, sqlx::Err
     .execute(pool)
     .await?;
     Ok(result.rows_affected())
+}
+
+/// Find active games stuck without a deadline: one player submitted orders
+/// but the deadline row is missing and the submission is older than the boot time.
+pub async fn get_stuck_active_games(pool: &PgPool) -> Result<Vec<(Uuid, i32)>, sqlx::Error> {
+    let rows: Vec<(Uuid, i32)> = sqlx::query_as(
+        r#"
+        SELECT g.id, g.turn
+        FROM games g
+        WHERE g.status = 'active'
+          AND EXISTS (
+            SELECT 1 FROM orders o
+            WHERE o.game_id = g.id AND o.turn = g.turn
+              AND o.submitted_at < now() - interval '24 hours'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM turn_deadlines td
+            WHERE td.game_id = g.id AND td.turn = g.turn
+          )
+        LIMIT 5
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
 }
 
 // ── Rating history queries ──

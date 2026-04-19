@@ -48,5 +48,19 @@ pub async fn boot_timer_task(pool: PgPool, manager: Arc<GameManager>) {
         if let Err(e) = crate::db::cleanup_stale_picking_games(&pool).await {
             error!("failed to clean up stale picking games: {}", e);
         }
+
+        // Rescue stuck active games: one player submitted but deadline is missing.
+        match crate::db::get_stuck_active_games(&pool).await {
+            Ok(stuck) => {
+                for (game_id, turn) in stuck {
+                    info!(%game_id, turn, "rescuing stuck game (no deadline, partial orders)");
+                    match manager.check_boot_timer(game_id, turn).await {
+                        Ok(()) => info!(%game_id, turn, "stuck game rescued"),
+                        Err(e) => error!(%game_id, turn, "failed to rescue stuck game: {}", e),
+                    }
+                }
+            }
+            Err(e) => error!("failed to check stuck games: {}", e),
+        }
     }
 }
