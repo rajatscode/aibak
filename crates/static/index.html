@@ -29,8 +29,8 @@
   --blue:#0969da;--red:#cf222e;--green:#1a7f37;--gold:#9a6700;
   --neutral:#8c959f;--fog:#eaeef2;
 }
-html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
-#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+#app{display:flex;flex-direction:column;flex:1;min-height:0}
 
 /* TOP BAR */
 #topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;background:var(--bg2);border-bottom:1px solid var(--border);min-height:48px;flex-shrink:0;gap:16px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
