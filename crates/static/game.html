@@ -1425,6 +1425,9 @@ function popupConfirm() {
 function cancelPending() { hidePopup(); pendingTarget = null; updateMap(); renderSidebar(); }
 function hidePopup() { document.getElementById('map-army-popup').style.display = 'none'; }
 
+document.getElementById('map-army-popup').addEventListener('mousedown', function(e) { e.stopPropagation(); });
+document.addEventListener('mousedown', function() { var p = document.getElementById('map-army-popup'); if (p.style.display !== 'none' && p.style.display !== '') cancelPending(); });
+
 var editingOrders = false;
 function editSubmittedOrders() {
   editingOrders = true;
