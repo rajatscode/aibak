@@ -406,7 +406,9 @@ function renderGameList(listId, emptyId, games, type) {
     var statusClass = 'status-' + g.status;
     var actionBtn = '';
     if (type === 'active') {
-      if (g.status === 'waiting') {
+      if (g.status === 'waiting' && currentUser && currentUser.id === g.player_a) {
+        actionBtn = '<button class="btn" style="background:var(--bg3);color:var(--red);border-color:var(--red)" onclick="cancelGame(\'' + escId(g.id) + '\')">Cancel</button>';
+      } else if (g.status === 'waiting') {
         actionBtn = '<button class="btn" onclick="window.location.href=\'/game/' + escId(g.id) + '\'">Join</button>';
       } else if (g.status === 'finished') {
         actionBtn = '<button class="btn btn-watch" onclick="spectateMultiplayer(\'' + escId(g.id) + '\')">Watch</button>';
@@ -888,10 +890,26 @@ function renderMyGameList(games) {
         '</div>' +
       '</div>' +
       '<div class="game-actions">' +
+        (g.status === 'waiting' ? '<button class="btn" style="background:var(--bg3);color:var(--red);border-color:var(--red)" onclick="cancelGame(\'' + escId(g.id) + '\')">Cancel</button>' : '') +
         '<a href="/game/' + g.id + '" class="btn btn-play">Play</a>' +
       '</div>';
     list.appendChild(card);
   });
+}
+
+async function cancelGame(gameId) {
+  try {
+    var res = await fetch('/api/games/' + encodeURIComponent(gameId) + '/cancel', { method: 'POST' });
+    if (!res.ok) {
+      var err = await res.text();
+      alert('Could not cancel game: ' + err);
+      return;
+    }
+    loadMyGames();
+    loadActiveGames();
+  } catch(e) {
+    alert('Network error');
+  }
 }
 
 async function findGame() {

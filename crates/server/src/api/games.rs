@@ -273,6 +273,36 @@ pub async fn get_game(
     }))
 }
 
+/// POST /api/games/:id/cancel -- cancel a waiting game (creator only).
+pub async fn cancel_game(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(game_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let pool = state.require_db()?;
+
+    let game = db::get_game(pool, game_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "game not found".to_string()))?;
+
+    if game.player_a != Some(auth.user_id) {
+        return Err((StatusCode::FORBIDDEN, "only the game creator can cancel".to_string()));
+    }
+
+    if game.status != "waiting" {
+        return Err((StatusCode::BAD_REQUEST, "can only cancel games in waiting status".to_string()));
+    }
+
+    sqlx::query("DELETE FROM games WHERE id = $1")
+        .bind(game_id)
+        .execute(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
 /// POST /api/games/:id/join -- join an open game.
 pub async fn join_game(
     auth: AuthUser,

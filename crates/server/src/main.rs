@@ -1837,6 +1837,7 @@ async fn main() {
         .route("/api/games", get(api::games::list_games))
         .route("/api/games/{id}", get(api::games::get_game))
         .route("/api/games/{id}/join", post(api::games::join_game))
+        .route("/api/games/{id}/cancel", post(api::games::cancel_game))
         .route("/api/games/{id}/picks", post(api::orders::submit_picks))
         .route("/api/games/{id}/orders", post(api::orders::submit_orders))
         .route("/api/games/{id}/resign", post(api::orders::resign))
