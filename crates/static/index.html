@@ -970,6 +970,23 @@ function clearUndoRedo() {
   redoStack = [];
 }
 
+// ========== DEPLOY STATE PERSISTENCE ==========
+function saveDeployState() {
+  if (phase !== 'orders' || !G) return;
+  try {
+    sessionStorage.setItem('strat_deploy_state', JSON.stringify({
+      turn: G.turn || 1,
+      deploys: deploys,
+      deployLeft: deployLeft,
+      orders: orders
+    }));
+  } catch(e) {}
+}
+function clearDeployState() {
+  try { sessionStorage.removeItem('strat_deploy_state'); } catch(e) {}
+}
+window.addEventListener('beforeunload', saveDeployState);
+
 function undo() {
   if (actionStack.length === 0) return;
   const action = actionStack.pop();
@@ -2210,9 +2227,26 @@ function onStateUpdate() {
     if (phase !== 'orders' || !window._lastTurn || window._lastTurn !== currentTurn) {
       window._lastTurn = currentTurn;
       phase = 'orders';
-      deploys = {};
-      deployLeft = G.income || 5;
-      orders = [];
+      // Try restoring saved deploy state from sessionStorage (survives reload)
+      var restored = false;
+      try {
+        var saved = sessionStorage.getItem('strat_deploy_state');
+        if (saved) {
+          var ds = JSON.parse(saved);
+          if (ds.turn === currentTurn) {
+            deploys = ds.deploys || {};
+            deployLeft = ds.deployLeft != null ? ds.deployLeft : (G.income || 5);
+            orders = ds.orders || [];
+            restored = true;
+          }
+          clearDeployState();
+        }
+      } catch(e) {}
+      if (!restored) {
+        deploys = {};
+        deployLeft = G.income || 5;
+        orders = [];
+      }
       selectedSource = null;
       pendingTarget = null;
       gameStats.turnsPlayed = currentTurn;
@@ -3218,6 +3252,7 @@ async function endTurn() {
   pendingTarget = null;
   editingOrderIdx = null;
   clearUndoRedo();
+  clearDeployState();
   window._lastTurn = null; // Force orders re-init on next fetchState
 
   await fetchState();
