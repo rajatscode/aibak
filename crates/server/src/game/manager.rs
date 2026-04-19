@@ -130,6 +130,14 @@ impl GameManager {
             return Err(GameError::GameFull);
         }
 
+        // Atomically claim the player_b slot before doing any setup work.
+        // This prevents a TOCTOU race where two players pass the above check
+        // and one silently overwrites the other.
+        let claimed = db::set_game_player_b(&self.pool, game_id, user_id).await?;
+        if !claimed {
+            return Err(GameError::GameFull);
+        }
+
         // Parse map from stored JSON and wrap in Board.
         let map_file: MapFile = serde_json::from_value(game.map_json.clone().ok_or(GameError::NotFound)?)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
@@ -155,8 +163,6 @@ impl GameManager {
         };
         let pick_json = serde_json::to_value(&pick_options)
             .map_err(|e| GameError::Serialization(e.to_string()))?;
-
-        db::set_game_player_b(&self.pool, game_id, user_id).await?;
 
         let state: GameState =
             serde_json::from_value(game.state_json.clone().ok_or(GameError::NotFound)?)
