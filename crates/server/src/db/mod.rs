@@ -8,7 +8,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct UserRow {
     pub id: Uuid,
-    pub discord_id: i64,
+    pub discord_id: Option<i64>,
     pub username: String,
     pub avatar_url: Option<String>,
     pub rating: f64,
@@ -88,6 +88,45 @@ pub async fn get_user_by_discord_id(
         .bind(discord_id)
         .fetch_optional(pool)
         .await
+}
+
+pub async fn create_anonymous_user(
+    pool: &PgPool,
+    username: &str,
+) -> Result<UserRow, sqlx::Error> {
+    sqlx::query_as::<_, UserRow>(
+        r#"
+        INSERT INTO users (discord_id, username)
+        VALUES (NULL, $1)
+        RETURNING *
+        "#,
+    )
+    .bind(username)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn link_discord(
+    pool: &PgPool,
+    user_id: Uuid,
+    discord_id: i64,
+    discord_username: &str,
+    avatar_url: Option<&str>,
+) -> Result<UserRow, sqlx::Error> {
+    sqlx::query_as::<_, UserRow>(
+        r#"
+        UPDATE users
+        SET discord_id = $2, username = $3, avatar_url = $4
+        WHERE id = $1 AND discord_id IS NULL
+        RETURNING *
+        "#,
+    )
+    .bind(user_id)
+    .bind(discord_id)
+    .bind(discord_username)
+    .bind(avatar_url)
+    .fetch_one(pool)
+    .await
 }
 
 pub async fn update_user_rating(

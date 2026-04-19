@@ -54,6 +54,21 @@ h2{font-size:20px;font-weight:700;margin-bottom:16px}
 .feedback-item.resolved{opacity:0.5}
 .resolved-badge{font-size:10px;color:var(--green);font-weight:600;border:1px solid var(--green);border-radius:4px;padding:1px 6px}
 .resolved-section-label{font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;padding:16px 0 8px}
+.replies-container{margin-top:8px;padding-left:16px;border-left:2px solid var(--border)}
+.reply-item{font-size:12px;padding:6px 0;border-bottom:1px solid rgba(33,41,58,0.5)}
+.reply-item:last-child{border-bottom:none}
+.reply-author{color:var(--text2);font-weight:600;font-size:11px}
+.reply-content{color:var(--text);margin-top:2px;white-space:pre-wrap;word-break:break-word}
+.reply-meta{font-size:10px;color:var(--text3);margin-top:2px}
+.reply-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:0}
+.reply-btn:hover{color:var(--blue)}
+.reply-box{margin-top:8px;display:none}
+.reply-box textarea{width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:8px;resize:vertical;font-family:inherit}
+.reply-box textarea:focus{outline:none;border-color:var(--blue)}
+.reply-box .reply-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:4px}
+.reply-box .btn-sm{padding:4px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border)}
+.delete-reply-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;padding:0;margin-left:8px}
+.delete-reply-btn:hover{color:var(--red)}
 
 .empty-state{text-align:center;padding:48px 16px;color:var(--text2);font-size:14px}
 #toast-container{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:6px;pointer-events:none}
@@ -183,7 +198,7 @@ submitBtn.addEventListener('click', async () => {
     if (res.ok) {
       input.value = '';
       charCount.textContent = '0';
-      loadFeedback();
+      loadFeedback().then(loadAllReplies);
     } else {
       const err = await res.text();
       toast('Error: ' + err, 'error');
@@ -237,6 +252,15 @@ async function loadFeedback() {
             ${item.resolved ? '<span class="resolved-badge">Resolved</span>' : ''}
             ${canManage ? `<button class="resolve-btn" onclick="resolveFeedback('${escId(item.id)}')">${item.resolved ? 'unresolve' : 'resolve'}</button>` : ''}
             ${canManage ? `<button class="delete-btn" onclick="deleteFeedback('${escId(item.id)}')">delete</button>` : ''}
+            ${currentUser ? `<button class="reply-btn" onclick="toggleReplyBox('${escId(item.id)}')">reply</button>` : ''}
+          </div>
+          <div class="replies-container" id="replies-${escId(item.id)}"></div>
+          <div class="reply-box" id="reply-box-${escId(item.id)}">
+            <textarea maxlength="1000" placeholder="Write a reply..." id="reply-input-${escId(item.id)}"></textarea>
+            <div class="reply-actions">
+              <button class="btn-sm" onclick="toggleReplyBox('${escId(item.id)}')" style="background:var(--bg2)">Cancel</button>
+              <button class="btn-sm btn-primary" onclick="submitReply('${escId(item.id)}',this)">Reply</button>
+            </div>
           </div>
         </div>
       </div>`;
@@ -270,7 +294,7 @@ async function vote(id, direction) {
       body: JSON.stringify({ direction })
     });
     if (!res.ok) throw new Error(await res.text());
-    loadFeedback();
+    loadFeedback().then(loadAllReplies);
   } catch (e) { toast('Vote failed: ' + e.message, 'error'); }
 }
 
@@ -279,7 +303,7 @@ async function resolveFeedback(id) {
   try {
     const res = await fetch(`/api/feedback/${id}/resolve`, { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
-    loadFeedback();
+    loadFeedback().then(loadAllReplies);
   } catch (e) { toast('Action failed: ' + e.message, 'error'); }
 }
 
@@ -296,12 +320,78 @@ async function deleteFeedback(id) {
   try {
     const res = await fetch(`/api/feedback/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(await res.text());
-    loadFeedback();
+    loadFeedback().then(loadAllReplies);
   } catch (e) { toast('Delete failed: ' + e.message, 'error'); }
 }
 
+function toggleReplyBox(feedbackId) {
+  var box = document.getElementById('reply-box-' + feedbackId);
+  if (box) box.style.display = box.style.display === 'block' ? 'none' : 'block';
+}
+
+async function submitReply(feedbackId, btn) {
+  var input = document.getElementById('reply-input-' + feedbackId);
+  var content = input.value.trim();
+  if (!content) return;
+  btn.disabled = true;
+  try {
+    var res = await fetch('/api/feedback/' + feedbackId + '/replies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content })
+    });
+    if (res.ok) {
+      input.value = '';
+      toggleReplyBox(feedbackId);
+      loadReplies(feedbackId);
+    } else {
+      var err = await res.text();
+      toast('Error: ' + err, 'error');
+    }
+  } catch (e) {
+    toast('Failed to submit reply: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+}
+
+async function loadReplies(feedbackId) {
+  var container = document.getElementById('replies-' + feedbackId);
+  if (!container) return;
+  try {
+    var res = await fetch('/api/feedback/' + feedbackId + '/replies');
+    if (!res.ok) return;
+    var replies = await res.json();
+    if (replies.length === 0) { container.innerHTML = ''; return; }
+    var isAdmin = currentUser && ADMIN_USERNAMES.includes(currentUser.username);
+    container.innerHTML = replies.map(function(r) {
+      var canDelete = currentUser && (currentUser.id === r.user_id || isAdmin);
+      return '<div class="reply-item">' +
+        '<span class="reply-author">' + escapeHtml(r.username) + '</span>' +
+        '<div class="reply-content">' + escapeHtml(r.content) + '</div>' +
+        '<span class="reply-meta">' + timeAgo(r.created_at) +
+        (canDelete ? '<button class="delete-reply-btn" onclick="deleteReply(\'' + escId(feedbackId) + '\',\'' + escId(r.id) + '\')">delete</button>' : '') +
+        '</span></div>';
+    }).join('');
+  } catch (e) {}
+}
+
+async function deleteReply(feedbackId, replyId) {
+  try {
+    var res = await fetch('/api/feedback/' + feedbackId + '/replies/' + replyId, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    loadReplies(feedbackId);
+  } catch (e) { toast('Delete failed: ' + e.message, 'error'); }
+}
+
+function loadAllReplies() {
+  document.querySelectorAll('.feedback-item').forEach(function(el) {
+    var id = el.getAttribute('data-id');
+    if (id) loadReplies(id);
+  });
+}
+
 checkAuth();
-loadFeedback();
+loadFeedback().then(function() { loadAllReplies(); });
 </script>
 </body>
 </html>

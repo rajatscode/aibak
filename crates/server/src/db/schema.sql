@@ -155,5 +155,22 @@ ALTER TABLE feedback ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_feedback_upvotes ON feedback(upvotes DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feedback_votes_feedback ON feedback_votes(feedback_id);
 
+-- ── Feedback replies ──
+
+CREATE TABLE IF NOT EXISTS feedback_replies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    feedback_id UUID NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id),
+    content TEXT NOT NULL CHECK(char_length(content) <= 1000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_replies_feedback ON feedback_replies(feedback_id, created_at ASC);
+
 -- Idempotency constraint: prevent duplicate rating entries per user per game.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rating_history_user_game ON rating_history(user_id, game_id);
+
+-- ── Anonymous auth migration ──
+-- Make discord_id nullable for username-only registration.
+ALTER TABLE users ALTER COLUMN discord_id DROP NOT NULL;
+-- Unique index on username for anonymous users (case-insensitive).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users(lower(username));

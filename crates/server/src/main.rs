@@ -1889,6 +1889,14 @@ async fn main() {
             "/api/feedback/{id}",
             axum::routing::delete(api::feedback::delete_feedback),
         )
+        .route(
+            "/api/feedback/{id}/replies",
+            get(api::feedback::list_replies).post(api::feedback::submit_reply),
+        )
+        .route(
+            "/api/feedback/{id}/replies/{reply_id}",
+            axum::routing::delete(api::feedback::delete_reply),
+        )
         // Map management.
         .route("/api/maps", get(api::maps::list_maps))
         .route("/api/maps", post(api::maps::save_map))

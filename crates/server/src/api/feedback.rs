@@ -295,3 +295,117 @@ pub async fn resolve_feedback(
 
     Ok(Json(ResolveResponse { resolved: new_resolved }))
 }
+
+// ── Replies ──
+
+#[derive(Deserialize)]
+pub struct SubmitReply {
+    pub content: String,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct ReplyRow {
+    pub id: Uuid,
+    pub feedback_id: Uuid,
+    pub user_id: Uuid,
+    pub content: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub username: String,
+}
+
+/// POST /api/feedback/:id/replies -- submit reply (auth required).
+pub async fn submit_reply(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(feedback_id): Path<Uuid>,
+    Json(body): Json<SubmitReply>,
+) -> Result<Json<FeedbackResponse>, (StatusCode, String)> {
+    let pool = state.require_db()?;
+
+    let content = body.content.trim();
+    if content.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "content cannot be empty".to_string()));
+    }
+    if content.len() > 1000 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "content must be 1000 characters or fewer".to_string(),
+        ));
+    }
+
+    // Check feedback exists.
+    let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM feedback WHERE id = $1)")
+        .bind(feedback_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, "feedback not found".to_string()));
+    }
+
+    let id = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO feedback_replies (feedback_id, user_id, content) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(feedback_id)
+    .bind(auth.user_id)
+    .bind(content)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(FeedbackResponse { id, success: true }))
+}
+
+/// GET /api/feedback/:id/replies -- list replies for a feedback item.
+pub async fn list_replies(
+    _auth: MaybeAuthUser,
+    State(state): State<AppState>,
+    Path(feedback_id): Path<Uuid>,
+) -> Result<Json<Vec<ReplyRow>>, (StatusCode, String)> {
+    let pool = state.require_db()?;
+
+    let rows = sqlx::query_as::<_, ReplyRow>(
+        "SELECT r.id, r.feedback_id, r.user_id, r.content, r.created_at, u.username \
+         FROM feedback_replies r JOIN users u ON r.user_id = u.id \
+         WHERE r.feedback_id = $1 ORDER BY r.created_at ASC LIMIT 50",
+    )
+    .bind(feedback_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(rows))
+}
+
+/// DELETE /api/feedback/:id/replies/:reply_id -- delete reply (owner or admin).
+pub async fn delete_reply(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path((feedback_id, reply_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<DeleteResponse>, (StatusCode, String)> {
+    let pool = state.require_db()?;
+    let _ = feedback_id; // part of the route but we identify by reply_id
+
+    let owner_id = sqlx::query_scalar::<_, Uuid>("SELECT user_id FROM feedback_replies WHERE id = $1")
+        .bind(reply_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "reply not found".to_string()))?;
+
+    if owner_id != auth.user_id && !is_admin(&auth.username) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "you can only delete your own replies".to_string(),
+        ));
+    }
+
+    sqlx::query("DELETE FROM feedback_replies WHERE id = $1")
+        .bind(reply_id)
+        .execute(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(DeleteResponse { success: true }))
+}

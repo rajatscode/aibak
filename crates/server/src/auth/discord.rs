@@ -47,6 +47,17 @@ pub fn build_auth_url(client_id: &str, redirect_uri: &str) -> String {
     )
 }
 
+/// Build the Discord authorization URL with an OAuth state parameter (for account linking).
+pub fn build_auth_url_with_state(client_id: &str, redirect_uri: &str, state: &str) -> String {
+    format!(
+        "{}?client_id={}&redirect_uri={}&response_type=code&scope=identify&state={}",
+        DISCORD_AUTH_URL,
+        client_id,
+        urlencoding::encode(redirect_uri),
+        urlencoding::encode(state)
+    )
+}
+
 /// Exchange an authorization code for an access token.
 pub async fn exchange_code(
     client_id: &str,
