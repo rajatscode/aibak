@@ -241,6 +241,7 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-appl
     <a href="/ladder" style="color:#8b949e;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid #21293a;">Ladder</a>
     <a href="/feedback" style="color:#8b949e;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid #21293a;">Feedback</a>
     <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;padding:10px 0;display:block;font-weight:600;">Discord</a>
+    <span id="mobile-nav-auth-area" style="padding:10px 0;display:block;border-top:1px solid #21293a;"></span>
   </div>
 </nav>
 <div id="app">
@@ -314,16 +315,16 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-appl
   </div>
 </div>
 <div id="login-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:999">
-  <div style="background:var(--bg2);border:2px solid var(--gold);border-radius:16px;padding:40px 48px;text-align:center;max-width:400px">
+  <div style="background:var(--bg2);border:2px solid var(--gold);border-radius:16px;padding:40px 48px;text-align:center;max-width:400px;width:calc(100% - 32px);box-sizing:border-box">
     <h2 style="font-size:22px;color:var(--gold);margin-bottom:8px">Sign in to play</h2>
     <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Enter a username to join this game</p>
-    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px">
-      <input id="game-register-username" type="text" placeholder="Username (3-16 chars)" maxlength="16" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;outline:none;width:200px" onkeydown="if(event.key==='Enter')gameRegister()">
-      <button onclick="gameRegister()" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:14px;font-weight:600;cursor:pointer">Play</button>
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap">
+      <input id="game-register-username" type="text" placeholder="Username (3-16 chars)" maxlength="16" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;outline:none;width:200px;min-height:44px" onkeydown="if(event.key==='Enter')gameRegister()">
+      <button class="btn" onclick="gameRegister()" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:14px;font-weight:600;cursor:pointer">Play</button>
     </div>
     <div id="game-register-error" style="color:var(--red);font-size:12px;margin-bottom:12px;display:none"></div>
     <div style="color:var(--text3);font-size:12px;margin-bottom:12px">&mdash; or &mdash;</div>
-    <a href="/api/auth/discord" style="display:inline-block;background:#5865F2;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:600;text-decoration:none">Sign in with Discord</a>
+    <a href="/api/auth/discord" class="btn" style="display:inline-flex;align-items:center;background:#5865F2;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:600;text-decoration:none;min-height:44px">Sign in with Discord</a>
     <p style="font-size:11px;color:var(--text3);margin-top:8px">Discord saves your rating history</p>
   </div>
 </div>
@@ -334,15 +335,19 @@ function showGameLoginPrompt() {
   document.getElementById('login-overlay').style.display = 'flex';
 }
 function updateNavAuth() {
-  var area = document.getElementById('nav-auth-area');
-  if (!area || !currentUser) return;
+  if (!currentUser) return;
   var name = currentUser.username || '';
   var safe = name.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var html;
   if (currentUser.has_discord) {
-    area.innerHTML = '<span style="color:#e6edf3;font-weight:600">' + safe + '</span>';
+    html = '<span style="color:#e6edf3;font-weight:600">' + safe + '</span>';
   } else {
-    area.innerHTML = '<span style="color:#e6edf3;font-weight:600">' + safe + '</span> <a href="/api/auth/link-discord" style="color:#5865F2;text-decoration:none;font-weight:600;margin-left:8px">Link Discord</a>';
+    html = '<span style="color:#e6edf3;font-weight:600">' + safe + '</span> <a href="/api/auth/link-discord" style="color:#5865F2;text-decoration:none;font-weight:600;margin-left:8px">Link Discord</a>';
   }
+  var area = document.getElementById('nav-auth-area');
+  if (area) area.innerHTML = html;
+  var mobileArea = document.getElementById('mobile-nav-auth-area');
+  if (mobileArea) mobileArea.innerHTML = html;
 }
 async function gameRegister() {
   var input = document.getElementById('game-register-username');
@@ -1441,8 +1446,8 @@ function showGameOver() {
   var iWon = (mySeat===0 && winnerId===GAME.player_a) || (mySeat===1 && winnerId===GAME.player_b);
 
   if (!winnerId) {
-    title.textContent = 'Game Over'; title.style.color = 'var(--text)';
-    msg.textContent = 'The game has ended.';
+    title.textContent = 'Draw'; title.style.color = 'var(--yellow, #eab308)';
+    msg.textContent = 'Both players eliminated simultaneously!';
   } else if (iWon) {
     title.textContent = 'Victory!'; title.style.color = 'var(--green)';
     msg.textContent = 'You won in '+(GAME.turn||0)+' turns!';

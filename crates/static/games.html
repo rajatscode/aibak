@@ -148,6 +148,7 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
     <a href="/ladder" style="color:#8b949e;text-decoration:none;">Ladder</a>
     <a href="/feedback" style="color:#8b949e;text-decoration:none;">Feedback</a>
     <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;font-weight:600;">Discord</a>
+    <span id="nav-auth-area"></span>
   </div>
   <button class="hamburger-btn" onclick="document.getElementById('mobile-nav-dropdown').classList.toggle('open')" style="display:none;background:none;border:none;color:#e6edf3;font-size:22px;cursor:pointer;padding:8px;">&#9776;</button>
   <div id="mobile-nav-dropdown" style="display:none;position:absolute;top:48px;left:0;right:0;background:#0f1419;border-bottom:1px solid #21293a;flex-direction:column;padding:8px 16px;gap:8px;z-index:100;">
@@ -156,6 +157,7 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
     <a href="/ladder" style="color:#8b949e;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid #21293a;">Ladder</a>
     <a href="/feedback" style="color:#8b949e;text-decoration:none;padding:10px 0;display:block;border-bottom:1px solid #21293a;">Feedback</a>
     <a href="https://discord.gg/URuwbk42bB" target="_blank" style="color:#5865F2;text-decoration:none;padding:10px 0;display:block;font-weight:600;">Discord</a>
+    <span id="mobile-nav-auth-area" style="padding:10px 0;display:block;border-top:1px solid #21293a;"></span>
   </div>
 </nav>
 
@@ -165,9 +167,16 @@ html,body{min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
     <div class="content" style="padding-bottom:0">
       <!-- Auth banner for logged-out users -->
       <div id="auth-banner" style="display:none;text-align:center;padding:32px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:16px">
-        <p style="font-size:15px;font-weight:600;margin-bottom:8px">Sign in with Discord to play multiplayer</p>
+        <p style="font-size:15px;font-weight:600;margin-bottom:8px">Enter a username to play multiplayer</p>
         <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Create games, join the matchmaking queue, and climb the ladder.</p>
-        <a href="/api/auth/discord" class="btn btn-play" style="font-size:14px;padding:8px 24px">Sign in with Discord</a>
+        <div style="display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <input id="register-username" type="text" placeholder="Username (3-16 chars)" maxlength="16" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;outline:none;width:200px;min-height:44px">
+          <button class="btn btn-play" style="font-size:14px;padding:8px 24px" onclick="registerUsername()">Play</button>
+        </div>
+        <div id="register-error" style="color:var(--red);font-size:12px;margin-bottom:12px;display:none"></div>
+        <div style="color:var(--text3);font-size:12px;margin-bottom:12px">— or —</div>
+        <a href="/api/auth/discord" class="btn" style="font-size:13px;padding:8px 20px;background:#5865F2;color:#fff;border-color:#5865F2">Sign in with Discord</a>
+        <p style="font-size:11px;color:var(--text3);margin-top:8px">Discord saves your rating history</p>
       </div>
 
       <!-- Multiplayer actions (logged-in only) -->
@@ -807,6 +816,17 @@ async function checkAuth() {
     var res = await fetch('/api/auth/me');
     if (!res.ok) throw new Error('not logged in');
     currentUser = await res.json();
+    // Update nav auth area (desktop + mobile)
+    var authHtml;
+    if (currentUser.has_discord) {
+      authHtml = '<span style="color:#e6edf3;font-weight:600">' + escHtml(currentUser.username) + '</span>';
+    } else {
+      authHtml = '<span style="color:#e6edf3;font-weight:600">' + escHtml(currentUser.username) + '</span> <a href="/api/auth/link-discord" style="color:#5865F2;text-decoration:none;font-weight:600;margin-left:8px">Link Discord</a>';
+    }
+    var authArea = document.getElementById('nav-auth-area');
+    if (authArea) authArea.innerHTML = authHtml;
+    var mobileAuthArea = document.getElementById('mobile-nav-auth-area');
+    if (mobileAuthArea) mobileAuthArea.innerHTML = authHtml;
     document.getElementById('mp-hub').style.display = '';
     document.getElementById('auth-banner').style.display = 'none';
     document.getElementById('mp-actions').style.display = '';
@@ -976,6 +996,45 @@ async function joinGame() {
     errEl.style.display = '';
   }
 }
+
+async function registerUsername() {
+  var input = document.getElementById('register-username');
+  var errEl = document.getElementById('register-error');
+  var username = input.value.trim();
+  errEl.style.display = 'none';
+  if (!username || username.length < 3 || username.length > 16) {
+    errEl.textContent = 'Username must be 3-16 characters';
+    errEl.style.display = '';
+    return;
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    errEl.textContent = 'Letters, numbers, and underscores only';
+    errEl.style.display = '';
+    return;
+  }
+  try {
+    var res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: username})
+    });
+    if (!res.ok) {
+      var err = await res.text();
+      errEl.textContent = err || 'Registration failed';
+      errEl.style.display = '';
+      return;
+    }
+    window.location.reload();
+  } catch(e) {
+    errEl.textContent = 'Network error';
+    errEl.style.display = '';
+  }
+}
+
+var regInput = document.getElementById('register-username');
+if (regInput) regInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') registerUsername();
+});
 
 checkAuth();
 loadActiveGames();
