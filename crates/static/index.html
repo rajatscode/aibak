@@ -588,6 +588,7 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-appl
 /* SESSION STATS BAR */
 #session-stats-bar{position:fixed;bottom:0;left:0;right:0;height:24px;background:var(--bg);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:20px;font-size:11px;color:var(--text3);z-index:900;transform:translateY(100%);transition:transform .3s ease}
 #session-stats-bar.visible{transform:translateY(0)}
+body.has-stats-bar #sidebar-actions{padding-bottom:32px}
 #session-stats-bar span{white-space:nowrap}
 #session-stats-bar .ss-val{color:var(--text2);font-weight:600}
 #session-stats-bar .ss-streak{font-weight:700}
@@ -596,7 +597,7 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-appl
 </style>
 </head>
 <body>
-<div style="position:fixed;bottom:8px;right:8px;z-index:9999;background:#d29922;color:#000;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;opacity:0.75;">ALPHA — expect bugs</div>
+<div style="position:fixed;bottom:8px;right:8px;z-index:9999;background:#d29922;color:#000;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;opacity:0.75;pointer-events:none">ALPHA — expect bugs</div>
 <nav id="main-nav" style="background:#0d1220;border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;justify-content:space-between;font-size:13px;height:48px;position:relative;flex-shrink:0;">
   <a href="/" style="color:var(--gold);font-weight:700;text-decoration:none;font-size:14px;letter-spacing:.3px;">strat.club</a>
   <div class="nav-links-desktop" style="display:flex;gap:20px;align-items:center;">
@@ -3708,6 +3709,7 @@ function renderSessionStatsBar() {
     (streakStr ? '<span class="ss-streak">' + streakStr + '</span>' : '') +
     '<span>Avg: <span class="ss-val">' + avgTurns + ' turns</span></span>';
   bar.classList.add('visible');
+  document.body.classList.add('has-stats-bar');
 }
 
 // Render stats bar on load if there are prior session games
