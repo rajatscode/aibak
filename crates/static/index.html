@@ -152,6 +152,9 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none;font-family:-appl
 #map-army-popup{position:absolute;display:none;background:rgba(17,24,39,.95);border:1px solid var(--gold);border-radius:12px;padding:8px 12px;z-index:200;white-space:nowrap;box-shadow:var(--shadow-lg);backdrop-filter:blur(8px)}
 #map-army-popup.popup-attack{border-color:#ef4444}
 #map-army-popup.popup-transfer{border-color:#3b82f6}
+#map-army-popup.popup-deploy{border-color:#22c55e}
+#map-army-popup .popup-go.go-deploy{background:#22c55e}
+#map-army-popup .popup-go.go-deploy:hover{background:#16a34a}
 #map-army-popup .popup-label{font-size:11px;color:var(--text2);margin-bottom:4px;text-align:center}
 #map-army-popup .popup-row{display:flex;align-items:center;gap:6px}
 #map-army-popup button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
@@ -2665,7 +2668,7 @@ function onOrdersClick(id, e) {
   if (selectedSource === null) {
     // No source selected
     if (isOwned(id)) {
-      if (deployLeft > 0) {
+      if (deployLeft > 0 || deploys[id]) {
         // Deploy to this territory
         onDeployClick(id, e);
       } else {
@@ -2692,7 +2695,7 @@ function onOrdersClick(id, e) {
       if (!src || !src.adjacent.includes(id)) {
         // Not adjacent — if owned, either deploy or select as new source
         if (isOwned(id)) {
-          if (deployLeft > 0) {
+          if (deployLeft > 0 || deploys[id]) {
             selectedSource = null;
             onDeployClick(id, e);
           } else if (availableArmies(id) > 0) {
@@ -2730,19 +2733,15 @@ function onOrdersClick(id, e) {
 // ========== DEPLOY ==========
 function onDeployClick(id, e) {
   if (!isOwned(id)) return;
-  const amount = e.shiftKey ? 5 : 1;
-  const actual = Math.min(amount, deployLeft);
-  if (actual <= 0) return;
-
-  if (!deploys[id]) deploys[id] = 0;
-  deploys[id] += actual;
-  deployLeft -= actual;
-
-  pushAction({type: 'deploy', territory: id, armies: actual});
-  floatText(id, '+' + actual);
-  playSound('deploy');
-  updateMap();
-  renderSidebar();
+  var existing = deploys[id] || 0;
+  var max = existing + deployLeft;
+  if (max <= 0) return;
+  pendingTarget = id;
+  pendingType = 'deploy';
+  pendingMax = max;
+  pendingArmies = existing || Math.min(1, max);
+  showMapArmyPopup(id);
+  updateMap(); renderSidebar();
 }
 
 function onDeployRightClick(id) {
@@ -2934,15 +2933,22 @@ function showMapArmyPopup(territoryId) {
   const countEl = document.getElementById('popup-count');
   const goBtn = document.getElementById('popup-go-btn');
   const tgt = terr(territoryId);
+  const isDeploy = pendingType === 'deploy';
   const isAttack = pendingType === 'attack';
-  const actionLabel = isAttack ? 'Attack' : 'Transfer';
-  label.textContent = actionLabel + ' ' + (tgt ? tgt.name : territoryId);
+  const actionLabel = isDeploy ? 'Deploy' : (isAttack ? 'Attack' : 'Transfer');
+  label.textContent = actionLabel + ' \u2192 ' + (tgt ? tgt.name : territoryId);
   countEl.value = pendingArmies;
 
   // Visual distinction: border + button color
-  popup.className = isAttack ? 'popup-attack' : 'popup-transfer';
-  goBtn.className = 'popup-go ' + (isAttack ? 'go-attack' : 'go-transfer');
-  goBtn.textContent = isAttack ? 'Attack' : 'Transfer';
+  if (isDeploy) {
+    popup.className = 'popup-deploy';
+    goBtn.className = 'popup-go go-deploy';
+    goBtn.textContent = 'Deploy';
+  } else {
+    popup.className = isAttack ? 'popup-attack' : 'popup-transfer';
+    goBtn.className = 'popup-go ' + (isAttack ? 'go-attack' : 'go-transfer');
+    goBtn.textContent = isAttack ? 'Attack' : 'Transfer';
+  }
 
   // Combat preview
   updateCombatPreview();
@@ -2990,7 +2996,8 @@ function hideMapArmyPopup() {
 }
 
 function popupAdjust(delta) {
-  pendingArmies = Math.max(1, Math.min(pendingMax, pendingArmies + delta));
+  var min = pendingType === 'deploy' ? 0 : 1;
+  pendingArmies = Math.max(min, Math.min(pendingMax, pendingArmies + delta));
   document.getElementById('popup-count').value = pendingArmies;
   updateCombatPreview();
 }
@@ -3003,7 +3010,8 @@ function popupSetMax() {
 
 function popupInputChange(el) {
   var val = parseInt(el.value, 10);
-  if (isNaN(val) || val < 1) val = 1;
+  var min = pendingType === 'deploy' ? 0 : 1;
+  if (isNaN(val) || val < min) val = min;
   if (val > pendingMax) val = pendingMax;
   pendingArmies = val;
   updateCombatPreview();
@@ -3026,7 +3034,30 @@ function updateCombatPreview() {
 }
 
 function popupConfirm() {
-  if (pendingTarget === null || selectedSource === null) return;
+  if (pendingTarget === null) return;
+  if (pendingType === 'deploy') {
+    var id = pendingTarget;
+    var oldAmount = deploys[id] || 0;
+    var diff = pendingArmies - oldAmount;
+    if (pendingArmies === 0) {
+      delete deploys[id];
+    } else {
+      deploys[id] = pendingArmies;
+    }
+    deployLeft -= diff;
+    if (diff > 0) floatText(id, '+' + diff);
+    else if (diff < 0) floatText(id, '' + diff);
+    if (diff !== 0) {
+      pushAction({type: 'deploy', territory: id, armies: pendingArmies});
+      playSound('deploy');
+    }
+    pendingTarget = null;
+    hideMapArmyPopup();
+    updateMap();
+    renderSidebar();
+    return;
+  }
+  if (selectedSource === null) return;
   const newOrder = {
     type: pendingType,
     from: selectedSource,

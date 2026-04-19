@@ -1305,7 +1305,7 @@ function onOrdersClick(id, e) {
 
   if (selectedSource === null) {
     if (isOwned(id)) {
-      if (deployLeft > 0) onDeployClick(id, e);
+      if (deployLeft > 0 || deploys[id]) onDeployClick(id, e);
       else {
         if (availableArmies(id) <= 0) { toast('No armies available', 'error'); return; }
         selectedSource = id;
@@ -1317,7 +1317,7 @@ function onOrdersClick(id, e) {
     var src = MAP.territories[selectedSource];
     if (!src || !(src.adjacent||[]).includes(id)) {
       if (isOwned(id)) {
-        if (deployLeft > 0) { selectedSource = null; onDeployClick(id, e); }
+        if (deployLeft > 0 || deploys[id]) { selectedSource = null; onDeployClick(id, e); }
         else if (availableArmies(id) > 0) { selectedSource = id; }
         else { selectedSource = null; }
       } else { selectedSource = null; }
@@ -1338,13 +1338,14 @@ function onOrdersClick(id, e) {
 
 function onDeployClick(id, e) {
   if (!isOwned(id)) return;
-  var amount = e.shiftKey ? 5 : 1;
-  var actual = Math.min(amount, deployLeft);
-  if (actual <= 0) return;
-  if (!deploys[id]) deploys[id] = 0;
-  deploys[id] += actual;
-  deployLeft -= actual;
-  floatText(id, '+'+actual);
+  var existing = deploys[id] || 0;
+  var max = existing + deployLeft;
+  if (max <= 0) return;
+  pendingTarget = id;
+  pendingType = 'deploy';
+  pendingMax = max;
+  pendingArmies = existing || Math.min(1, max);
+  showMapArmyPopup(id);
   updateMap(); renderSidebar();
 }
 
@@ -1411,18 +1412,45 @@ function showMapArmyPopup(targetId) {
     }
   }
   var t = MAP ? MAP.territories[targetId] : null;
-  document.getElementById('popup-label').textContent = pendingType + ' \u2192 ' + (t?t.name:targetId);
-  document.getElementById('popup-count').textContent = pendingArmies;
+  var tName = t ? t.name : targetId;
+  if (pendingType === 'deploy') {
+    document.getElementById('popup-label').textContent = 'Deploy \u2192 ' + tName;
+    document.getElementById('popup-count').textContent = pendingArmies;
+    var goBtn = popup.querySelector('.popup-go');
+    if (goBtn) goBtn.textContent = 'Deploy';
+  } else {
+    document.getElementById('popup-label').textContent = pendingType + ' \u2192 ' + tName;
+    document.getElementById('popup-count').textContent = pendingArmies;
+    var goBtn = popup.querySelector('.popup-go');
+    if (goBtn) goBtn.textContent = 'Go';
+  }
   popup.style.display = 'block';
 }
 
 function popupAdjust(delta) {
-  pendingArmies = Math.max(1, Math.min(pendingMax, pendingArmies + delta));
+  var min = pendingType === 'deploy' ? 0 : 1;
+  pendingArmies = Math.max(min, Math.min(pendingMax, pendingArmies + delta));
   document.getElementById('popup-count').textContent = pendingArmies;
 }
 
 function popupConfirm() {
   if (pendingTarget === null) return;
+  if (pendingType === 'deploy') {
+    var id = pendingTarget;
+    var oldAmount = deploys[id] || 0;
+    var diff = pendingArmies - oldAmount;
+    if (pendingArmies === 0) {
+      delete deploys[id];
+    } else {
+      deploys[id] = pendingArmies;
+    }
+    deployLeft -= diff;
+    if (diff > 0) floatText(id, '+' + diff);
+    else if (diff < 0) floatText(id, '' + diff);
+    hidePopup(); pendingTarget = null;
+    updateMap(); renderSidebar();
+    return;
+  }
   orders.push({type:pendingType, from:selectedSource, to:pendingTarget, armies:pendingArmies});
   hidePopup(); selectedSource = null; pendingTarget = null;
   updateMap(); renderSidebar();
