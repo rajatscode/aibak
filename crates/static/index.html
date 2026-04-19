@@ -3553,8 +3553,8 @@ function showGameOver(winner) {
     return;
   }
 
-  const statsDiv = document.getElementById('go-stats');
-  const analysisDiv = document.getElementById('go-analysis');
+  var statsDiv = document.getElementById('go-stats');
+  var analysisDiv = document.getElementById('go-analysis');
   var boardName = getBoardDisplayName();
   var turns = gameStats.turnsPlayed || 0;
   if (winner === 0) {
