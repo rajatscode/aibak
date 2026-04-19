@@ -1912,7 +1912,12 @@ async fn main() {
         .with_state(app_state);
 
     info!(addr = %bind_addr, "server listening");
-    println!("Playing at http://localhost:3000");
+    if bind_addr.starts_with("0.0.0.0") || bind_addr.starts_with("127.0.0.1") || bind_addr.starts_with("localhost") {
+        let port = bind_addr.split(':').last().unwrap_or("3000");
+        println!("Playing at http://localhost:{}", port);
+    } else {
+        println!("Playing at http://{}", bind_addr);
+    }
     let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())

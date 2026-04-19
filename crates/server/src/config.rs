@@ -28,8 +28,13 @@ impl Config {
             discord_client_id: std::env::var("DISCORD_CLIENT_ID").ok(),
             discord_client_secret: std::env::var("DISCORD_CLIENT_SECRET").ok(),
             discord_redirect_uri: std::env::var("DISCORD_REDIRECT_URI").ok(),
-            jwt_secret: std::env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "dev-secret-change-in-production".to_string()),
+            jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+                if std::env::var("FLY_APP_NAME").is_ok() {
+                    panic!("JWT_SECRET must be set in production! Run: flyctl secrets set JWT_SECRET=$(openssl rand -hex 32)");
+                }
+                eprintln!("WARNING: Using insecure default JWT secret. Set JWT_SECRET for production.");
+                "dev-secret-change-in-production".to_string()
+            }),
             bind_addr: std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:3000".to_string()),
             default_map_path: std::env::var("DEFAULT_MAP")
                 .unwrap_or_else(|_| "maps/small_earth.json".to_string()),
