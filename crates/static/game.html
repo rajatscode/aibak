@@ -421,19 +421,21 @@ let deadlineInterval = null;
   if (!GAME_ID) { toast('Invalid game URL', 'error'); return; }
   document.getElementById('game-link').textContent = window.location.href;
 
-  // Check auth — show login prompt instead of auto-redirect
+  // Check auth — don't block on failure, allow spectating
   try {
     const r = await fetch('/api/auth/me');
-    if (!r.ok) { showGameLoginPrompt(); return; }
-    currentUser = await r.json();
-    updateNavAuth();
-  } catch (e) {
-    showGameLoginPrompt();
-    return;
-  }
+    if (r.ok) {
+      currentUser = await r.json();
+      updateNavAuth();
+    }
+  } catch (e) { /* not logged in — continue as spectator */ }
 
-  await fetchGameState();
-  connectWebSocket();
+  if (currentUser) {
+    await fetchGameState();
+    connectWebSocket();
+  } else {
+    await fetchSpectateState();
+  }
 })();
 
 // ========== API ==========
@@ -472,6 +474,34 @@ async function fetchGameState() {
     }
     document.getElementById('player-a-info').classList.toggle('active', mySeat === 0);
     document.getElementById('player-b-info').classList.toggle('active', mySeat === 1);
+
+    onStateUpdate();
+  } catch (e) {
+    toast('Network error: ' + e.message, 'error');
+  }
+}
+
+async function fetchSpectateState() {
+  try {
+    const r = await fetch('/api/games/' + GAME_ID + '/spectate');
+    if (!r.ok) {
+      // Spectate endpoint blocks in-progress games — show login prompt
+      showGameLoginPrompt();
+      return;
+    }
+    const data = await r.json();
+    GAME = data.game;
+    STATE = data.state;
+    MAP = data.map;
+    pickOptions = data.pick_options || [];
+    mySeat = null;
+
+    if (data.game) {
+      var pa = data.game.player_a_name;
+      var pb = data.game.player_b_name;
+      if (pa) document.getElementById('pa-name').textContent = pa;
+      if (pb) document.getElementById('pb-name').textContent = pb;
+    }
 
     onStateUpdate();
   } catch (e) {
@@ -613,11 +643,16 @@ function onStateUpdate() {
         '<p>Share this link to invite a player</p>' +
         '<p style="margin-top:12px;color:var(--gold);font-family:monospace;font-size:12px;word-break:break-all" id="game-link">' + window.location.href + '</p>' +
         '<button id="copy-link-btn" onclick="copyInviteLink()" style="margin-top:12px;background:transparent;border:1px solid var(--gold);color:var(--gold);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Copy Link</button>';
-    } else {
-      // Non-player: show join button
+    } else if (currentUser) {
+      // Logged-in non-player: show join button
       card.innerHTML = '<h2 style="color:var(--gold)">Join Game</h2>' +
         '<p style="margin-top:8px;color:var(--text2)">This game is waiting for an opponent. Join and play!</p>' +
         '<button onclick="joinThisGame()" style="margin-top:16px;background:var(--blue);color:#fff;border:none;border-radius:6px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer">Join Game</button>';
+    } else {
+      // Not logged in: prompt to log in to join
+      card.innerHTML = '<h2 style="color:var(--gold)">Game Waiting</h2>' +
+        '<p style="margin-top:8px;color:var(--text2)">This game is waiting for an opponent.</p>' +
+        '<button onclick="showGameLoginPrompt()" style="margin-top:16px;background:var(--blue);color:#fff;border:none;border-radius:6px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer">Log in to join</button>';
     }
     waitingEl.classList.add('show');
     return;
@@ -1050,6 +1085,16 @@ function availableArmies(id) {
 function renderSidebar() {
   var pp = document.getElementById('phase-panel');
   var cp = document.getElementById('control-panel');
+  var sa = document.getElementById('sidebar-actions');
+
+  // Spectator mode — no interactive controls
+  if (!currentUser) {
+    var phaseLabel = phase === 'picking' ? 'Pick Phase' : phase === 'orders' ? 'Turn ' + (STATE ? STATE.turn : 0) : phase === 'finished' ? 'Game Over' : 'Loading...';
+    pp.innerHTML = '<div class="sb-phase">' + phaseLabel + '</div><div class="sb-sub" style="color:var(--text2)">Spectating</div>';
+    cp.innerHTML = renderBonusInfo();
+    if (sa) sa.innerHTML = '<a href="#" onclick="showGameLoginPrompt();return false" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">Log in to play</a>';
+    return;
+  }
 
   if (submitted) {
     pp.innerHTML = '<div class="sb-phase" style="color:var(--green)">\u2713 Orders Submitted</div><div class="sb-sub">Waiting for opponent...</div>';
@@ -1201,6 +1246,7 @@ function renderBonusInfo() {
 
 // ========== TERRITORY CLICK ==========
 function onTerritoryClick(id, e) {
+  if (!currentUser) { showGameLoginPrompt(); return; }
   if (submitted) return;
   if (phase === 'picking') onPickClick(id);
   else if (phase === 'orders') onOrdersClick(id, e);
